@@ -17,7 +17,7 @@ class ApiService {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     const token = this.getAuthToken();
-    
+
     const defaultHeaders: HeadersInit = {
       'Content-Type': 'application/json',
     };
@@ -44,15 +44,15 @@ class ApiService {
           // Clear stored authentication data
           localStorage.removeItem('auth_token');
           localStorage.removeItem('user');
-          
+
           // Redirect to login page
           if (window.location.pathname !== '/login') {
             window.location.href = '/login';
           }
-          
+
           throw new Error('Authentication required');
         }
-        
+
         throw new Error(data.message || `HTTP error! status: ${response.status}`);
       }
 
@@ -105,7 +105,7 @@ class ApiService {
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.status) queryParams.append('status', params.status);
     if (params?.search) queryParams.append('search', params.search);
-    
+
     const endpoint = queryParams.toString() ? `/cases?${queryParams}` : '/cases';
     return this.get(endpoint);
   }
@@ -121,6 +121,12 @@ class ApiService {
     };
   }>> {
     return this.get('/cases/stats/overview');
+  }
+
+  async getCaseById(caseId: string): Promise<ApiResponse<{
+    case: any;
+  }>> {
+    return this.get(`/cases/${caseId}`);
   }
 
   // DigiLocker specific methods
@@ -157,7 +163,8 @@ class ApiService {
     emailSent: boolean;
   }>> {
     return this.post('/digilocker/send-auth-email', {
-      userEmail: 'maheshwariharsh38@gmail.com',
+      userEmail: 'hsdhameliya88@gmail.com',
+      // userEmail: 'maheshwariharsh38@gmail.com',
       caseData: {
         name: caseData.name,
         phone: caseData.phone,

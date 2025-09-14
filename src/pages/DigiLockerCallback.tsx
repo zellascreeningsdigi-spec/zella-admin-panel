@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 interface CallbackState {
   status: 'loading' | 'success' | 'error';
@@ -8,6 +8,7 @@ interface CallbackState {
   sessionId?: string;
   code?: string;
   state?: string;
+  error?: string;
 }
 
 const DigiLockerCallback: React.FC = () => {
@@ -22,13 +23,16 @@ const DigiLockerCallback: React.FC = () => {
     const processCallback = async () => {
       try {
         const code = searchParams.get('code');
+        console.log(code);
         const state = searchParams.get('state');
         const error = searchParams.get('error');
+        const error_description = searchParams.get('error_description');
 
         if (error) {
           setCallbackState({
             status: 'error',
-            message: `Authorization failed: ${error}`
+            message: `Authorization failed: ${error}`,
+            error: `Failed due to${error_description}`,
           });
           return;
         }
@@ -47,7 +51,7 @@ const DigiLockerCallback: React.FC = () => {
         });
 
         // Call backend to exchange code for token
-        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/digilocker/exchange-token`, {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/digilocker/exchange-token`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -70,7 +74,7 @@ const DigiLockerCallback: React.FC = () => {
           setTimeout(async () => {
             try {
               const documentsResponse = await fetch(
-                `${process.env.REACT_APP_API_URL}/api/digilocker/session/${state}/documents`, 
+                `${process.env.REACT_APP_API_URL}/digilocker/session/${state}/documents`,
                 {
                   method: 'POST',
                   headers: {

@@ -1,3 +1,11 @@
+export interface DocumentStored {
+  docType: string;
+  s3Key: string;
+  s3Url: string;
+  uploadedAt: Date;
+  verificationStatus: string;
+}
+
 export interface Case {
   _id?: string;
   id: string;
@@ -20,6 +28,7 @@ export interface Case {
   syncStatus?: string;
   lastSyncedAt?: string;
   digiLockerSessions?: string[];
+  documentsStored?: DocumentStored[];
   createdAt?: string;
   updatedAt?: string;
 }

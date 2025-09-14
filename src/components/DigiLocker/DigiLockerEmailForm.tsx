@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import React, { useState } from 'react';
 
 interface CaseData {
   name: string;
@@ -45,7 +45,7 @@ const DigiLockerEmailForm: React.FC<DigiLockerEmailFormProps> = ({ onEmailSent }
     try {
       // Get auth token from localStorage or context
       const token = localStorage.getItem('token');
-      
+
       if (!token) {
         setStatus({
           type: 'error',
@@ -54,14 +54,14 @@ const DigiLockerEmailForm: React.FC<DigiLockerEmailFormProps> = ({ onEmailSent }
         return;
       }
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/digilocker/send-auth-email`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/digilocker/send-auth-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          userEmail: 'maheshwariharsh38@gmail.com',
+          userEmail: 'hsdhameliya88@gmail.com',
           caseData: {
             ...caseData,
             caseId: caseData.caseId || `CASE_${Date.now()}`
@@ -76,7 +76,7 @@ const DigiLockerEmailForm: React.FC<DigiLockerEmailFormProps> = ({ onEmailSent }
           type: 'success',
           message: `DigiLocker authorization email sent successfully! Session ID: ${result.data.sessionId}`
         });
-        
+
         // Reset form
         setCaseData({
           name: '',
@@ -115,7 +115,7 @@ const DigiLockerEmailForm: React.FC<DigiLockerEmailFormProps> = ({ onEmailSent }
           🔐 Send DigiLocker Authorization
         </CardTitle>
         <p className="text-sm text-gray-600">
-          Send DigiLocker authorization email to maheshwariharsh38@gmail.com
+          Send DigiLocker authorization email to hsdhameliya88@gmail.com
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -175,11 +175,10 @@ const DigiLockerEmailForm: React.FC<DigiLockerEmailFormProps> = ({ onEmailSent }
         </div>
 
         {status.type && (
-          <div className={`p-3 rounded-md text-sm ${
-            status.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' :
+          <div className={`p-3 rounded-md text-sm ${status.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' :
             status.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' :
-            'bg-blue-50 text-blue-700 border border-blue-200'
-          }`}>
+              'bg-blue-50 text-blue-700 border border-blue-200'
+            }`}>
             {status.message}
           </div>
         )}
@@ -200,7 +199,7 @@ const DigiLockerEmailForm: React.FC<DigiLockerEmailFormProps> = ({ onEmailSent }
         </Button>
 
         <div className="text-xs text-gray-500 space-y-1">
-          <p>• Email will be sent to: maheshwariharsh38@gmail.com</p>
+          <p>• Email will be sent to: hsdhameliya88@gmail.com</p>
           <p>• User will receive DigiLocker authorization URL</p>
           <p>• After authorization, documents will be automatically fetched</p>
         </div>

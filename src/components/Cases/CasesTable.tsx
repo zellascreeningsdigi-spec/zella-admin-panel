@@ -1,16 +1,5 @@
-import React, { useMemo, useState, useCallback } from 'react';
-import {
-  useReactTable,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  getPaginationRowModel,
-  flexRender,
-  ColumnDef,
-  SortingState,
-  ColumnFiltersState,
-} from '@tanstack/react-table';
-import { Case } from '@/types/case';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -19,19 +8,31 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { apiService } from '@/services/api';
+import { Case } from '@/types/case';
 import {
-  Edit,
-  MessageCircle,
-  Eye,
-  FileEdit,
-  Trash2,
-  Shield,
+  ColumnDef,
+  ColumnFiltersState,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  SortingState,
+  useReactTable,
+} from '@tanstack/react-table';
+import {
   ChevronLeft,
   ChevronRight,
+  Edit,
+  Eye,
+  FileEdit,
+  MessageCircle,
+  Shield,
+  Trash2,
 } from 'lucide-react';
-import { apiService } from '@/services/api';
+import React, { useCallback, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface CasesTableProps {
   cases: Case[];
@@ -39,6 +40,7 @@ interface CasesTableProps {
 }
 
 const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
+  const navigate = useNavigate();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
@@ -53,26 +55,25 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
 
     return (
       <span
-        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          statusStyles[status as keyof typeof statusStyles]
-        }`}
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusStyles[status as keyof typeof statusStyles]
+          }`}
       >
-        {status === 'pending' ? 'Pending' : 
-         status === 'completed' ? 'Resolved Case' : 
-         'Insufficiency'}
+        {status === 'pending' ? 'Pending' :
+          status === 'completed' ? 'Resolved Case' :
+            'Insufficiency'}
       </span>
     );
   };
 
   const handleDigilockerAction = useCallback(async (caseData: Case) => {
     setIsProcessing(caseData.id);
-    
+
     try {
       const response = await apiService.sendDigiLockerAuthEmail(caseData);
-      
+
       if (response.success) {
-        alert(`DigiLocker authorization email sent successfully for ${caseData.name}!\n\nSession ID: ${response.data?.sessionId}\nEmail sent to: maheshwariharsh38@gmail.com\n\nThe user will receive the authorization URL via email and can complete the verification process.`);
-        
+        alert(`DigiLocker authorization email sent successfully for ${caseData.name}!\n\nSession ID: ${response.data?.sessionId}\nEmail sent to: hsdhameliya88@gmail.com\n\nThe user will receive the authorization URL via email and can complete the verification process.`);
+
         // Refresh the cases list to show updated DigiLocker status
         if (onCaseUpdated) {
           onCaseUpdated();
@@ -115,9 +116,8 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
 
     return (
       <span
-        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          statusStyles[status as keyof typeof statusStyles] || 'bg-gray-100 text-gray-800'
-        }`}
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusStyles[status as keyof typeof statusStyles] || 'bg-gray-100 text-gray-800'
+          }`}
       >
         {statusLabels[status as keyof typeof statusLabels] || status}
       </span>
@@ -200,7 +200,7 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
                 variant="outline"
                 size="sm"
                 title="View Report"
-                onClick={() => console.log('View report:', caseData.id)}
+                onClick={() => navigate(`/documents?caseId=${caseData.id}`)}
               >
                 <Eye className="h-4 w-4" />
               </Button>
@@ -306,9 +306,9 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
                     {header.isPlaceholder
                       ? null
                       : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
+                        header.column.columnDef.header,
+                        header.getContext()
+                      )}
                   </TableHead>
                 ))}
               </TableRow>
