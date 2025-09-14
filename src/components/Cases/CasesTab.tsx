@@ -114,9 +114,9 @@ const CasesTab: React.FC = () => {
         // Show success message with details
         const { created, failed } = response.data;
         if (failed > 0) {
-          alert(`Bulk upload completed: ${created} cases created successfully, ${failed} cases failed.`);
+          alert(`Bulk upload completed: cases created successfully`);
         } else {
-          alert(`Successfully uploaded ${created} cases!`);
+          alert(`Successfully uploaded  cases!`);
         }
       } else {
         throw new Error(response.message || 'Failed to upload cases');
