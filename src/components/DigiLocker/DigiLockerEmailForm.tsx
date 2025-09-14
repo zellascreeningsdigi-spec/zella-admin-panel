@@ -10,6 +10,7 @@ interface CaseData {
   caseId?: string;
   phone?: string;
   address?: string;
+  email?: string;
 }
 
 interface DigiLockerEmailFormProps {
@@ -28,7 +29,8 @@ const DigiLockerEmailForm: React.FC<DigiLockerEmailFormProps> = ({ onEmailSent }
     companyName: '',
     caseId: '',
     phone: '',
-    address: ''
+    address: '',
+    email: '',
   });
 
   const handleInputChange = (field: keyof CaseData, value: string) => {
@@ -54,6 +56,13 @@ const DigiLockerEmailForm: React.FC<DigiLockerEmailFormProps> = ({ onEmailSent }
         return;
       }
 
+      if (caseData.email == undefined || caseData.email == '') {
+        setStatus({
+          type: 'error',
+          message: 'Invalid Email for this case.'
+        });
+      }
+
       const response = await fetch(`${process.env.REACT_APP_API_URL}/digilocker/send-auth-email`, {
         method: 'POST',
         headers: {
@@ -61,7 +70,7 @@ const DigiLockerEmailForm: React.FC<DigiLockerEmailFormProps> = ({ onEmailSent }
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          userEmail: 'hsdhameliya88@gmail.com',
+          userEmail: caseData.email,
           caseData: {
             ...caseData,
             caseId: caseData.caseId || `CASE_${Date.now()}`
@@ -115,7 +124,7 @@ const DigiLockerEmailForm: React.FC<DigiLockerEmailFormProps> = ({ onEmailSent }
           🔐 Send DigiLocker Authorization
         </CardTitle>
         <p className="text-sm text-gray-600">
-          Send DigiLocker authorization email to hsdhameliya88@gmail.com
+          Send DigiLocker authorization email to {caseData.email}
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -199,7 +208,7 @@ const DigiLockerEmailForm: React.FC<DigiLockerEmailFormProps> = ({ onEmailSent }
         </Button>
 
         <div className="text-xs text-gray-500 space-y-1">
-          <p>• Email will be sent to: hsdhameliya88@gmail.com</p>
+          <p>• Email will be sent to: {caseData.email}</p>
           <p>• User will receive DigiLocker authorization URL</p>
           <p>• After authorization, documents will be automatically fetched</p>
         </div>

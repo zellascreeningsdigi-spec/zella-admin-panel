@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Download, FileText, RefreshCw } from 'lucide-react';
-import CasesTable from './CasesTable';
-import { Case } from '@/types/case';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiService } from '@/services/api';
+import { Case } from '@/types/case';
+import { Download, FileText, Plus, RefreshCw } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
+import BulkUploadDialog from './BulkUploadDialog';
+import CasesTable from './CasesTable';
 
 interface CaseStats {
   totalCases: number;
@@ -27,12 +29,14 @@ const CasesTab: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const [isBulkUploading, setIsBulkUploading] = useState(false);
 
   const fetchCases = async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const [casesResponse, statsResponse] = await Promise.all([
         apiService.getCases({ limit: 100 }),
         apiService.getCaseStats()
@@ -65,7 +69,7 @@ const CasesTab: React.FC = () => {
           createdAt: backendCase.createdAt,
           updatedAt: backendCase.updatedAt
         }));
-        
+
         setCases(transformedCases);
       }
 
@@ -89,11 +93,74 @@ const CasesTab: React.FC = () => {
   };
 
   const handleBulkUpload = () => {
-    console.log('Bulk upload cases');
+    setIsBulkUploadOpen(true);
+  };
+
+  const handleBulkUploadClose = () => {
+    setIsBulkUploadOpen(false);
+  };
+
+  const handleBulkUploadSubmit = async (cases: any[]) => {
+    try {
+      setIsBulkUploading(true);
+      console.log('Uploading cases:', cases);
+
+      const response = await apiService.bulkCreateCases(cases);
+      console.log('Response:', response);
+      if (response.success && response.data) {
+        // Refresh the cases list
+        await fetchCases();
+
+        // Show success message with details
+        const { created, failed } = response.data;
+        if (failed > 0) {
+          alert(`Bulk upload completed: ${created} cases created successfully, ${failed} cases failed.`);
+        } else {
+          alert(`Successfully uploaded ${created} cases!`);
+        }
+      } else {
+        throw new Error(response.message || 'Failed to upload cases');
+      }
+    } catch (error) {
+      console.error('Error uploading cases:', error);
+      alert(`Error uploading cases: ${error instanceof Error ? error.message : 'Please try again.'}`);
+    } finally {
+      setIsBulkUploading(false);
+    }
   };
 
   const handleDownloadTemplate = () => {
-    console.log('Download CSV template');
+    const sampleData = [
+      {
+        code: 'ZS001',
+        name: 'John Doe',
+        phone: '9876543210',
+        email: 'john.doe@example.com',
+        appNo: 'APP001',
+        companyName: 'ABC Company',
+        address: '123 Main Street',
+        city: 'Mumbai',
+        state: 'Maharashtra',
+        pin: '400001'
+      },
+      {
+        code: 'ZS002',
+        name: 'Jane Smith',
+        phone: '9876543211',
+        email: 'jane.smith@example.com',
+        appNo: 'APP002',
+        companyName: 'XYZ Corp',
+        address: '456 Park Avenue',
+        city: 'Delhi',
+        state: 'Delhi',
+        pin: '110001'
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(sampleData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Cases');
+    XLSX.writeFile(wb, 'case_template.xlsx');
   };
 
   const handleRefresh = () => {
@@ -228,6 +295,14 @@ const CasesTab: React.FC = () => {
           <CasesTable cases={cases} onCaseUpdated={fetchCases} />
         </CardContent>
       </Card>
+
+      {/* Bulk Upload Dialog */}
+      <BulkUploadDialog
+        isOpen={isBulkUploadOpen}
+        onClose={handleBulkUploadClose}
+        onUpload={handleBulkUploadSubmit}
+        isUploading={isBulkUploading}
+      />
     </div>
   );
 };

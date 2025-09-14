@@ -129,6 +129,14 @@ class ApiService {
     return this.get(`/cases/${caseId}`);
   }
 
+  async bulkCreateCases(cases: any[]): Promise<ApiResponse<{
+    created: number;
+    failed: number;
+    errors?: any[];
+  }>> {
+    return this.post('/cases/bulk', { cases });
+  }
+
   // DigiLocker specific methods
   async initiateDigiLocker(caseData: any): Promise<ApiResponse<{
     sessionId: string;
@@ -163,7 +171,7 @@ class ApiService {
     emailSent: boolean;
   }>> {
     return this.post('/digilocker/send-auth-email', {
-      userEmail: 'hsdhameliya88@gmail.com',
+      userEmail: caseData.email,
       // userEmail: 'maheshwariharsh38@gmail.com',
       caseData: {
         name: caseData.name,

@@ -72,7 +72,7 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
       const response = await apiService.sendDigiLockerAuthEmail(caseData);
 
       if (response.success) {
-        alert(`DigiLocker authorization email sent successfully for ${caseData.name}!\n\nSession ID: ${response.data?.sessionId}\nEmail sent to: hsdhameliya88@gmail.com\n\nThe user will receive the authorization URL via email and can complete the verification process.`);
+        alert(`DigiLocker authorization email sent successfully for ${caseData.name}!\n\nSession ID: ${response.data?.sessionId}\nEmail sent to: ${caseData.email}\n\nThe user will receive the authorization URL via email and can complete the verification process.`);
 
         // Refresh the cases list to show updated DigiLocker status
         if (onCaseUpdated) {
