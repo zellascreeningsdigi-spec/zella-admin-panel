@@ -9,7 +9,6 @@ export interface DocumentStored {
 export interface Case {
   _id?: string;
   id: string;
-  phpCaseId?: string;
   code: string;
   date: string;
   name: string;

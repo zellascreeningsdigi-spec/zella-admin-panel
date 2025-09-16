@@ -38,8 +38,8 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
     const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
 
-    const requiredFields = ['name', 'phone', 'email', 'city', 'state', 'pin'];
-    const optionalFields = ['code', 'appNo', 'companyName', 'address'];
+    const requiredFields = ['initiatorname', 'phone', 'email', 'city', 'state', 'pin'];
+    const optionalFields = ['bgvid', 'appNo', 'companyName', 'address'];
 
     const generateCode = (index: number): string => {
         const number = (index + 1).toString().padStart(3, '0');
@@ -52,6 +52,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
     };
 
     const validateField = (value: any, field: string, row: number): string | null => {
+        console.log(field, value);
         if (requiredFields.includes(field) && (!value || value.toString().trim() === '')) {
             return `${field} is required`;
         }
@@ -138,12 +139,12 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
                 });
 
                 // Generate code and appNo if not provided
-                const code = caseData.code || generateCode(rowIndex);
+                const code = caseData.bgvid || generateCode(rowIndex);
                 const appNo = caseData.appno || generateAppNo(rowIndex);
 
                 cases.push({
                     code,
-                    name: caseData.name || '',
+                    name: caseData.initiatorname || '',
                     phone: caseData.phone || '',
                     email: caseData.email || '',
                     appNo,
@@ -214,8 +215,8 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
     const handleDownloadSample = () => {
         const sampleData = [
             {
-                code: 'ZS001',
-                name: 'John Doe',
+                bgvid: 'ZS001',
+                initiatorName: 'John Doe',
                 phone: '9876543210',
                 email: 'john.doe@example.com',
                 appNo: 'APP001',
@@ -226,8 +227,8 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
                 pin: '400001'
             },
             {
-                code: 'ZS002',
-                name: 'Jane Smith',
+                bgvid: 'ZS002',
+                initiatorName: 'Jane Smith',
                 phone: '9876543211',
                 email: 'jane.smith@example.com',
                 appNo: 'APP002',
@@ -347,8 +348,8 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
                                     <table className="min-w-full text-sm">
                                         <thead>
                                             <tr className="border-b">
-                                                <th className="text-left p-2">Code</th>
-                                                <th className="text-left p-2">Name</th>
+                                                <th className="text-left p-2">BGVID</th>
+                                                <th className="text-left p-2">Initiator Name</th>
                                                 <th className="text-left p-2">Phone</th>
                                                 <th className="text-left p-2">Email</th>
                                                 <th className="text-left p-2">App No</th>

@@ -5,6 +5,7 @@ import { Case } from '@/types/case';
 import { Download, FileText, Plus, RefreshCw } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
+import AddCaseDialog from './AddCaseDialog';
 import BulkUploadDialog from './BulkUploadDialog';
 import CasesTable from './CasesTable';
 
@@ -31,6 +32,7 @@ const CasesTab: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [isBulkUploading, setIsBulkUploading] = useState(false);
+  const [isAddCaseOpen, setIsAddCaseOpen] = useState(false);
 
   const fetchCases = async () => {
     try {
@@ -46,8 +48,7 @@ const CasesTab: React.FC = () => {
         // Transform backend data to match frontend Case interface
         const transformedCases = casesResponse.data.cases.map((backendCase: any) => ({
           _id: backendCase._id,
-          id: backendCase.phpCaseId || backendCase._id,
-          phpCaseId: backendCase.phpCaseId,
+          id: backendCase._id,
           code: backendCase.code,
           date: backendCase.formSubmitDate || backendCase.createdAt,
           name: backendCase.name,
@@ -89,7 +90,15 @@ const CasesTab: React.FC = () => {
   }, []);
 
   const handleAddCase = () => {
-    console.log('Add new case');
+    setIsAddCaseOpen(true);
+  };
+
+  const handleAddCaseClose = () => {
+    setIsAddCaseOpen(false);
+  };
+
+  const handleCaseAdded = () => {
+    fetchCases();
   };
 
   const handleBulkUpload = () => {
@@ -132,8 +141,8 @@ const CasesTab: React.FC = () => {
   const handleDownloadTemplate = () => {
     const sampleData = [
       {
-        code: 'ZS001',
-        name: 'John Doe',
+        bgvid: 'ZS001',
+        initiatorName: 'John Doe',
         phone: '9876543210',
         email: 'john.doe@example.com',
         appNo: 'APP001',
@@ -144,8 +153,8 @@ const CasesTab: React.FC = () => {
         pin: '400001'
       },
       {
-        code: 'ZS002',
-        name: 'Jane Smith',
+        bgvid: 'ZS002',
+        initiatorName: 'Jane Smith',
         phone: '9876543211',
         email: 'jane.smith@example.com',
         appNo: 'APP002',
@@ -295,6 +304,13 @@ const CasesTab: React.FC = () => {
           <CasesTable cases={cases} onCaseUpdated={fetchCases} />
         </CardContent>
       </Card>
+
+      {/* Add Case Dialog */}
+      <AddCaseDialog
+        isOpen={isAddCaseOpen}
+        onClose={handleAddCaseClose}
+        onCaseAdded={handleCaseAdded}
+      />
 
       {/* Bulk Upload Dialog */}
       <BulkUploadDialog

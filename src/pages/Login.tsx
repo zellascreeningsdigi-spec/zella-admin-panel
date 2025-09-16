@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
+import React, { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -76,24 +76,14 @@ const Login: React.FC = () => {
                 {error}
               </div>
             )}
-            <Button 
-              type="submit" 
-              className="w-full" 
+            <Button
+              type="submit"
+              className="w-full"
               disabled={isLoading}
             >
               {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-          <div className="mt-4 text-sm text-gray-600 text-center">
-            <p className="font-medium mb-2">Default Admin Credentials:</p>
-            <div className="bg-gray-50 p-3 rounded border">
-              <p><strong>Email:</strong> admin@zella.com</p>
-              <p><strong>Password:</strong> ZellaAdmin2024!</p>
-            </div>
-            <p className="text-xs mt-2">
-              Create custom admin: <code className="bg-gray-100 px-1 rounded">npm run create:admin</code>
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>

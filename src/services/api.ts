@@ -129,6 +129,12 @@ class ApiService {
     return this.get(`/cases/${caseId}`);
   }
 
+  async createCase(caseData: any): Promise<ApiResponse<{
+    case: any;
+  }>> {
+    return this.post('/cases', caseData);
+  }
+
   async bulkCreateCases(cases: any[]): Promise<ApiResponse<{
     created: number;
     failed: number;

@@ -128,7 +128,7 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
     () => [
       {
         accessorKey: 'code',
-        header: 'Code',
+        header: 'BGVID',
         cell: ({ row }) => (
           <div className="font-medium">{row.getValue('code')}</div>
         ),
@@ -143,7 +143,7 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
       },
       {
         accessorKey: 'name',
-        header: 'Name',
+        header: 'Initiator Name',
         cell: ({ row }) => (
           <div className="font-medium">{row.getValue('name')}</div>
         ),
