@@ -135,6 +135,18 @@ class ApiService {
     return this.post('/cases', caseData);
   }
 
+  async updateCase(caseId: string, caseData: any): Promise<ApiResponse<{
+    case: any;
+  }>> {
+    return this.put(`/cases/${caseId}`, caseData);
+  }
+
+  async deleteCase(caseId: string): Promise<ApiResponse<{
+    case: any;
+  }>> {
+    return this.delete(`/cases/${caseId}`);
+  }
+
   async bulkCreateCases(cases: any[]): Promise<ApiResponse<{
     created: number;
     failed: number;

@@ -33,6 +33,7 @@ const CasesTab: React.FC = () => {
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [isBulkUploading, setIsBulkUploading] = useState(false);
   const [isAddCaseOpen, setIsAddCaseOpen] = useState(false);
+  const [editingCase, setEditingCase] = useState<Case | null>(null);
 
   const fetchCases = async () => {
     try {
@@ -90,11 +91,27 @@ const CasesTab: React.FC = () => {
   }, []);
 
   const handleAddCase = () => {
+    setEditingCase(null);
     setIsAddCaseOpen(true);
   };
 
   const handleAddCaseClose = () => {
     setIsAddCaseOpen(false);
+    setEditingCase(null);
+  };
+
+  const handleEditCase = (caseData: Case) => {
+    setEditingCase(caseData);
+    setIsAddCaseOpen(true);
+  };
+
+  const handleDeleteCase = (caseData: string | undefined) => {
+    if (caseData) {
+      apiService.deleteCase(caseData).then(() => {
+        fetchCases();
+      });
+    }
+    fetchCases();
   };
 
   const handleCaseAdded = () => {
@@ -301,7 +318,7 @@ const CasesTab: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <CasesTable cases={cases} onCaseUpdated={fetchCases} />
+          <CasesTable cases={cases} onCaseUpdated={fetchCases} onEditCase={handleEditCase} onDeleteCase={handleDeleteCase} />
         </CardContent>
       </Card>
 
@@ -310,6 +327,8 @@ const CasesTab: React.FC = () => {
         isOpen={isAddCaseOpen}
         onClose={handleAddCaseClose}
         onCaseAdded={handleCaseAdded}
+        editCase={editingCase}
+        onCaseUpdated={handleCaseAdded}
       />
 
       {/* Bulk Upload Dialog */}

@@ -4,12 +4,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiService } from '@/services/api';
 import { Case } from '@/types/case';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface AddCaseDialogProps {
     isOpen: boolean;
     onClose: () => void;
     onCaseAdded: () => void;
+    editCase?: Case | null;
+    onCaseUpdated?: () => void;
 }
 
 interface CaseFormData {
@@ -29,7 +31,9 @@ interface CaseFormData {
 const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
     isOpen,
     onClose,
-    onCaseAdded
+    onCaseAdded,
+    editCase,
+    onCaseUpdated
 }) => {
     const [formData, setFormData] = useState<CaseFormData>({
         code: '',
@@ -47,6 +51,41 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<Partial<CaseFormData>>({});
+
+    // Populate form when editCase is provided
+    useEffect(() => {
+        if (editCase && isOpen) {
+            setFormData({
+                code: editCase.code || '',
+                date: editCase.date || '',
+                name: editCase.name || '',
+                phone: editCase.phone || '',
+                appNo: editCase.appNo || '',
+                companyName: editCase.companyName || '',
+                email: editCase.email || '',
+                address: editCase.address || '',
+                city: editCase.city || '',
+                state: editCase.state || '',
+                pin: editCase.pin || ''
+            });
+        } else if (!editCase && isOpen) {
+            // Reset form for new case
+            setFormData({
+                code: '',
+                date: '',
+                name: '',
+                phone: '',
+                appNo: '',
+                companyName: '',
+                email: '',
+                address: '',
+                city: '',
+                state: '',
+                pin: ''
+            });
+        }
+        setErrors({});
+    }, [editCase, isOpen]);
 
     const handleInputChange = (field: keyof CaseFormData, value: string) => {
         setFormData(prev => ({
@@ -68,22 +107,25 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
 
         // Required fields validation
         if (!formData.code.trim()) {
-            newErrors.code = 'Code is required';
+            newErrors.code = 'BGVID is required';
         }
         if (!formData.date.trim()) {
             newErrors.date = 'Date is required';
         }
         if (!formData.name.trim()) {
-            newErrors.name = 'Name is required';
+            newErrors.name = 'Initiator Name is required';
         }
         if (!formData.phone.trim()) {
             newErrors.phone = 'Phone is required';
         }
         if (!formData.appNo.trim()) {
-            newErrors.appNo = 'Application Number is required';
+            newErrors.appNo = 'Candidate Name is required';
         }
         if (!formData.companyName.trim()) {
             newErrors.companyName = 'Company Name is required';
+        }
+        if (!formData.email.trim()) {
+            newErrors.email = 'Email is required';
         }
 
         // Email validation (if provided)
@@ -123,8 +165,6 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
                 phone: formData.phone.trim(),
                 appNo: formData.appNo.trim(),
                 companyName: formData.companyName.trim(),
-                status: 'pending',
-                digiLockerStatus: 'not_initiated',
                 ...(formData.email && { email: formData.email.trim() }),
                 ...(formData.address && { address: formData.address.trim() }),
                 ...(formData.city && { city: formData.city.trim() }),
@@ -132,7 +172,16 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
                 ...(formData.pin && { pin: formData.pin.trim() })
             };
 
-            const response = await apiService.createCase(caseData);
+            let response;
+            if (editCase) {
+                // Update existing case
+                response = await apiService.updateCase(editCase.id, caseData);
+            } else {
+                // Create new case
+                caseData.status = 'pending';
+                caseData.digiLockerStatus = 'not_initiated';
+                response = await apiService.createCase(caseData);
+            }
 
             if (response.success) {
                 // Reset form
@@ -153,15 +202,19 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
 
                 // Close dialog and refresh cases list
                 onClose();
-                onCaseAdded();
+                if (editCase && onCaseUpdated) {
+                    onCaseUpdated();
+                } else {
+                    onCaseAdded();
+                }
 
-                alert('Case added successfully!');
+                alert(editCase ? 'Case updated successfully!' : 'Case added successfully!');
             } else {
-                throw new Error(response.message || 'Failed to create case');
+                throw new Error(response.message || `Failed to ${editCase ? 'update' : 'create'} case`);
             }
         } catch (error) {
-            console.error('Error creating case:', error);
-            alert(`Error creating case: ${error instanceof Error ? error.message : 'Please try again.'}`);
+            console.error(`Error ${editCase ? 'updating' : 'creating'} case:`, error);
+            alert(`Error ${editCase ? 'updating' : 'creating'} case: ${error instanceof Error ? error.message : 'Please try again.'}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -191,9 +244,9 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
         <Dialog open={isOpen} onOpenChange={handleClose}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Add New Case</DialogTitle>
+                    <DialogTitle>{editCase ? 'Edit Case' : 'Add New Case'}</DialogTitle>
                     <DialogDescription>
-                        Fill in the case details below. Fields marked with * are required.
+                        {editCase ? 'Update the case details below.' : 'Fill in the case details below.'} Fields marked with * are required.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -273,14 +326,14 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
                         {/* Application Number - Required */}
                         <div className="space-y-2">
                             <Label htmlFor="appNo">
-                                Application Number <span className="text-red-500">*</span>
+                                Candidate Name <span className="text-red-500">*</span>
                             </Label>
                             <Input
                                 id="appNo"
                                 type="text"
                                 value={formData.appNo}
                                 onChange={(e) => handleInputChange('appNo', e.target.value)}
-                                placeholder="Enter application number"
+                                placeholder="Enter candidate name"
                                 className={errors.appNo ? 'border-red-500' : ''}
                             />
                             {errors.appNo && (
@@ -306,9 +359,9 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
                             )}
                         </div>
 
-                        {/* Email - Optional */}
+                        {/* Email - Required */}
                         <div className="space-y-2">
-                            <Label htmlFor="email">Email</Label>
+                            <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
                             <Input
                                 id="email"
                                 type="email"
@@ -388,7 +441,7 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
                             type="submit"
                             disabled={isSubmitting}
                         >
-                            {isSubmitting ? 'Saving...' : 'Save Case'}
+                            {isSubmitting ? (editCase ? 'Updating...' : 'Saving...') : (editCase ? 'Update Case' : 'Save Case')}
                         </Button>
                     </DialogFooter>
                 </form>

@@ -26,10 +26,8 @@ import {
   ChevronRight,
   Edit,
   Eye,
-  FileEdit,
-  MessageCircle,
   Shield,
-  Trash2,
+  Trash2
 } from 'lucide-react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -37,9 +35,11 @@ import { useNavigate } from 'react-router-dom';
 interface CasesTableProps {
   cases: Case[];
   onCaseUpdated?: () => void;
+  onEditCase?: (caseData: Case) => void;
+  onDeleteCase?: (caseData: string | undefined) => void;
 }
 
-const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
+const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCase, onDeleteCase }) => {
   const navigate = useNavigate();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -184,17 +184,9 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
                 variant="outline"
                 size="sm"
                 title="Edit Case"
-                onClick={() => console.log('Edit case:', caseData.id)}
+                onClick={() => onEditCase?.(caseData)}
               >
                 <Edit className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                title="WhatsApp"
-                onClick={() => window.open(`https://wa.me/91${caseData.phone}`, '_blank')}
-              >
-                <MessageCircle className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
@@ -203,14 +195,6 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
                 onClick={() => navigate(`/documents?caseId=${caseData.id}`)}
               >
                 <Eye className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                title="Edit Report"
-                onClick={() => console.log('Edit report:', caseData.id)}
-              >
-                <FileEdit className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
@@ -230,7 +214,7 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
                 variant="outline"
                 size="sm"
                 title="Delete"
-                onClick={() => console.log('Delete case:', caseData.id)}
+                onClick={() => onDeleteCase?.(caseData._id)}
                 className="hover:bg-red-50 hover:border-red-200"
               >
                 <Trash2 className="h-4 w-4 text-red-600" />
@@ -240,7 +224,7 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated }) => {
         },
       },
     ],
-    [isProcessing, handleDigilockerAction]
+    [isProcessing, handleDigilockerAction, onEditCase, onDeleteCase]
   );
 
   const table = useReactTable({
