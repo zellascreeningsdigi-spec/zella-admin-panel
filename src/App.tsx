@@ -12,6 +12,7 @@ function App() {
         <div className="App">
           <Routes>
             <Route path="/login" element={<Login />} />
+            
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/digilocker" element={<DigiLockerCallback />} />
             <Route path="/documents" element={<DocumentPage />} />
