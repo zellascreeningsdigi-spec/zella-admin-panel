@@ -31,8 +31,8 @@ const DigiLockerCallback: React.FC = () => {
         if (error) {
           setCallbackState({
             status: 'error',
-            message: `Authorization failed: ${error}`,
-            error: `Failed due to${error_description}`,
+            message: `Authorization failed`,
+            error: `Failed Contact us via email start@zellascreenings.com`,
           });
           return;
         }
@@ -40,14 +40,15 @@ const DigiLockerCallback: React.FC = () => {
         if (!code || !state) {
           setCallbackState({
             status: 'error',
-            message: 'Missing authorization code or state parameter'
+            message: 'Invalid URL',
+            error: `Please try again with same authorization link sent by mail.`,
           });
           return;
         }
 
         setCallbackState({
           status: 'loading',
-          message: 'Exchanging authorization code for access token...'
+          message: 'Communicating with digilocker...'
         });
 
         // Call backend to exchange code for token
@@ -94,13 +95,13 @@ const DigiLockerCallback: React.FC = () => {
               } else {
                 setCallbackState({
                   status: 'error',
-                  message: 'Failed to fetch documents: ' + documentsResult.message
+                  message: 'Failed to fetch documents'
                 });
               }
             } catch (docError) {
               setCallbackState({
                 status: 'error',
-                message: 'Error fetching documents: ' + (docError as Error).message
+                message: 'Error fetching documents: Contact us via email start@zellascreenings.com'
               });
             }
           }, 2000);
@@ -108,14 +109,14 @@ const DigiLockerCallback: React.FC = () => {
         } else {
           setCallbackState({
             status: 'error',
-            message: result.message || 'Failed to exchange authorization code'
+            message: 'Link Expired Contact us for new Link via email start@zellascreenings.com'
           });
         }
 
       } catch (error) {
         setCallbackState({
           status: 'error',
-          message: 'Network error: ' + (error as Error).message
+          message: 'Network error'
         });
       }
     };
@@ -163,53 +164,9 @@ const DigiLockerCallback: React.FC = () => {
             {callbackState.message}
           </p>
 
-          {callbackState.sessionId && (
-            <div className="text-sm text-gray-600">
-              <p>Session ID: <code className="bg-gray-100 px-2 py-1 rounded">{callbackState.sessionId}</code></p>
-            </div>
-          )}
-
           {callbackState.status === 'loading' && (
             <div className="flex justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            </div>
-          )}
-
-          {callbackState.status === 'success' && (
-            <div className="space-y-2">
-              <p className="text-sm text-gray-600">
-                Your documents have been successfully retrieved and stored in our system.
-              </p>
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition-colors"
-              >
-                Go to Dashboard
-              </button>
-            </div>
-          )}
-
-          {callbackState.status === 'error' && (
-            <div className="space-y-2">
-              <p className="text-sm text-gray-600">
-                Please try again or contact support if the issue persists.
-              </p>
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="w-full bg-gray-600 text-white py-2 px-4 rounded hover:bg-gray-700 transition-colors"
-              >
-                Back to Dashboard
-              </button>
-            </div>
-          )}
-
-          {/* Debug information for development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mt-4 p-3 bg-gray-100 rounded text-xs text-left">
-              <h4 className="font-bold mb-2">Debug Info:</h4>
-              <p>Code: {callbackState.code || 'Not provided'}</p>
-              <p>State: {callbackState.state || 'Not provided'}</p>
-              <p>Error: {searchParams.get('error') || 'None'}</p>
             </div>
           )}
         </CardContent>
