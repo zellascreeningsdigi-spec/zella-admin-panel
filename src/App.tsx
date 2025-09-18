@@ -16,6 +16,7 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             
             <Route path="/digilocker" element={<DigiLockerCallback />} />
+            
             <Route path="/documents" element={<DocumentPage />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>
