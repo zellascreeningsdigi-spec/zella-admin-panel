@@ -314,7 +314,7 @@ const CasesTab: React.FC = () => {
         <CardHeader>
           <CardTitle>All Cases</CardTitle>
           <CardDescription>
-            Manage and track all verification cases. Cases added via PHP application will appear here automatically.
+            Manage and track all verification cases.
           </CardDescription>
         </CardHeader>
         <CardContent>
