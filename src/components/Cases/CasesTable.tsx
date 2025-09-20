@@ -134,6 +134,13 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
         ),
       },
       {
+        accessorKey: 'appNo',
+        header: 'Candidate Name',
+        cell: ({ row }) => (
+          <div className="font-mono text-sm">{row.getValue('appNo')}</div>
+        ),
+      },
+      {
         accessorKey: 'date',
         header: 'Date',
         cell: ({ row }) => {
@@ -151,13 +158,6 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
       {
         accessorKey: 'phone',
         header: 'Phone',
-      },
-      {
-        accessorKey: 'appNo',
-        header: 'App No.',
-        cell: ({ row }) => (
-          <div className="font-mono text-sm">{row.getValue('appNo')}</div>
-        ),
       },
       {
         accessorKey: 'companyName',
