@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from '@/components/Layout/Sidebar';
 import Header from '@/components/Layout/Header';
@@ -8,7 +8,14 @@ import CasesTab from '@/components/Cases/CasesTab';
 
 const Dashboard: React.FC = () => {
   const { user, loading } = useAuth();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  useEffect(() => {
+    if (location.state?.activeTab) {
+      setActiveTab(location.state.activeTab);
+    }
+  }, [location.state]);
 
   if (loading) {
     return (

@@ -31,7 +31,7 @@ const DocumentPage = () => {
     };
 
     const handleBackToCases = () => {
-        navigate('/');
+        navigate('/dashboard', { state: { activeTab: 'cases' } });
     };
 
     if (!caseData) {
