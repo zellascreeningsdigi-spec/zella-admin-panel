@@ -1,11 +1,14 @@
 import DocumentCard from "@/components/Documents/DocumentCard";
+import { Button } from "@/components/ui/button";
 import apiService from "@/services/api";
 import { Case } from "@/types/case";
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 const DocumentPage = () => {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const [caseData, setCaseData] = useState<Case | null>(null);
 
     useEffect(() => {
@@ -27,6 +30,10 @@ const DocumentPage = () => {
         window.open(s3Url, '_blank', 'noopener,noreferrer');
     };
 
+    const handleBackToCases = () => {
+        navigate('/');
+    };
+
     if (!caseData) {
         return (
             <div className="flex items-center justify-center min-h-screen">
@@ -41,6 +48,17 @@ const DocumentPage = () => {
     return (
         <div className="container mx-auto px-4 py-8">
             <div className="mb-8">
+                <div className="flex items-center gap-4 mb-4">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleBackToCases}
+                        className="flex items-center gap-2"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to Cases
+                    </Button>
+                </div>
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">Documents</h1>
                 <p className="text-gray-600">
                     Case: {caseData.code} - {caseData.name}
