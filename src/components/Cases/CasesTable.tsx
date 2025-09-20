@@ -127,6 +127,14 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
   const columns = useMemo<ColumnDef<Case>[]>(
     () => [
       {
+        accessorKey: 'date',
+        header: 'Date',
+        cell: ({ row }) => {
+          const date = new Date(row.getValue('date'));
+          return <div>{date.toLocaleDateString('en-GB')}</div>;
+        },
+      },
+      {
         accessorKey: 'code',
         header: 'BGVID',
         cell: ({ row }) => (
@@ -139,14 +147,6 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
         cell: ({ row }) => (
           <div className="font-mono text-sm">{row.getValue('appNo')}</div>
         ),
-      },
-      {
-        accessorKey: 'date',
-        header: 'Date',
-        cell: ({ row }) => {
-          const date = new Date(row.getValue('date'));
-          return <div>{date.toLocaleDateString('en-GB')}</div>;
-        },
       },
       {
         accessorKey: 'name',
