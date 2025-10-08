@@ -49,7 +49,8 @@ const BulkUploadCustomersDialog: React.FC<BulkUploadCustomersDialogProps> = ({
 
   const handleDownloadSample = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/customers/sample-file', {
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_BASE_URL}/customers/sample-file`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
         }
@@ -83,10 +84,11 @@ const BulkUploadCustomersDialog: React.FC<BulkUploadCustomersDialogProps> = ({
     setResult(null);
 
     try {
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('http://localhost:5000/api/customers/bulk-upload', {
+      const response = await fetch(`${API_BASE_URL}/customers/bulk-upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
