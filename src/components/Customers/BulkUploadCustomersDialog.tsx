@@ -201,9 +201,10 @@ const BulkUploadCustomersDialog: React.FC<BulkUploadCustomersDialogProps> = ({
                 </p>
                 <ul className="text-xs text-amber-800 space-y-1 ml-6 list-disc">
                   <li>File must be CSV or Excel (.xlsx, .xls) format</li>
-                  <li>Required columns: "Company Name", "Email 1"</li>
-                  <li>Optional columns: "Email 2", "Email 3", "Email 4", "Email 5", "Documents Required"</li>
-                  <li>Documents Required should be comma-separated (e.g., "Aadhaar Card,PAN Card")</li>
+                  <li>Required columns: "Company Name", "Emails"</li>
+                  <li>Optional column: "Documents Required"</li>
+                  <li><strong>Emails</strong> should be comma-separated (e.g., "email1@test.com,email2@test.com")</li>
+                  <li><strong>Documents Required</strong> should be comma-separated (e.g., "Aadhaar Card,PAN Card")</li>
                   <li>Each customer must have at least one email address</li>
                   <li>Duplicate company names will be skipped</li>
                 </ul>
