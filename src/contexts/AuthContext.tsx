@@ -7,6 +7,7 @@ interface User {
   name: string;
   email: string;
   role: string;
+  customerId?: string; // For customer role users
   permissions: {
     canInitiateDigiLocker: boolean;
     canViewReports: boolean;

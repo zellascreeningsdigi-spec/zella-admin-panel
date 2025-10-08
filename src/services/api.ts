@@ -226,6 +226,88 @@ class ApiService {
   async refreshToken(): Promise<ApiResponse<{ token: string }>> {
     return this.post('/auth/refresh');
   }
+
+  // Customers API methods
+  async getCustomers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<ApiResponse<{
+    customers: any[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+
+    const endpoint = queryParams.toString() ? `/customers?${queryParams}` : '/customers';
+    return this.get(endpoint);
+  }
+
+  async getCustomerById(customerId: string): Promise<ApiResponse<{
+    customer: any;
+  }>> {
+    return this.get(`/customers/${customerId}`);
+  }
+
+  async createCustomer(customerData: any): Promise<ApiResponse<{
+    customer: any;
+  }>> {
+    return this.post('/customers', customerData);
+  }
+
+  async updateCustomer(customerId: string, customerData: any): Promise<ApiResponse<{
+    customer: any;
+  }>> {
+    return this.put(`/customers/${customerId}`, customerData);
+  }
+
+  async deleteCustomer(customerId: string): Promise<ApiResponse<{
+    customer: any;
+  }>> {
+    return this.delete(`/customers/${customerId}`);
+  }
+
+  // Customer Documents API
+  async getCustomerDocuments(customerId: string): Promise<ApiResponse<{
+    documents: any[];
+    documentsRequired: string[];
+  }>> {
+    return this.get(`/customers/${customerId}/documents`);
+  }
+
+  async uploadCustomerDocument(customerId: string, formData: FormData): Promise<ApiResponse<{
+    document: any;
+  }>> {
+    const token = this.getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/customers/${customerId}/documents`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    });
+
+    return response.json();
+  }
+
+  async deleteCustomerDocument(customerId: string, documentId: string): Promise<ApiResponse<{}>> {
+    return this.delete(`/customers/${customerId}/documents/${documentId}`);
+  }
+
+  async sendCustomerLoginEmails(customerId: string, emails: string[]): Promise<ApiResponse<{
+    results: any[];
+    successCount: number;
+    failureCount: number;
+  }>> {
+    return this.post(`/customers/${customerId}/send-email`, { emails });
+  }
 }
 
 export const apiService = new ApiService();

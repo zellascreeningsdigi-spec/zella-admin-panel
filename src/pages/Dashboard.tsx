@@ -5,6 +5,7 @@ import Sidebar from '@/components/Layout/Sidebar';
 import Header from '@/components/Layout/Header';
 import DashboardOverview from '@/components/Dashboard/DashboardOverview';
 import CasesTab from '@/components/Cases/CasesTab';
+import CustomersTab from '@/components/Customers/CustomersTab';
 
 const Dashboard: React.FC = () => {
   const { user, loading } = useAuth();
@@ -14,8 +15,11 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (location.state?.activeTab) {
       setActiveTab(location.state.activeTab);
+    } else if (user?.role === 'customer') {
+      // Customer users should default to the customers tab
+      setActiveTab('customers');
     }
-  }, [location.state]);
+  }, [location.state, user]);
 
   if (loading) {
     return (
@@ -35,6 +39,8 @@ const Dashboard: React.FC = () => {
         return <DashboardOverview />;
       case 'cases':
         return <CasesTab />;
+      case 'customers':
+        return <CustomersTab />;
       default:
         return <DashboardOverview />;
     }
