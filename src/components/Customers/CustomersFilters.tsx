@@ -27,26 +27,30 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ onFilterChange, onR
     lastUpdatedTo: '',
   });
 
-  // Debounce search input
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      onFilterChange(filters);
-    }, 500); // 500ms debounce for search
-
-    return () => clearTimeout(timeoutId);
-  }, [filters.search]);
-
-  // Immediate update for date filters
-  useEffect(() => {
-    if (filters.dateFrom || filters.dateTo || filters.lastUpdatedFrom || filters.lastUpdatedTo) {
-      onFilterChange(filters);
-    }
-  }, [filters.dateFrom, filters.dateTo, filters.lastUpdatedFrom, filters.lastUpdatedTo]);
-
   const handleFilterChange = (key: keyof CustomerFilters, value: string) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
+
+    // For date filters, update immediately
+    if (key !== 'search') {
+      onFilterChange(newFilters);
+    }
   };
+
+  // Debounce only the search input
+  useEffect(() => {
+    if (filters.search === '') {
+      // If search is cleared, update immediately
+      onFilterChange(filters);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      onFilterChange(filters);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [filters.search]);
 
   const handleReset = () => {
     const resetFilters: CustomerFilters = {

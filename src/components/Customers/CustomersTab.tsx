@@ -21,35 +21,18 @@ const CustomersTab: React.FC = () => {
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
-  const [filters, setFilters] = useState<CustomerFilters>({
-    search: '',
-    dateFrom: '',
-    dateTo: '',
-    lastUpdatedFrom: '',
-    lastUpdatedTo: '',
-  });
-  const [appliedFilters, setAppliedFilters] = useState<CustomerFilters>({
-    search: '',
-    dateFrom: '',
-    dateTo: '',
-    lastUpdatedFrom: '',
-    lastUpdatedTo: '',
-  });
-
   const fetchCustomers = async (filterParams?: CustomerFilters) => {
     try {
       setLoading(true);
       setError(null);
 
-      const filtersToUse = filterParams || appliedFilters;
-
       const response = await apiService.getCustomers({
         limit: 100,
-        search: filtersToUse.search || undefined,
-        dateFrom: filtersToUse.dateFrom || undefined,
-        dateTo: filtersToUse.dateTo || undefined,
-        lastUpdatedFrom: filtersToUse.lastUpdatedFrom || undefined,
-        lastUpdatedTo: filtersToUse.lastUpdatedTo || undefined,
+        search: filterParams?.search || undefined,
+        dateFrom: filterParams?.dateFrom || undefined,
+        dateTo: filterParams?.dateTo || undefined,
+        lastUpdatedFrom: filterParams?.lastUpdatedFrom || undefined,
+        lastUpdatedTo: filterParams?.lastUpdatedTo || undefined,
       });
 
       if (response.success && response.data) {
@@ -121,8 +104,6 @@ const CustomersTab: React.FC = () => {
   };
 
   const handleFilterChange = (newFilters: CustomerFilters) => {
-    setFilters(newFilters);
-    setAppliedFilters(newFilters);
     fetchCustomers(newFilters);
   };
 
@@ -134,8 +115,6 @@ const CustomersTab: React.FC = () => {
       lastUpdatedFrom: '',
       lastUpdatedTo: '',
     };
-    setFilters(resetFilters);
-    setAppliedFilters(resetFilters);
     fetchCustomers(resetFilters);
   };
 
