@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar, Filter, X } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 export interface CustomerFilters {
   search: string;
@@ -26,6 +26,7 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ onFilterChange, onR
     lastUpdatedFrom: '',
     lastUpdatedTo: '',
   });
+  const isInitialMount = useRef(true);
 
   const handleFilterChange = (key: keyof CustomerFilters, value: string) => {
     const newFilters = { ...filters, [key]: value };
@@ -39,9 +40,9 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ onFilterChange, onR
 
   // Debounce only the search input
   useEffect(() => {
-    if (filters.search === '') {
-      // If search is cleared, update immediately
-      onFilterChange(filters);
+    // Skip initial render
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
       return;
     }
 
