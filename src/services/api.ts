@@ -227,11 +227,19 @@ class ApiService {
     return this.post('/auth/refresh');
   }
 
+  async resetPassword(currentPassword: string, newPassword: string): Promise<ApiResponse<any>> {
+    return this.post('/auth/reset-password', { currentPassword, newPassword });
+  }
+
   // Customers API methods
   async getCustomers(params?: {
     page?: number;
     limit?: number;
     search?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    lastUpdatedFrom?: string;
+    lastUpdatedTo?: string;
   }): Promise<ApiResponse<{
     customers: any[];
     pagination: {
@@ -245,6 +253,10 @@ class ApiService {
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.search) queryParams.append('search', params.search);
+    if (params?.dateFrom) queryParams.append('dateFrom', params.dateFrom);
+    if (params?.dateTo) queryParams.append('dateTo', params.dateTo);
+    if (params?.lastUpdatedFrom) queryParams.append('lastUpdatedFrom', params.lastUpdatedFrom);
+    if (params?.lastUpdatedTo) queryParams.append('lastUpdatedTo', params.lastUpdatedTo);
 
     const endpoint = queryParams.toString() ? `/customers?${queryParams}` : '/customers';
     return this.get(endpoint);

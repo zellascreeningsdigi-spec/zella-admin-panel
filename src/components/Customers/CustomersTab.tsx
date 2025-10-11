@@ -8,6 +8,7 @@ import React, { useEffect, useState } from 'react';
 import AddCustomerDialog from './AddCustomerDialog';
 import BulkUploadCustomersDialog from './BulkUploadCustomersDialog';
 import CustomerDetailsView from './CustomerDetailsView';
+import CustomersFilters, { CustomerFilters } from './CustomersFilters';
 import CustomersTable from './CustomersTable';
 import DocumentsSection from './DocumentsSection';
 
@@ -20,13 +21,27 @@ const CustomersTab: React.FC = () => {
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
+  const [filters, setFilters] = useState<CustomerFilters>({
+    search: '',
+    dateFrom: '',
+    dateTo: '',
+    lastUpdatedFrom: '',
+    lastUpdatedTo: '',
+  });
 
   const fetchCustomers = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await apiService.getCustomers({ limit: 100 });
+      const response = await apiService.getCustomers({
+        limit: 100,
+        search: filters.search || undefined,
+        dateFrom: filters.dateFrom || undefined,
+        dateTo: filters.dateTo || undefined,
+        lastUpdatedFrom: filters.lastUpdatedFrom || undefined,
+        lastUpdatedTo: filters.lastUpdatedTo || undefined,
+      });
 
       if (response.success && response.data) {
         setCustomers(response.data.customers);
@@ -41,7 +56,7 @@ const CustomersTab: React.FC = () => {
 
   useEffect(() => {
     fetchCustomers();
-  }, []);
+  }, [filters]);
 
   const handleAddCustomer = () => {
     setEditingCustomer(null);
@@ -94,6 +109,20 @@ const CustomersTab: React.FC = () => {
 
   const handleRefresh = () => {
     fetchCustomers();
+  };
+
+  const handleFilterChange = (newFilters: CustomerFilters) => {
+    setFilters(newFilters);
+  };
+
+  const handleResetFilters = () => {
+    setFilters({
+      search: '',
+      dateFrom: '',
+      dateTo: '',
+      lastUpdatedFrom: '',
+      lastUpdatedTo: '',
+    });
   };
 
   if (loading) {
@@ -249,7 +278,11 @@ const CustomersTab: React.FC = () => {
             Manage customer companies and their email contacts.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <CustomersFilters
+            onFilterChange={handleFilterChange}
+            onReset={handleResetFilters}
+          />
           <CustomersTable
             customers={customers}
             onViewCustomer={handleViewCustomer}

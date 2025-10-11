@@ -96,7 +96,10 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
 
       const files = Array.from(e.dataTransfer.files);
       if (files.length > 0) {
-        handleFileUpload(files[0], documentName);
+        // Upload all files
+        files.forEach(file => {
+          handleFileUpload(file, documentName);
+        });
       }
     },
     [customer._id]
@@ -105,7 +108,10 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>, documentName: string) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      handleFileUpload(files[0], documentName);
+      // Upload all selected files
+      Array.from(files).forEach(file => {
+        handleFileUpload(file, documentName);
+      });
     }
   };
 
@@ -158,7 +164,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
       <CardHeader>
         <CardTitle>Required Documents</CardTitle>
         <CardDescription>
-          Upload the required documents below. Drag and drop files or click to browse.
+          Upload the required documents below. Drag and drop multiple files or click to browse.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -188,7 +194,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
               >
                 <Upload className="h-8 w-8 mx-auto text-gray-400 mb-2" />
                 <p className="text-sm text-gray-600 mb-1">
-                  Drag and drop your file here, or click to browse
+                  Drag and drop your files here, or click to browse
                 </p>
                 <p className="text-xs text-gray-400">PDF, JPG, PNG, DOC (Max 10MB)</p>
                 <input
@@ -198,6 +204,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
                   onChange={(e) => handleFileInputChange(e, documentName)}
                   accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
                   disabled={uploading}
+                  multiple
                 />
                 <Button
                   type="button"

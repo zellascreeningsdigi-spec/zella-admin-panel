@@ -69,7 +69,15 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
         header: 'Created At',
         cell: ({ row }) => {
           const date = new Date(row.getValue('createdAt'));
-          return <div>{date.toLocaleDateString('en-GB')}</div>;
+          return <div className="text-sm">{date.toLocaleDateString('en-GB')}</div>;
+        },
+      },
+      {
+        accessorKey: 'updatedAt',
+        header: 'Last Updated',
+        cell: ({ row }) => {
+          const date = new Date(row.getValue('updatedAt'));
+          return <div className="text-sm text-gray-600">{date.toLocaleDateString('en-GB')}</div>;
         },
       },
       {
@@ -136,33 +144,25 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <Input
-          placeholder="Search customers..."
-          value={globalFilter ?? ''}
-          onChange={(event) => setGlobalFilter(String(event.target.value))}
-          className="max-w-sm"
-        />
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Next
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+      <div className="flex items-center justify-end space-x-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => table.previousPage()}
+          disabled={!table.getCanPreviousPage()}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Previous
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => table.nextPage()}
+          disabled={!table.getCanNextPage()}
+        >
+          Next
+          <ChevronRight className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="rounded-md border">
