@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar, Filter, X } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 
 export interface CustomerFilters {
   search: string;
@@ -13,55 +13,39 @@ export interface CustomerFilters {
 }
 
 interface CustomersFiltersProps {
-  onFilterChange: (filters: CustomerFilters) => void;
+  filters: CustomerFilters;
+  onFilterChange: (filters: CustomerFilters, immediate?: boolean) => void;
   onReset: () => void;
 }
 
-const CustomersFilters: React.FC<CustomersFiltersProps> = ({ onFilterChange, onReset }) => {
+const CustomersFilters: React.FC<CustomersFiltersProps> = ({ filters, onFilterChange, onReset }) => {
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<CustomerFilters>({
-    search: '',
-    dateFrom: '',
-    dateTo: '',
-    lastUpdatedFrom: '',
-    lastUpdatedTo: '',
-  });
-  const isInitialMount = useRef(true);
+  const searchTimeoutRef = useRef<NodeJS.Timeout>();
 
   const handleFilterChange = (key: keyof CustomerFilters, value: string) => {
     const newFilters = { ...filters, [key]: value };
-    setFilters(newFilters);
 
-    // For date filters, update immediately
-    if (key !== 'search') {
-      onFilterChange(newFilters);
+    // For search, debounce the API call
+    if (key === 'search') {
+      // Clear existing timeout
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+
+      // Update filters immediately (for UI)
+      onFilterChange(newFilters, false);
+
+      // Debounce the actual fetch
+      searchTimeoutRef.current = setTimeout(() => {
+        onFilterChange(newFilters, true);
+      }, 500);
+    } else {
+      // For date filters, update immediately
+      onFilterChange(newFilters, true);
     }
   };
 
-  // Debounce only the search input
-  useEffect(() => {
-    // Skip initial render
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      onFilterChange(filters);
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [filters.search]);
-
   const handleReset = () => {
-    const resetFilters: CustomerFilters = {
-      search: '',
-      dateFrom: '',
-      dateTo: '',
-      lastUpdatedFrom: '',
-      lastUpdatedTo: '',
-    };
-    setFilters(resetFilters);
     onReset();
   };
 

@@ -21,6 +21,14 @@ const CustomersTab: React.FC = () => {
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
+  const [filters, setFilters] = useState<CustomerFilters>({
+    search: '',
+    dateFrom: '',
+    dateTo: '',
+    lastUpdatedFrom: '',
+    lastUpdatedTo: '',
+  });
+
   const fetchCustomers = async (filterParams?: CustomerFilters) => {
     try {
       setLoading(true);
@@ -103,8 +111,11 @@ const CustomersTab: React.FC = () => {
     fetchCustomers();
   };
 
-  const handleFilterChange = (newFilters: CustomerFilters) => {
-    fetchCustomers(newFilters);
+  const handleFilterChange = (newFilters: CustomerFilters, immediate: boolean = true) => {
+    setFilters(newFilters);
+    if (immediate) {
+      fetchCustomers(newFilters);
+    }
   };
 
   const handleResetFilters = () => {
@@ -115,6 +126,7 @@ const CustomersTab: React.FC = () => {
       lastUpdatedFrom: '',
       lastUpdatedTo: '',
     };
+    setFilters(resetFilters);
     fetchCustomers(resetFilters);
   };
 
@@ -273,6 +285,7 @@ const CustomersTab: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <CustomersFilters
+            filters={filters}
             onFilterChange={handleFilterChange}
             onReset={handleResetFilters}
           />
