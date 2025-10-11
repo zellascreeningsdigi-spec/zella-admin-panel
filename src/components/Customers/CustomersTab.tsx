@@ -28,19 +28,28 @@ const CustomersTab: React.FC = () => {
     lastUpdatedFrom: '',
     lastUpdatedTo: '',
   });
+  const [appliedFilters, setAppliedFilters] = useState<CustomerFilters>({
+    search: '',
+    dateFrom: '',
+    dateTo: '',
+    lastUpdatedFrom: '',
+    lastUpdatedTo: '',
+  });
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (filterParams?: CustomerFilters) => {
     try {
       setLoading(true);
       setError(null);
 
+      const filtersToUse = filterParams || appliedFilters;
+
       const response = await apiService.getCustomers({
         limit: 100,
-        search: filters.search || undefined,
-        dateFrom: filters.dateFrom || undefined,
-        dateTo: filters.dateTo || undefined,
-        lastUpdatedFrom: filters.lastUpdatedFrom || undefined,
-        lastUpdatedTo: filters.lastUpdatedTo || undefined,
+        search: filtersToUse.search || undefined,
+        dateFrom: filtersToUse.dateFrom || undefined,
+        dateTo: filtersToUse.dateTo || undefined,
+        lastUpdatedFrom: filtersToUse.lastUpdatedFrom || undefined,
+        lastUpdatedTo: filtersToUse.lastUpdatedTo || undefined,
       });
 
       if (response.success && response.data) {
@@ -56,7 +65,7 @@ const CustomersTab: React.FC = () => {
 
   useEffect(() => {
     fetchCustomers();
-  }, [filters]);
+  }, []);
 
   const handleAddCustomer = () => {
     setEditingCustomer(null);
@@ -113,16 +122,21 @@ const CustomersTab: React.FC = () => {
 
   const handleFilterChange = (newFilters: CustomerFilters) => {
     setFilters(newFilters);
+    setAppliedFilters(newFilters);
+    fetchCustomers(newFilters);
   };
 
   const handleResetFilters = () => {
-    setFilters({
+    const resetFilters = {
       search: '',
       dateFrom: '',
       dateTo: '',
       lastUpdatedFrom: '',
       lastUpdatedTo: '',
-    });
+    };
+    setFilters(resetFilters);
+    setAppliedFilters(resetFilters);
+    fetchCustomers(resetFilters);
   };
 
   if (loading) {
