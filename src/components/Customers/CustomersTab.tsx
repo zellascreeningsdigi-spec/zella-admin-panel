@@ -16,22 +16,19 @@ const CustomersTab: React.FC = () => {
   const { user } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
-  const [filters, setFilters] = useState<CustomerFilters>({
-    search: '',
-    dateFrom: '',
-    dateTo: '',
-    lastUpdatedFrom: '',
-    lastUpdatedTo: '',
-  });
 
   const fetchCustomers = async (filterParams?: CustomerFilters) => {
     try {
-      setLoading(true);
+      // Only show full page loading on initial load
+      if (initialLoad) {
+        setLoading(true);
+      }
       setError(null);
 
       const response = await apiService.getCustomers({
@@ -50,7 +47,10 @@ const CustomersTab: React.FC = () => {
       console.error('Error fetching customers:', err);
       setError('Failed to load customers. Please try again.');
     } finally {
-      setLoading(false);
+      if (initialLoad) {
+        setLoading(false);
+        setInitialLoad(false);
+      }
     }
   };
 
@@ -111,23 +111,12 @@ const CustomersTab: React.FC = () => {
     fetchCustomers();
   };
 
-  const handleFilterChange = (newFilters: CustomerFilters, immediate: boolean = true) => {
-    setFilters(newFilters);
-    if (immediate) {
-      fetchCustomers(newFilters);
-    }
+  const handleFilterChange = (newFilters: CustomerFilters) => {
+    fetchCustomers(newFilters);
   };
 
   const handleResetFilters = () => {
-    const resetFilters = {
-      search: '',
-      dateFrom: '',
-      dateTo: '',
-      lastUpdatedFrom: '',
-      lastUpdatedTo: '',
-    };
-    setFilters(resetFilters);
-    fetchCustomers(resetFilters);
+    fetchCustomers();
   };
 
   if (loading) {
@@ -285,7 +274,6 @@ const CustomersTab: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <CustomersFilters
-            filters={filters}
             onFilterChange={handleFilterChange}
             onReset={handleResetFilters}
           />

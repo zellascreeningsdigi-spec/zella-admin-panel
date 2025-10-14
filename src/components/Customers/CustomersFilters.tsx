@@ -13,17 +13,24 @@ export interface CustomerFilters {
 }
 
 interface CustomersFiltersProps {
-  filters: CustomerFilters;
-  onFilterChange: (filters: CustomerFilters, immediate?: boolean) => void;
+  onFilterChange: (filters: CustomerFilters) => void;
   onReset: () => void;
 }
 
-const CustomersFilters: React.FC<CustomersFiltersProps> = ({ filters, onFilterChange, onReset }) => {
+const CustomersFilters: React.FC<CustomersFiltersProps> = ({ onFilterChange, onReset }) => {
   const [showFilters, setShowFilters] = useState(false);
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const [localFilters, setLocalFilters] = useState<CustomerFilters>({
+    search: '',
+    dateFrom: '',
+    dateTo: '',
+    lastUpdatedFrom: '',
+    lastUpdatedTo: '',
+  });
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleFilterChange = (key: keyof CustomerFilters, value: string) => {
-    const newFilters = { ...filters, [key]: value };
+    const newFilters = { ...localFilters, [key]: value };
+    setLocalFilters(newFilters);
 
     // For search, debounce the API call
     if (key === 'search') {
@@ -32,24 +39,28 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ filters, onFilterCh
         clearTimeout(searchTimeoutRef.current);
       }
 
-      // Update filters immediately (for UI)
-      onFilterChange(newFilters, false);
-
       // Debounce the actual fetch
       searchTimeoutRef.current = setTimeout(() => {
-        onFilterChange(newFilters, true);
+        onFilterChange(newFilters);
       }, 500);
     } else {
       // For date filters, update immediately
-      onFilterChange(newFilters, true);
+      onFilterChange(newFilters);
     }
   };
 
   const handleReset = () => {
+    setLocalFilters({
+      search: '',
+      dateFrom: '',
+      dateTo: '',
+      lastUpdatedFrom: '',
+      lastUpdatedTo: '',
+    });
     onReset();
   };
 
-  const hasActiveFilters = Object.values(filters).some(value => value !== '');
+  const hasActiveFilters = Object.values(localFilters).some(value => value !== '');
 
   return (
     <div className="space-y-4">
@@ -58,7 +69,7 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ filters, onFilterCh
         <div className="flex-1">
           <Input
             placeholder="Search by company name, email, or document name..."
-            value={filters.search}
+            value={localFilters.search}
             onChange={(e) => handleFilterChange('search', e.target.value)}
             className="w-full"
           />
@@ -99,7 +110,7 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ filters, onFilterCh
                 <div>
                   <Input
                     type="date"
-                    value={filters.dateFrom}
+                    value={localFilters.dateFrom}
                     onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
                     placeholder="From"
                     className="w-full"
@@ -109,7 +120,7 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ filters, onFilterCh
                 <div>
                   <Input
                     type="date"
-                    value={filters.dateTo}
+                    value={localFilters.dateTo}
                     onChange={(e) => handleFilterChange('dateTo', e.target.value)}
                     placeholder="To"
                     className="w-full"
@@ -126,7 +137,7 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ filters, onFilterCh
                 <div>
                   <Input
                     type="date"
-                    value={filters.lastUpdatedFrom}
+                    value={localFilters.lastUpdatedFrom}
                     onChange={(e) => handleFilterChange('lastUpdatedFrom', e.target.value)}
                     placeholder="From"
                     className="w-full"
@@ -136,7 +147,7 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ filters, onFilterCh
                 <div>
                   <Input
                     type="date"
-                    value={filters.lastUpdatedTo}
+                    value={localFilters.lastUpdatedTo}
                     onChange={(e) => handleFilterChange('lastUpdatedTo', e.target.value)}
                     placeholder="To"
                     className="w-full"
@@ -152,29 +163,29 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ filters, onFilterCh
             <div className="flex items-center gap-2 pt-2 border-t">
               <span className="text-sm text-gray-600">Active filters:</span>
               <div className="flex flex-wrap gap-2">
-                {filters.search && (
+                {localFilters.search && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-700">
-                    Search: {filters.search}
+                    Search: {localFilters.search}
                   </span>
                 )}
-                {filters.dateFrom && (
+                {localFilters.dateFrom && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-700">
-                    Created from: {new Date(filters.dateFrom).toLocaleDateString()}
+                    Created from: {new Date(localFilters.dateFrom).toLocaleDateString()}
                   </span>
                 )}
-                {filters.dateTo && (
+                {localFilters.dateTo && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-700">
-                    Created to: {new Date(filters.dateTo).toLocaleDateString()}
+                    Created to: {new Date(localFilters.dateTo).toLocaleDateString()}
                   </span>
                 )}
-                {filters.lastUpdatedFrom && (
+                {localFilters.lastUpdatedFrom && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700">
-                    Updated from: {new Date(filters.lastUpdatedFrom).toLocaleDateString()}
+                    Updated from: {new Date(localFilters.lastUpdatedFrom).toLocaleDateString()}
                   </span>
                 )}
-                {filters.lastUpdatedTo && (
+                {localFilters.lastUpdatedTo && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700">
-                    Updated to: {new Date(filters.lastUpdatedTo).toLocaleDateString()}
+                    Updated to: {new Date(localFilters.lastUpdatedTo).toLocaleDateString()}
                   </span>
                 )}
               </div>
