@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/contexts/AuthContext';
 import { apiService } from '@/services/api';
 import { Customer, CustomerDocument } from '@/types/customer';
 import { Download, FileText, Trash2, Upload, X } from 'lucide-react';
@@ -11,6 +12,7 @@ interface DocumentsSectionProps {
 }
 
 const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumentsUpdated }) => {
+  const { user } = useAuth();
   const [documents, setDocuments] = useState<CustomerDocument[]>([]);
   const [documentsRequired, setDocumentsRequired] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -196,13 +198,13 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
                 <p className="text-sm text-gray-600 mb-1">
                   Drag and drop your files here, or click to browse
                 </p>
-                <p className="text-xs text-gray-400">PDF, JPG, PNG, DOC (Max 10MB)</p>
+                <p className="text-xs text-gray-400">PDF, JPG, PNG, DOC, ZIP (Max 10MB)</p>
                 <input
                   type="file"
                   id={`file-${index}`}
                   className="hidden"
                   onChange={(e) => handleFileInputChange(e, documentName)}
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.zip"
                   disabled={uploading}
                   multiple
                 />
@@ -223,46 +225,51 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
               {uploadedDocs.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-gray-700">Uploaded Files:</p>
-                  {uploadedDocs.map((doc) => (
-                    <div
-                      key={doc._id}
-                      className="flex items-center justify-between bg-gray-50 p-3 rounded-lg"
-                    >
-                      <div className="flex items-center space-x-3 flex-1">
-                        <FileText className="h-5 w-5 text-blue-600" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {doc.originalName}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {formatFileSize(doc.fileSize)} • {formatDate(doc.uploadedAt)}
-                            {doc.uploadedBy && ` • by ${doc.uploadedBy.name}`}
-                          </p>
+                  {uploadedDocs.map((doc) => {
+                    const isSuperAdmin = user?.role === 'super-admin';
+                    return (
+                      <div
+                        key={doc._id}
+                        className="flex items-center justify-between bg-gray-50 p-3 rounded-lg"
+                      >
+                        <div className="flex items-center space-x-3 flex-1">
+                          <FileText className="h-5 w-5 text-blue-600" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {doc.originalName}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {formatFileSize(doc.fileSize)} • {formatDate(doc.uploadedAt)}
+                              {doc.uploadedBy && ` • by ${doc.uploadedBy.name}`}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {doc.s3Url && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open(doc.s3Url, '_blank')}
+                              title="Download"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {isSuperAdmin && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleFileDelete(doc._id)}
+                              className="hover:bg-red-50 hover:border-red-200"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        {doc.s3Url && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.open(doc.s3Url, '_blank')}
-                            title="Download"
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleFileDelete(doc._id)}
-                          className="hover:bg-red-50 hover:border-red-200"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4 text-red-600" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

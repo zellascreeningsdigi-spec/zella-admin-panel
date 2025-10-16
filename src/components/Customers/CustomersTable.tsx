@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useAuth } from '@/contexts/AuthContext';
 import { Customer } from '@/types/customer';
 import {
   ColumnDef,
@@ -37,6 +38,7 @@ interface CustomersTableProps {
 }
 
 const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustomer, onEditCustomer, onDeleteCustomer }) => {
+  const { user } = useAuth();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
@@ -85,6 +87,7 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
         header: 'Actions',
         cell: ({ row }) => {
           const customer = row.original;
+          const isSuperAdmin = user?.role === 'super-admin';
           return (
             <div className="flex space-x-2">
               <Button
@@ -103,21 +106,23 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
               >
                 <Edit className="h-4 w-4" />
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                title="Delete"
-                onClick={() => onDeleteCustomer?.(customer._id)}
-                className="hover:bg-red-50 hover:border-red-200"
-              >
-                <Trash2 className="h-4 w-4 text-red-600" />
-              </Button>
+              {isSuperAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  title="Delete"
+                  onClick={() => onDeleteCustomer?.(customer._id)}
+                  className="hover:bg-red-50 hover:border-red-200"
+                >
+                  <Trash2 className="h-4 w-4 text-red-600" />
+                </Button>
+              )}
             </div>
           );
         },
       },
     ],
-    [onViewCustomer, onEditCustomer, onDeleteCustomer]
+    [onViewCustomer, onEditCustomer, onDeleteCustomer, user]
   );
 
   const table = useReactTable({

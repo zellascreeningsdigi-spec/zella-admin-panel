@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiService } from '@/services/api';
 import { Customer } from '@/types/customer';
-import { ArrowLeft, Edit, Mail, Calendar, Send } from 'lucide-react';
+import { ArrowLeft, Edit, Mail, Calendar, Send, Download } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import DocumentsSection from './DocumentsSection';
 import SendEmailModal from './SendEmailModal';
@@ -22,6 +22,7 @@ const CustomerDetailsView: React.FC<CustomerDetailsViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSendEmailModalOpen, setIsSendEmailModalOpen] = useState(false);
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
   useEffect(() => {
     fetchCustomerDetails();
@@ -55,6 +56,49 @@ const CustomerDetailsView: React.FC<CustomerDetailsViewProps> = ({
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleDownloadAll = async () => {
+    if (!customer || !customer.documents || customer.documents.length === 0) {
+      alert('No documents available to download');
+      return;
+    }
+
+    try {
+      setDownloadingAll(true);
+
+      // Get fresh documents with URLs
+      const response = await apiService.getCustomerDocuments(customerId);
+
+      if (!response.success || !response.data?.documents) {
+        throw new Error('Failed to fetch documents');
+      }
+
+      const documents = response.data.documents;
+
+      // Download each document
+      for (const doc of documents) {
+        if (doc.s3Url) {
+          // Create a temporary link and trigger download
+          const link = document.createElement('a');
+          link.href = doc.s3Url;
+          link.target = '_blank';
+          link.download = doc.originalName || 'document';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          // Small delay between downloads to avoid browser blocking
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+    } catch (error) {
+      console.error('Error downloading all files:', error);
+      alert('Failed to download all files. Please try again.');
+    } finally {
+      setDownloadingAll(false);
+    }
   };
 
   if (loading) {
@@ -101,6 +145,14 @@ const CustomerDetailsView: React.FC<CustomerDetailsViewProps> = ({
           </div>
         </div>
         <div className="flex space-x-3">
+          <Button
+            variant="outline"
+            onClick={handleDownloadAll}
+            disabled={downloadingAll || !customer.documents || customer.documents.length === 0}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            {downloadingAll ? 'Downloading...' : 'Download All Files'}
+          </Button>
           <Button variant="outline" onClick={() => setIsSendEmailModalOpen(true)}>
             <Send className="h-4 w-4 mr-2" />
             Send Email
