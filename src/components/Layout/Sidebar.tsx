@@ -13,8 +13,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
 
   const allMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
-    { id: 'Digilocker', label: 'Cases', icon: FileText, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
-    { id: 'DataHub', label: 'Customers', icon: Users, roles: ['super-admin', 'admin', 'operator', 'viewer', 'customer'] },
+    { id: 'Digilocker', label: 'Digilocker', icon: FileText, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
+    { id: 'DataHub', label: 'Datahub', icon: Users, roles: ['super-admin', 'admin', 'operator', 'viewer', 'customer'] },
   ];
 
   // Filter menu items based on user role
