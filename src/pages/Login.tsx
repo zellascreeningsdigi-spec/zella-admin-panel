@@ -40,9 +40,9 @@ const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl text-center">Admin Login</CardTitle>
+          <CardTitle className="text-2xl text-center">ZellaScreenings - DataHub</CardTitle>
           <CardDescription className="text-center">
-            Enter your credentials to access the admin panel
+            Enter your credentials to access the portal
           </CardDescription>
         </CardHeader>
         <CardContent>

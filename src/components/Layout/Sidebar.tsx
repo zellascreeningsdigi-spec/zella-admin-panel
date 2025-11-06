@@ -13,8 +13,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
 
   const allMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
-    { id: 'cases', label: 'Cases', icon: FileText, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
-    { id: 'customers', label: 'Customers', icon: Users, roles: ['super-admin', 'admin', 'operator', 'viewer', 'customer'] },
+    { id: 'Digilocker', label: 'Cases', icon: FileText, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
+    { id: 'DataHub', label: 'Customers', icon: Users, roles: ['super-admin', 'admin', 'operator', 'viewer', 'customer'] },
   ];
 
   // Filter menu items based on user role
@@ -25,7 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   return (
     <div className="h-screen w-64 bg-gray-900 text-white flex flex-col">
       <div className="p-6">
-        <h1 className="text-xl font-bold">{user?.role === 'customer' ? 'Customer Portal' : 'Admin Panel'}</h1>
+        <h1 className="text-xl font-bold">{user?.role === 'customer' ? 'Zella Screenings - DataHub' : 'Admin Panel'}</h1>
         <p className="text-gray-400 text-sm mt-1">Zella Screenings</p>
       </div>
       

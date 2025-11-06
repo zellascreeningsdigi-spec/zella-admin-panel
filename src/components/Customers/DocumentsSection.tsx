@@ -198,7 +198,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
                 <p className="text-sm text-gray-600 mb-1">
                   Drag and drop your files here, or click to browse
                 </p>
-                <p className="text-xs text-gray-400">PDF, JPG, PNG, DOC, ZIP (Max 10MB)</p>
+                <p className="text-xs text-gray-400">PDF, JPG, PNG, DOC, ZIP Max (100 Mb) each file</p>
                 <input
                   type="file"
                   id={`file-${index}`}
