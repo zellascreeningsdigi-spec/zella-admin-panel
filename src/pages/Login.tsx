@@ -40,6 +40,7 @@ const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
+          <img src="/logo192.png" alt="ZellaScreenings Logo" className="w-16 h-16 mx-auto" />
           <CardTitle className="text-2xl text-center">ZellaScreenings - DataHub</CardTitle>
           <CardDescription className="text-center">
             Enter your credentials to access the portal

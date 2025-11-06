@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { LogOut, FileText, Home, Users } from 'lucide-react';
+import logo from "../../logo192.png";
 
 interface SidebarProps {
   activeTab: string;
@@ -14,7 +15,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const allMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
     { id: 'digilocker', label: 'Digilocker', icon: FileText, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
-    { id: 'dataHub', label: 'Datahub', icon: Users, roles: ['super-admin', 'admin', 'operator', 'viewer', 'customer'] },
+    { id: 'datahub', label: 'Datahub', icon: Users, roles: ['super-admin', 'admin', 'operator', 'viewer', 'customer'] },
   ];
 
   // Filter menu items based on user role
@@ -23,11 +24,17 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   );
 
   return (
-    <div className="h-screen w-64 bg-gray-900 text-white flex flex-col">
+    <div className="h-screen w-[300px] bg-gray-900 text-white flex flex-col">
+      <div className='flex items-center justify-center p-5'>
+        <div>
+          <img src={logo} width={50} height={50}></img>
+        </div>
       <div className="p-6">
         <h1 className="text-xl font-bold">{user?.role === 'customer' ? 'Zella Screenings - DataHub' : 'Admin Panel'}</h1>
-        <p className="text-gray-400 text-sm mt-1">Zella Screenings</p>
+        {/* <p className="text-gray-400 text-sm mt-1">Zella Screenings</p> */}
       </div>
+      </div>
+
       
       <nav className="flex-1 px-4">
         <ul className="space-y-2">
@@ -55,7 +62,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
       <div className="p-4">
         <Button
           variant="outline"
-          className="w-full text-gray-300 border-gray-600 hover:bg-gray-800"
+          className="w-full text-black border-gray-600"
           onClick={logout}
         >
           <LogOut className="h-4 w-4 mr-2" />

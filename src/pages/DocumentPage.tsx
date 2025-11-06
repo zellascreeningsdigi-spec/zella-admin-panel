@@ -31,7 +31,7 @@ const DocumentPage = () => {
     };
 
     const handleBackToCases = () => {
-        navigate('/dashboard', { state: { activeTab: 'cases' } });
+        navigate('/dashboard', { state: { activeTab: 'digilocker' } });
     };
 
     if (!caseData) {
