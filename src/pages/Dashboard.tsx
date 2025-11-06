@@ -17,7 +17,7 @@ const Dashboard: React.FC = () => {
       setActiveTab(location.state.activeTab);
     } else if (user?.role === 'customer') {
       // Customer users should default to the customers tab
-      setActiveTab('customers');
+      setActiveTab('datahub');
     }
   }, [location.state, user]);
 
@@ -37,9 +37,9 @@ const Dashboard: React.FC = () => {
     switch (activeTab) {
       case 'dashboard':
         return <DashboardOverview />;
-      case 'cases':
+      case 'digilocker':
         return <CasesTab />;
-      case 'customers':
+      case 'datahub':
         return <CustomersTab />;
       default:
         return <DashboardOverview />;
