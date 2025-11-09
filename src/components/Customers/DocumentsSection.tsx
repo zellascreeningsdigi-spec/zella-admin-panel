@@ -369,15 +369,18 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
                 </Button>
               </>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setAddingNew(true)}
-              disabled={addingNew}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Document Type
-            </Button>
+            {/* Only show Add Document Type button for super-admin, admin, and operator */}
+            {user?.role !== 'customer' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAddingNew(true)}
+                disabled={addingNew}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Document Type
+              </Button>
+            )}
           </div>
         </div>
         {/* Search Bar and Filters */}
@@ -627,15 +630,18 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
                     <>
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-gray-900">{documentName}</h3>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleStartEdit(index, documentName)}
-                          className="h-7 w-7 p-0"
-                          title="Edit name"
-                        >
-                          <Edit2 className="h-3.5 w-3.5 text-gray-500" />
-                        </Button>
+                        {/* Only show edit button for non-customer roles */}
+                        {user?.role !== 'customer' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleStartEdit(index, documentName)}
+                            className="h-7 w-7 p-0"
+                            title="Edit name"
+                          >
+                            <Edit2 className="h-3.5 w-3.5 text-gray-500" />
+                          </Button>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-gray-500">
@@ -644,16 +650,19 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
                             <span className="text-xs text-amber-600 ml-1">(yours)</span>
                           )}
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteDocumentRequirement(index)}
-                          className="h-7 w-7 p-0 hover:bg-red-50"
-                          title={uploadedDocs.length > 0 ? "Cannot delete - documents uploaded" : "Delete requirement"}
-                          disabled={uploadedDocs.length > 0}
-                        >
-                          <Trash2 className={`h-3.5 w-3.5 ${uploadedDocs.length > 0 ? 'text-gray-300' : 'text-red-600'}`} />
-                        </Button>
+                        {/* Only show delete button for non-customer roles */}
+                        {user?.role !== 'customer' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteDocumentRequirement(index)}
+                            className="h-7 w-7 p-0 hover:bg-red-50"
+                            title={uploadedDocs.length > 0 ? "Cannot delete - documents uploaded" : "Delete requirement"}
+                            disabled={uploadedDocs.length > 0}
+                          >
+                            <Trash2 className={`h-3.5 w-3.5 ${uploadedDocs.length > 0 ? 'text-gray-300' : 'text-red-600'}`} />
+                          </Button>
+                        )}
                       </div>
                     </>
                   )}
