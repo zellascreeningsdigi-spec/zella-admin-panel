@@ -313,6 +313,60 @@ class ApiService {
     return this.delete(`/customers/${customerId}/documents/${documentId}`);
   }
 
+  // Document Requirements API
+  async addDocumentRequirement(customerId: string, documentName: string): Promise<ApiResponse<{
+    documentsRequired: string[];
+  }>> {
+    return this.post(`/customers/${customerId}/document-requirements`, { documentName });
+  }
+
+  async renameDocumentRequirement(customerId: string, index: number, newName: string): Promise<ApiResponse<{
+    documentsRequired: string[];
+  }>> {
+    return this.put(`/customers/${customerId}/document-requirements/${index}`, { newName });
+  }
+
+  async deleteDocumentRequirement(customerId: string, index: number): Promise<ApiResponse<{
+    documentsRequired: string[];
+  }>> {
+    return this.delete(`/customers/${customerId}/document-requirements/${index}`);
+  }
+
+  async downloadAllDocuments(customerId: string): Promise<void> {
+    const token = this.getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/customers/${customerId}/documents/download-all`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to download documents');
+    }
+
+    // Get filename from Content-Disposition header or use default
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let filename = 'documents.zip';
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+      if (filenameMatch) {
+        filename = filenameMatch[1];
+      }
+    }
+
+    // Download the blob
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }
+
   async sendCustomerLoginEmails(customerId: string, emails: string[]): Promise<ApiResponse<{
     results: any[];
     successCount: number;

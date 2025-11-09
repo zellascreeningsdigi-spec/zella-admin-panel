@@ -43,7 +43,7 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
       setFormData({
         companyName: editCustomer.companyName || '',
         emails: editCustomer.emails && editCustomer.emails.length > 0 ? [...editCustomer.emails] : [''],
-        documentsRequired: editCustomer.documentsRequired ? editCustomer.documentsRequired.join(', ') : ''
+        documentsRequired: '' // Not editable in edit mode
       });
     } else if (!editCustomer && isOpen) {
       // Reset form for new customer
@@ -142,11 +142,15 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
       // Filter out empty emails
       const validEmails = formData.emails.filter(email => email.trim() !== '');
 
-      const customerData = {
+      const customerData: any = {
         companyName: formData.companyName,
-        emails: validEmails,
-        documentsRequired: formData.documentsRequired
+        emails: validEmails
       };
+
+      // Only include documentsRequired when creating a new customer
+      if (!editCustomer) {
+        customerData.documentsRequired = formData.documentsRequired;
+      }
 
       let response;
       if (editCustomer) {
@@ -240,24 +244,26 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
               )}
             </div>
 
-            {/* Documents Required */}
-            <div className="space-y-2">
-              <Label htmlFor="documentsRequired">
-                Documents Required
-              </Label>
-              <Input
-                id="documentsRequired"
-                value={formData.documentsRequired}
-                onChange={(e) => handleInputChange('documentsRequired', e.target.value)}
-                placeholder="e.g., Aadhaar Card, PAN Card, Passport (comma-separated)"
-              />
-              <p className="text-xs text-gray-500">
-                Enter document names separated by commas. These will be shown to customers for upload.
-              </p>
-              {errors.documentsRequired && (
-                <p className="text-sm text-red-500">{errors.documentsRequired}</p>
-              )}
-            </div>
+            {/* Documents Required - Only show when creating new customer */}
+            {!editCustomer && (
+              <div className="space-y-2">
+                <Label htmlFor="documentsRequired">
+                  Documents Required
+                </Label>
+                <Input
+                  id="documentsRequired"
+                  value={formData.documentsRequired}
+                  onChange={(e) => handleInputChange('documentsRequired', e.target.value)}
+                  placeholder="e.g., Aadhaar Card, PAN Card, Passport (comma-separated)"
+                />
+                <p className="text-xs text-gray-500">
+                  Enter document names separated by commas. You can manage these later in the Documents section.
+                </p>
+                {errors.documentsRequired && (
+                  <p className="text-sm text-red-500">{errors.documentsRequired}</p>
+                )}
+              </div>
+            )}
           </div>
 
           <DialogFooter>

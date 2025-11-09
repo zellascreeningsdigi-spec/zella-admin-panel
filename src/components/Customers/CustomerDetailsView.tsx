@@ -66,36 +66,11 @@ const CustomerDetailsView: React.FC<CustomerDetailsViewProps> = ({
 
     try {
       setDownloadingAll(true);
-
-      // Get fresh documents with URLs
-      const response = await apiService.getCustomerDocuments(customerId);
-
-      if (!response.success || !response.data?.documents) {
-        throw new Error('Failed to fetch documents');
-      }
-
-      const documents = response.data.documents;
-
-      // Download each document
-      for (const doc of documents) {
-        if (doc.s3Url) {
-          // Create a temporary link and trigger download
-          const link = document.createElement('a');
-          link.href = doc.s3Url;
-          link.target = '_blank';
-          link.download = doc.originalName || 'document';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-
-          // Small delay between downloads to avoid browser blocking
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
-
+      // Use the new ZIP download API - downloads all files as a single ZIP
+      await apiService.downloadAllDocuments(customerId);
     } catch (error) {
       console.error('Error downloading all files:', error);
-      alert('Failed to download all files. Please try again.');
+      alert(`Failed to download files: ${error instanceof Error ? error.message : 'Please try again'}`);
     } finally {
       setDownloadingAll(false);
     }
