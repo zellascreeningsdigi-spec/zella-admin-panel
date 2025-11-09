@@ -27,11 +27,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
   const [showAllDocuments, setShowAllDocuments] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
-    fetchDocuments();
-  }, [customer._id]);
-
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     try {
       setLoading(true);
       const response = await apiService.getCustomerDocuments(customer._id!);
@@ -47,7 +43,11 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
     } finally {
       setLoading(false);
     }
-  };
+  }, [customer._id]);
+
+  useEffect(() => {
+    fetchDocuments();
+  }, [fetchDocuments]);
 
   const handleFileUpload = async (file: File, documentName: string) => {
     try {
@@ -212,7 +212,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
         });
       }
     },
-    [customer._id]
+    [handleFileUpload]
   );
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>, documentName: string) => {

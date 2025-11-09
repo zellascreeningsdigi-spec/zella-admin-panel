@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { apiService } from '@/services/api';
 import { Customer } from '@/types/customer';
 import { ArrowLeft, Edit, Mail, Calendar, Send, Download } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import DocumentsSection from './DocumentsSection';
 import SendEmailModal from './SendEmailModal';
 
@@ -24,11 +24,7 @@ const CustomerDetailsView: React.FC<CustomerDetailsViewProps> = ({
   const [isSendEmailModalOpen, setIsSendEmailModalOpen] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
 
-  useEffect(() => {
-    fetchCustomerDetails();
-  }, [customerId]);
-
-  const fetchCustomerDetails = async () => {
+  const fetchCustomerDetails = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -45,7 +41,11 @@ const CustomerDetailsView: React.FC<CustomerDetailsViewProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [customerId]);
+
+  useEffect(() => {
+    fetchCustomerDetails();
+  }, [fetchCustomerDetails]);
 
   const formatDate = (dateString?: string): string => {
     if (!dateString) return 'N/A';
