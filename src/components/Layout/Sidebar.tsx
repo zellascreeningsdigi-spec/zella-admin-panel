@@ -27,7 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
     <div className="h-screen w-[300px] bg-gray-900 text-white flex flex-col">
       <div className='flex items-center justify-center p-5'>
         <div>
-          <img src={logo} width={50} height={50}></img>
+          <img src={logo} width={50} height={50} alt="Zella Screenings Logo"></img>
         </div>
       <div className="p-6">
         <h1 className="text-xl font-bold">{user?.role === 'customer' ? 'Zella Screenings - DataHub' : 'Admin Panel'}</h1>

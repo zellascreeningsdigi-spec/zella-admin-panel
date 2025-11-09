@@ -81,7 +81,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
         return null;
     };
 
-    const parseFile = async (file: File) => {
+    const parseFile = useCallback(async (file: File) => {
         setIsProcessing(true);
         setValidationErrors([]);
         setParsedData([]);
@@ -101,9 +101,6 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
 
             const headers = jsonData[0] as string[];
             const dataRows = jsonData.slice(1) as any[][];
-
-            // Normalize headers (remove spaces, convert to lowercase)
-            const normalizedHeaders = headers.map(h => h?.toString().toLowerCase().replace(/\s+/g, ''));
 
             const errors: ValidationError[] = [];
             const cases: ParsedCase[] = [];
@@ -164,7 +161,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
         } finally {
             setIsProcessing(false);
         }
-    };
+    }, []);
 
     const handleDrag = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -194,7 +191,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
                 setValidationErrors([{ row: 0, field: 'file', message: 'Please select an Excel (.xlsx) or CSV file' }]);
             }
         }
-    }, []);
+    }, [parseFile]);
 
     const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;

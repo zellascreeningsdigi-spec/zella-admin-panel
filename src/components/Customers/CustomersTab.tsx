@@ -56,6 +56,7 @@ const CustomersTab: React.FC = () => {
 
   useEffect(() => {
     fetchCustomers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAddCustomer = () => {

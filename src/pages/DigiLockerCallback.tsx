@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
 interface CallbackState {
   status: 'loading' | 'success' | 'error';
@@ -13,7 +13,6 @@ interface CallbackState {
 
 const DigiLockerCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const [callbackState, setCallbackState] = useState<CallbackState>({
     status: 'loading',
     message: 'Processing DigiLocker authorization...'
@@ -26,7 +25,6 @@ const DigiLockerCallback: React.FC = () => {
         console.log(code);
         const state = searchParams.get('state');
         const error = searchParams.get('error');
-        const error_description = searchParams.get('error_description');
 
         if (error) {
           setCallbackState({

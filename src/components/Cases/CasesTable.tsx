@@ -224,7 +224,7 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
         },
       },
     ],
-    [isProcessing, handleDigilockerAction, onEditCase, onDeleteCase]
+    [isProcessing, handleDigilockerAction, onEditCase, onDeleteCase, navigate]
   );
 
   const table = useReactTable({

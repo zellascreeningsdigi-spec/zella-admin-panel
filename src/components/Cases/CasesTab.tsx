@@ -138,7 +138,7 @@ const CasesTab: React.FC = () => {
         await fetchCases();
 
         // Show success message with details
-        const { created, failed } = response.data;
+        const { failed } = response.data;
         if (failed > 0) {
           alert(`Bulk upload completed: cases created successfully`);
         } else {
