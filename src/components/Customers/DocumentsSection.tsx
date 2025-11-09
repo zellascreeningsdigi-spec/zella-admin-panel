@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiService } from '@/services/api';
 import { Customer, CustomerDocument } from '@/types/customer';
-import { Archive, Check, Download, Edit2, FileText, FolderOpen, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import { Archive, Check, CheckSquare, Download, Edit2, FileText, FolderOpen, Plus, Search, Square, Trash2, Upload, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface DocumentsSectionProps {
@@ -28,6 +28,8 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
   const [downloading, setDownloading] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -88,6 +90,76 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
     } catch (error) {
       console.error('Error deleting document:', error);
       alert('Failed to delete document. Please try again.');
+    }
+  };
+
+  const handleToggleDocumentSelection = (docId: string) => {
+    setSelectedDocuments(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(docId)) {
+        newSet.delete(docId);
+      } else {
+        newSet.add(docId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedDocuments.size === filteredDocuments.length) {
+      setSelectedDocuments(new Set());
+    } else {
+      setSelectedDocuments(new Set(filteredDocuments.map(doc => doc._id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedDocuments.size === 0) {
+      alert('Please select at least one document to delete.');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete ${selectedDocuments.size} document(s)?`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    let deletedCount = 0;
+    let failedCount = 0;
+
+    try {
+      for (const docId of Array.from(selectedDocuments)) {
+        try {
+          const response = await apiService.deleteCustomerDocument(customer._id!, docId);
+          if (response.success) {
+            deletedCount++;
+          } else {
+            failedCount++;
+          }
+        } catch (error) {
+          console.error(`Error deleting document ${docId}:`, error);
+          failedCount++;
+        }
+      }
+
+      // Clear selection
+      setSelectedDocuments(new Set());
+
+      // Refresh documents
+      await fetchDocuments();
+      onDocumentsUpdated?.();
+
+      // Show result
+      if (failedCount > 0) {
+        alert(`Deleted ${deletedCount} document(s). Failed to delete ${failedCount} document(s).`);
+      } else {
+        alert(`Successfully deleted ${deletedCount} document(s).`);
+      }
+    } catch (error) {
+      console.error('Error during bulk delete:', error);
+      alert('An error occurred during bulk delete. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -350,6 +422,35 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
           <div className="flex gap-2">
             {documents.length > 0 && (
               <>
+                {/* Bulk Selection Controls */}
+                {user?.role === 'super-admin' && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAll}
+                    >
+                      {selectedDocuments.size === filteredDocuments.length && filteredDocuments.length > 0 ? (
+                        <CheckSquare className="h-4 w-4 mr-2" />
+                      ) : (
+                        <Square className="h-4 w-4 mr-2" />
+                      )}
+                      {selectedDocuments.size > 0 ? `${selectedDocuments.size} Selected` : 'Select All'}
+                    </Button>
+                    {selectedDocuments.size > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleBulkDelete}
+                        disabled={isDeleting}
+                        className="border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        {isDeleting ? 'Deleting...' : `Delete ${selectedDocuments.size}`}
+                      </Button>
+                    )}
+                  </>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -533,7 +634,20 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
                     className="flex items-center justify-between bg-gray-50 p-3 rounded-lg hover:bg-gray-100 transition-colors"
                   >
                     <div className="flex items-center space-x-3 flex-1">
-                      <FileText className="h-5 w-5 text-blue-600" />
+                      {/* Checkbox for bulk selection (super-admin only) */}
+                      {isSuperAdmin && (
+                        <button
+                          onClick={() => handleToggleDocumentSelection(doc._id)}
+                          className="flex-shrink-0 hover:bg-gray-200 p-1 rounded"
+                        >
+                          {selectedDocuments.has(doc._id) ? (
+                            <CheckSquare className="h-5 w-5 text-blue-600" />
+                          ) : (
+                            <Square className="h-5 w-5 text-gray-400" />
+                          )}
+                        </button>
+                      )}
+                      <FileText className="h-5 w-5 text-blue-600 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">
                           {searchQuery ? highlightText(doc.originalName, searchQuery) : doc.originalName}
@@ -727,7 +841,20 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
                               className="flex items-center justify-between bg-gray-50 p-3 rounded-lg"
                             >
                               <div className="flex items-center space-x-3 flex-1">
-                                <FileText className="h-5 w-5 text-blue-600" />
+                                {/* Checkbox for bulk selection (super-admin only) */}
+                                {isSuperAdmin && (
+                                  <button
+                                    onClick={() => handleToggleDocumentSelection(doc._id)}
+                                    className="flex-shrink-0 hover:bg-gray-200 p-1 rounded"
+                                  >
+                                    {selectedDocuments.has(doc._id) ? (
+                                      <CheckSquare className="h-5 w-5 text-blue-600" />
+                                    ) : (
+                                      <Square className="h-5 w-5 text-gray-400" />
+                                    )}
+                                  </button>
+                                )}
+                                <FileText className="h-5 w-5 text-blue-600 flex-shrink-0" />
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-medium text-gray-900 truncate">
                                     {searchQuery ? highlightText(doc.originalName, searchQuery) : doc.originalName}
