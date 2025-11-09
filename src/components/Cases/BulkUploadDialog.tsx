@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertCircle, CheckCircle, Download, FileText, Upload } from 'lucide-react';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 
 interface BulkUploadDialogProps {
@@ -38,8 +38,8 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
     const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
 
-    const requiredFields = ['initiatorname', 'phone', 'email', 'city', 'state', 'pin'];
-    const optionalFields = ['bgvid', 'appNo', 'companyName', 'address'];
+    const requiredFields = useMemo(() => ['initiatorname', 'phone', 'email', 'city', 'state', 'pin'], []);
+    const optionalFields = useMemo(() => ['bgvid', 'appNo', 'companyName', 'address'], []);
 
     const generateCode = (index: number): string => {
         const number = (index + 1).toString().padStart(3, '0');
@@ -51,7 +51,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
         return `APP${number}`;
     };
 
-    const validateField = (value: any, field: string, row: number): string | null => {
+    const validateField = useCallback((value: any, field: string, row: number): string | null => {
         console.log(field, value);
         if (requiredFields.includes(field) && (!value || value.toString().trim() === '')) {
             return `${field} is required`;
@@ -79,7 +79,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
         }
 
         return null;
-    };
+    }, [requiredFields]);
 
     const parseFile = useCallback(async (file: File) => {
         setIsProcessing(true);
@@ -161,7 +161,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
         } finally {
             setIsProcessing(false);
         }
-    }, []);
+    }, [optionalFields, requiredFields, validateField]);
 
     const handleDrag = useCallback((e: React.DragEvent) => {
         e.preventDefault();
