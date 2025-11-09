@@ -51,7 +51,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
         return `APP${number}`;
     };
 
-    const validateField = useCallback((value: any, field: string, row: number): string | null => {
+    const validateField = useCallback((value: any, field: string): string | null => {
         console.log(field, value);
         if (requiredFields.includes(field) && (!value || value.toString().trim() === '')) {
             return `${field} is required`;
@@ -119,7 +119,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
 
                 // Validate required fields
                 requiredFields.forEach(field => {
-                    const error = validateField(caseData[field], field, rowIndex + 2);
+                    const error = validateField(caseData[field], field);
                     if (error) {
                         errors.push({ row: rowIndex + 2, field, message: error });
                     }
@@ -128,7 +128,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
                 // Validate optional fields if present
                 optionalFields.forEach(field => {
                     if (caseData[field] !== undefined) {
-                        const error = validateField(caseData[field], field, rowIndex + 2);
+                        const error = validateField(caseData[field], field);
                         if (error) {
                             errors.push({ row: rowIndex + 2, field, message: error });
                         }

@@ -26,6 +26,8 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
   const [searchQuery, setSearchQuery] = useState('');
   const [showAllDocuments, setShowAllDocuments] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -229,18 +231,47 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
     return documents.filter((doc) => doc.name === documentName);
   };
 
-  // Filter documents based on search query
+  // Filter documents based on search query and date range
   const filteredDocuments = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return documents;
+    let filtered = documents;
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((doc) =>
+        doc.originalName.toLowerCase().includes(query) ||
+        doc.name.toLowerCase().includes(query)
+      );
     }
 
-    const query = searchQuery.toLowerCase();
-    return documents.filter((doc) =>
-      doc.originalName.toLowerCase().includes(query) ||
-      doc.name.toLowerCase().includes(query)
-    );
-  }, [documents, searchQuery]);
+    // Apply date range filter
+    if (dateFrom || dateTo) {
+      filtered = filtered.filter((doc) => {
+        const uploadDate = new Date(doc.uploadedAt);
+        const fromDate = dateFrom ? new Date(dateFrom) : null;
+        const toDate = dateTo ? new Date(dateTo) : null;
+
+        // Set time to start/end of day for accurate comparison
+        if (fromDate) {
+          fromDate.setHours(0, 0, 0, 0);
+        }
+        if (toDate) {
+          toDate.setHours(23, 59, 59, 999);
+        }
+
+        if (fromDate && toDate) {
+          return uploadDate >= fromDate && uploadDate <= toDate;
+        } else if (fromDate) {
+          return uploadDate >= fromDate;
+        } else if (toDate) {
+          return uploadDate <= toDate;
+        }
+        return true;
+      });
+    }
+
+    return filtered;
+  }, [documents, searchQuery, dateFrom, dateTo]);
 
   // Get filtered documents for a specific document name
   const getFilteredDocumentsForName = (documentName: string): CustomerDocument[] => {
@@ -349,26 +380,89 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
             </Button>
           </div>
         </div>
-        {/* Search Bar */}
+        {/* Search Bar and Filters */}
         {documents.length > 0 && (
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Search documents by filename..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-            {searchQuery && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0"
-                onClick={() => setSearchQuery('')}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search documents by filename..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0"
+                  onClick={() => setSearchQuery('')}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            {/* Date Filter */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 flex-1">
+                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">From:</label>
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+              <div className="flex items-center gap-2 flex-1">
+                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">To:</label>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+              {(dateFrom || dateTo) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDateFrom('');
+                    setDateTo('');
+                  }}
+                  className="whitespace-nowrap"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Clear Dates
+                </Button>
+              )}
+            </div>
+
+            {/* Active Filters Summary */}
+            {(searchQuery || dateFrom || dateTo) && (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span className="font-medium">Active filters:</span>
+                {searchQuery && (
+                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                    Search: "{searchQuery}"
+                  </span>
+                )}
+                {dateFrom && (
+                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
+                    From: {new Date(dateFrom).toLocaleDateString('en-GB')}
+                  </span>
+                )}
+                {dateTo && (
+                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
+                    To: {new Date(dateTo).toLocaleDateString('en-GB')}
+                  </span>
+                )}
+                <span className="text-gray-500">
+                  ({filteredDocuments.length} of {documents.length} documents)
+                </span>
+              </div>
             )}
           </div>
         )}
