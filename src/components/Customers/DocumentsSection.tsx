@@ -49,7 +49,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
     fetchDocuments();
   }, [fetchDocuments]);
 
-  const handleFileUpload = async (file: File, documentName: string) => {
+  const handleFileUpload = useCallback(async (file: File, documentName: string) => {
     try {
       setUploading(true);
       const formData = new FormData();
@@ -70,7 +70,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
     } finally {
       setUploading(false);
     }
-  };
+  }, [customer._id, fetchDocuments, onDocumentsUpdated]);
 
   const handleFileDelete = async (docId: string) => {
     if (!window.confirm('Are you sure you want to delete this document?')) {
