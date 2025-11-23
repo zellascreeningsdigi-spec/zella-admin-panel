@@ -29,7 +29,7 @@ import {
   Shield,
   Trash2
 } from 'lucide-react';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface CasesTableProps {
@@ -37,14 +37,30 @@ interface CasesTableProps {
   onCaseUpdated?: () => void;
   onEditCase?: (caseData: Case) => void;
   onDeleteCase?: (caseData: string | undefined) => void;
+  initialPageIndex?: number;
 }
 
-const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCase, onDeleteCase }) => {
+const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCase, onDeleteCase, initialPageIndex }) => {
   const navigate = useNavigate();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
+  const [currentPageIndex, setCurrentPageIndex] = useState(initialPageIndex || 0);
+
+  // Filter states
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [digiLockerStatusFilter, setDigiLockerStatusFilter] = useState<string>('');
+  const [companyFilter, setCompanyFilter] = useState<string>('');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+
+  // Restore page index when navigating back from documents or when initialPageIndex changes
+  useEffect(() => {
+    if (initialPageIndex !== undefined) {
+      setCurrentPageIndex(initialPageIndex);
+    }
+  }, [initialPageIndex]);
 
   const getStatusBadge = (status: string) => {
     const statusStyles = {
@@ -124,6 +140,73 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
     );
   };
 
+  // Apply filters to cases
+  const filteredCases = useMemo(() => {
+    return cases.filter((caseItem) => {
+      // Status filter
+      if (statusFilter && caseItem.status !== statusFilter) {
+        return false;
+      }
+
+      // DigiLocker Status filter
+      if (digiLockerStatusFilter) {
+        const caseDigiLockerStatus = caseItem.digiLockerStatus || 'not_initiated';
+        if (caseDigiLockerStatus !== digiLockerStatusFilter) {
+          return false;
+        }
+      }
+
+      // Company filter
+      if (companyFilter && !caseItem.companyName?.toLowerCase().includes(companyFilter.toLowerCase())) {
+        return false;
+      }
+
+      // Date range filter
+      if (dateFrom || dateTo) {
+        const caseDate = new Date(caseItem.date);
+        const fromDate = dateFrom ? new Date(dateFrom) : null;
+        const toDate = dateTo ? new Date(dateTo) : null;
+
+        // Set time to start/end of day for accurate comparison
+        if (fromDate) {
+          fromDate.setHours(0, 0, 0, 0);
+        }
+        if (toDate) {
+          toDate.setHours(23, 59, 59, 999);
+        }
+
+        if (fromDate && toDate) {
+          if (!(caseDate >= fromDate && caseDate <= toDate)) {
+            return false;
+          }
+        } else if (fromDate) {
+          if (!(caseDate >= fromDate)) {
+            return false;
+          }
+        } else if (toDate) {
+          if (!(caseDate <= toDate)) {
+            return false;
+          }
+        }
+      }
+
+      return true;
+    });
+  }, [cases, statusFilter, digiLockerStatusFilter, companyFilter, dateFrom, dateTo]);
+
+  // Clear all filters
+  const handleClearFilters = () => {
+    setStatusFilter('');
+    setDigiLockerStatusFilter('');
+    setCompanyFilter('');
+    setDateFrom('');
+    setDateTo('');
+    setGlobalFilter('');
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = statusFilter || digiLockerStatusFilter || companyFilter || dateFrom || dateTo || globalFilter;
+
   const columns = useMemo<ColumnDef<Case>[]>(
     () => [
       {
@@ -192,7 +275,9 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
                 variant="outline"
                 size="sm"
                 title="View Report"
-                onClick={() => navigate(`/documents?caseId=${caseData.id}`)}
+                onClick={() => navigate(`/documents?caseId=${caseData.id}`, {
+                  state: { pageIndex: currentPageIndex }
+                })}
               >
                 <Eye className="h-4 w-4" />
               </Button>
@@ -224,11 +309,11 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
         },
       },
     ],
-    [isProcessing, handleDigilockerAction, onEditCase, onDeleteCase, navigate]
+    [isProcessing, handleDigilockerAction, onEditCase, onDeleteCase, navigate, currentPageIndex]
   );
 
   const table = useReactTable({
-    data: cases,
+    data: filteredCases,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -237,20 +322,158 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    autoResetPageIndex: false,
     state: {
       sorting,
       columnFilters,
       globalFilter,
-    },
-    initialState: {
       pagination: {
+        pageIndex: currentPageIndex,
         pageSize: 10,
       },
     },
+    onPaginationChange: (updater) => {
+      if (typeof updater === 'function') {
+        const newPagination = updater({ pageIndex: currentPageIndex, pageSize: 10 });
+        setCurrentPageIndex(newPagination.pageIndex);
+      }
+    },
+    manualPagination: false,
   });
 
   return (
     <div className="space-y-4">
+      {/* Filter Section */}
+      <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-700">Filters</h3>
+          {hasActiveFilters && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearFilters}
+              className="h-8"
+            >
+              Clear All Filters
+            </Button>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Status Filter */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-600">Status</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full h-9 px-3 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="completed">Resolved Case</option>
+                <option value="insufficiency">Insufficiency</option>
+              </select>
+            </div>
+
+            {/* DigiLocker Status Filter */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-600">DigiLocker Status</label>
+              <select
+                value={digiLockerStatusFilter}
+                onChange={(e) => setDigiLockerStatusFilter(e.target.value)}
+                className="w-full h-9 px-3 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All DigiLocker Statuses</option>
+                <option value="not_initiated">Not Started</option>
+                <option value="initiated">Initiated</option>
+                <option value="auth_success">Authenticated</option>
+                <option value="documents_fetched">Documents Fetched</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
+
+            {/* Company Filter */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-600">Company</label>
+              <Input
+                placeholder="Filter by company..."
+                value={companyFilter}
+                onChange={(e) => setCompanyFilter(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Date Range Filter */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-600">Date From</label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-600">Date To</label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Active Filters Summary */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-200">
+            <span className="text-xs font-medium text-gray-600">Active:</span>
+            {statusFilter && (
+              <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800">
+                Status: {statusFilter === 'pending' ? 'Pending' : statusFilter === 'completed' ? 'Resolved Case' : 'Insufficiency'}
+              </span>
+            )}
+            {digiLockerStatusFilter && (
+              <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
+                DigiLocker: {digiLockerStatusFilter === 'not_initiated' ? 'Not Started' :
+                             digiLockerStatusFilter === 'initiated' ? 'Initiated' :
+                             digiLockerStatusFilter === 'auth_success' ? 'Authenticated' :
+                             digiLockerStatusFilter === 'documents_fetched' ? 'Documents Fetched' :
+                             digiLockerStatusFilter === 'completed' ? 'Completed' : 'Failed'}
+              </span>
+            )}
+            {companyFilter && (
+              <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800">
+                Company: "{companyFilter}"
+              </span>
+            )}
+            {dateFrom && (
+              <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                From: {new Date(dateFrom).toLocaleDateString('en-GB')}
+              </span>
+            )}
+            {dateTo && (
+              <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                To: {new Date(dateTo).toLocaleDateString('en-GB')}
+              </span>
+            )}
+            {globalFilter && (
+              <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-200 text-gray-800">
+                Search: "{globalFilter}"
+              </span>
+            )}
+            <span className="text-xs text-gray-500">
+              ({filteredCases.length} of {cases.length} cases)
+            </span>
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center justify-between">
         <Input
           placeholder="Search cases..."

@@ -18,7 +18,11 @@ interface CaseStats {
   digiLockerCompleted: number;
 }
 
-const CasesTab: React.FC = () => {
+interface CasesTabProps {
+  pageIndex?: number;
+}
+
+const CasesTab: React.FC<CasesTabProps> = ({ pageIndex }) => {
   const [cases, setCases] = useState<Case[]>([]);
   const [stats, setStats] = useState<CaseStats>({
     totalCases: 0,
@@ -318,7 +322,7 @@ const CasesTab: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <CasesTable cases={cases} onCaseUpdated={fetchCases} onEditCase={handleEditCase} onDeleteCase={handleDeleteCase} />
+          <CasesTable cases={cases} onCaseUpdated={fetchCases} onEditCase={handleEditCase} onDeleteCase={handleDeleteCase} initialPageIndex={pageIndex} />
         </CardContent>
       </Card>
 

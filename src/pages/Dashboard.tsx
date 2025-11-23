@@ -11,6 +11,7 @@ const Dashboard: React.FC = () => {
   const { user, loading } = useAuth();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [casesPageIndex, setCasesPageIndex] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     if (location.state?.activeTab) {
@@ -18,6 +19,11 @@ const Dashboard: React.FC = () => {
     } else if (user?.role === 'customer') {
       // Customer users should default to the customers tab
       setActiveTab('datahub');
+    }
+
+    // Update cases page index from navigation state
+    if (location.state?.pageIndex !== undefined) {
+      setCasesPageIndex(location.state.pageIndex);
     }
   }, [location.state, user]);
 
@@ -38,7 +44,7 @@ const Dashboard: React.FC = () => {
       case 'dashboard':
         return <DashboardOverview />;
       case 'digilocker':
-        return <CasesTab />;
+        return <CasesTab pageIndex={casesPageIndex} />;
       case 'datahub':
         return <CustomersTab />;
       default:

@@ -4,11 +4,12 @@ import apiService from "@/services/api";
 import { Case } from "@/types/case";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 const DocumentPage = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const [caseData, setCaseData] = useState<Case | null>(null);
 
     useEffect(() => {
@@ -31,7 +32,13 @@ const DocumentPage = () => {
     };
 
     const handleBackToCases = () => {
-        navigate('/dashboard', { state: { activeTab: 'digilocker' } });
+        const pageIndex = location.state?.pageIndex;
+        navigate('/dashboard', {
+            state: {
+                activeTab: 'digilocker',
+                pageIndex: pageIndex !== undefined ? pageIndex : 0
+            }
+        });
     };
 
     if (!caseData) {
