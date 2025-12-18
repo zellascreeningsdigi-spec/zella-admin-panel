@@ -6,6 +6,7 @@ import Header from '@/components/Layout/Header';
 import DashboardOverview from '@/components/Dashboard/DashboardOverview';
 import CasesTab from '@/components/Cases/CasesTab';
 import CustomersTab from '@/components/Customers/CustomersTab';
+import ReportsTab from '@/components/Reports/ReportsTab';
 
 const Dashboard: React.FC = () => {
   const { user, loading } = useAuth();
@@ -47,6 +48,8 @@ const Dashboard: React.FC = () => {
         return <CasesTab pageIndex={casesPageIndex} />;
       case 'datahub':
         return <CustomersTab />;
+      case 'reports':
+        return <ReportsTab />;
       default:
         return <DashboardOverview />;
     }

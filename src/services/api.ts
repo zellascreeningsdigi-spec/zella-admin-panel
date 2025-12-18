@@ -231,6 +231,10 @@ class ApiService {
     return this.post('/auth/reset-password', { currentPassword, newPassword });
   }
 
+  async updateProfile(name: string, designation: string): Promise<ApiResponse<{ user: any }>> {
+    return this.put('/auth/profile', { name, designation });
+  }
+
   // Customers API methods
   async getCustomers(params?: {
     page?: number;
@@ -373,6 +377,59 @@ class ApiService {
     failureCount: number;
   }>> {
     return this.post(`/customers/${customerId}/send-email`, { emails });
+  }
+
+  async sendCompanyReport(
+    customerId: string,
+    emails: string[],
+    subject: string,
+    message: string,
+    excelFile: File
+  ): Promise<ApiResponse<{
+    results: any[];
+    successCount: number;
+    failureCount: number;
+  }>> {
+    const formData = new FormData();
+    formData.append('emails', JSON.stringify(emails));
+    formData.append('subject', subject);
+    formData.append('message', message);
+    formData.append('report', excelFile);
+
+    const token = this.getAuthToken();
+    const response = await fetch(
+      `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/customers/${customerId}/send-report`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        throw new Error('Authentication required');
+      }
+      throw new Error(data.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return data;
+  }
+
+  async getCustomerEmailReports(customerId: string): Promise<ApiResponse<{
+    emailReports: any[];
+    total: number;
+  }>> {
+    return this.get(`/customers/${customerId}/email-reports`);
   }
 }
 

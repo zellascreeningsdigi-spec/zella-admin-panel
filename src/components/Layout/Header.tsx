@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { ChevronDown, Key, LogOut } from 'lucide-react';
+import { ChevronDown, Key, LogOut, User } from 'lucide-react';
 import ResetPasswordDialog from '@/components/ResetPasswordDialog';
+import UpdateProfileDialog from '@/components/UpdateProfileDialog';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showUpdateProfile, setShowUpdateProfile] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,6 +31,11 @@ const Header: React.FC = () => {
   const handleResetPassword = () => {
     setShowMenu(false);
     setShowResetPassword(true);
+  };
+
+  const handleUpdateProfile = () => {
+    setShowMenu(false);
+    setShowUpdateProfile(true);
   };
 
   return (
@@ -63,9 +70,20 @@ const Header: React.FC = () => {
               <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
                 <div className="px-4 py-2 border-b border-gray-100">
                   <p className="text-sm font-medium text-gray-900">{user?.name}</p>
+                  {user?.designation && (
+                    <p className="text-xs text-gray-600">{user.designation}</p>
+                  )}
                   <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                   <p className="text-xs text-gray-400 mt-1 capitalize">{user?.role}</p>
                 </div>
+
+                <button
+                  onClick={handleUpdateProfile}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2"
+                >
+                  <User className="h-4 w-4" />
+                  <span>Update Profile</span>
+                </button>
 
                 <button
                   onClick={handleResetPassword}
@@ -87,6 +105,11 @@ const Header: React.FC = () => {
           </div>
         </div>
       </header>
+
+      <UpdateProfileDialog
+        isOpen={showUpdateProfile}
+        onClose={() => setShowUpdateProfile(false)}
+      />
 
       <ResetPasswordDialog
         isOpen={showResetPassword}

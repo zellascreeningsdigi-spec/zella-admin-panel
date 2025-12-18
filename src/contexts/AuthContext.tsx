@@ -6,6 +6,7 @@ interface User {
   id: string;
   name: string;
   email: string;
+  designation?: string;
   role: string;
   customerId?: string; // For customer role users
   permissions: {
@@ -24,6 +25,7 @@ interface AuthContextType {
   token: string | null;
   login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
+  updateUser: (updatedUser: User) => void;
   loading: boolean;
   isAuthenticated: boolean;
 }
@@ -112,11 +114,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUser = (updatedUser: User) => {
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
+
   const value: AuthContextType = {
     user,
     token,
     login,
     logout,
+    updateUser,
     loading,
     isAuthenticated: !!user && !!token
   };
