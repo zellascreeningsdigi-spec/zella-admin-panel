@@ -7,6 +7,7 @@ import DashboardOverview from '@/components/Dashboard/DashboardOverview';
 import CasesTab from '@/components/Cases/CasesTab';
 import CustomersTab from '@/components/Customers/CustomersTab';
 import ReportsTab from '@/components/Reports/ReportsTab';
+import ManageUsersTab from '@/components/Users/ManageUsersTab';
 
 const Dashboard: React.FC = () => {
   const { user, loading } = useAuth();
@@ -50,6 +51,8 @@ const Dashboard: React.FC = () => {
         return <CustomersTab />;
       case 'reports':
         return <ReportsTab />;
+      case 'manage-users':
+        return <ManageUsersTab />;
       default:
         return <DashboardOverview />;
     }

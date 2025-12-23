@@ -31,8 +31,8 @@ const ReportsTab: React.FC = () => {
         search: filterParams?.search || undefined,
         dateFrom: filterParams?.dateFrom || undefined,
         dateTo: filterParams?.dateTo || undefined,
-        lastUpdatedFrom: filterParams?.lastUpdatedFrom || undefined,
-        lastUpdatedTo: filterParams?.lastUpdatedTo || undefined,
+        lastReportSentFrom: filterParams?.lastReportSentFrom || undefined,
+        lastReportSentTo: filterParams?.lastReportSentTo || undefined,
       });
 
       if (response.success && response.data) {
@@ -177,6 +177,7 @@ const ReportsTab: React.FC = () => {
           <CustomersFilters
             onFilterChange={handleFilterChange}
             onReset={handleResetFilters}
+            useReportSentFilter={true}
           />
           <CompaniesTable
             customers={customers}

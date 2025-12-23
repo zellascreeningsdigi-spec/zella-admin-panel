@@ -37,7 +37,7 @@ const CompaniesTable: React.FC<CompaniesTableProps> = ({ customers, onSendReport
             <TableHead className="w-[300px]">Company Name</TableHead>
             <TableHead>Email Contacts</TableHead>
             <TableHead>Created Date</TableHead>
-            <TableHead>Last Updated</TableHead>
+            <TableHead>Last Report Sent</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -76,7 +76,7 @@ const CompaniesTable: React.FC<CompaniesTableProps> = ({ customers, onSendReport
               <TableCell>
                 <div className="flex items-center text-sm text-gray-600">
                   <Calendar className="h-4 w-4 mr-2 text-gray-500" />
-                  {formatDate(customer.updatedAt)}
+                  {formatDate(customer.lastReportSent)}
                 </div>
               </TableCell>
               <TableCell className="text-right">

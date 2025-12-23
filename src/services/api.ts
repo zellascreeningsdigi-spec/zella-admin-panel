@@ -244,6 +244,8 @@ class ApiService {
     dateTo?: string;
     lastUpdatedFrom?: string;
     lastUpdatedTo?: string;
+    lastReportSentFrom?: string;
+    lastReportSentTo?: string;
   }): Promise<ApiResponse<{
     customers: any[];
     pagination: {
@@ -261,6 +263,8 @@ class ApiService {
     if (params?.dateTo) queryParams.append('dateTo', params.dateTo);
     if (params?.lastUpdatedFrom) queryParams.append('lastUpdatedFrom', params.lastUpdatedFrom);
     if (params?.lastUpdatedTo) queryParams.append('lastUpdatedTo', params.lastUpdatedTo);
+    if (params?.lastReportSentFrom) queryParams.append('lastReportSentFrom', params.lastReportSentFrom);
+    if (params?.lastReportSentTo) queryParams.append('lastReportSentTo', params.lastReportSentTo);
 
     const endpoint = queryParams.toString() ? `/customers?${queryParams}` : '/customers';
     return this.get(endpoint);

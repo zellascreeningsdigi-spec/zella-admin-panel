@@ -23,4 +23,5 @@ export interface Customer {
   documents?: CustomerDocument[];
   createdAt?: string;
   updatedAt?: string;
+  lastReportSent?: string;
 }

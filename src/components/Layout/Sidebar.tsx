@@ -3,7 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { LogOut, FileText, Home, Users, BarChart3, UserCog } from 'lucide-react';
 import logo from "../../logo192.png";
-import { useNavigate } from 'react-router-dom';
 
 interface SidebarProps {
   activeTab: string;
@@ -12,7 +11,6 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const { logout, user } = useAuth();
-  const navigate = useNavigate();
 
   const allMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
@@ -67,8 +65,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
           {canManageUsers && (
             <li>
               <button
-                onClick={() => navigate('/manage-users')}
-                className="w-full flex items-center px-4 py-3 rounded-lg transition-colors text-gray-300 hover:bg-gray-800 hover:text-white"
+                onClick={() => onTabChange('manage-users')}
+                className={`w-full flex items-center px-4 py-3 rounded-lg transition-colors ${
+                  activeTab === 'manage-users'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                }`}
               >
                 <UserCog className="h-5 w-5 mr-3" />
                 Manage Users

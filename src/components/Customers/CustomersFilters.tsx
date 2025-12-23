@@ -10,14 +10,17 @@ export interface CustomerFilters {
   dateTo: string;
   lastUpdatedFrom: string;
   lastUpdatedTo: string;
+  lastReportSentFrom: string;
+  lastReportSentTo: string;
 }
 
 interface CustomersFiltersProps {
   onFilterChange: (filters: CustomerFilters) => void;
   onReset: () => void;
+  useReportSentFilter?: boolean; // If true, use lastReportSent filter instead of lastUpdated
 }
 
-const CustomersFilters: React.FC<CustomersFiltersProps> = ({ onFilterChange, onReset }) => {
+const CustomersFilters: React.FC<CustomersFiltersProps> = ({ onFilterChange, onReset, useReportSentFilter = false }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [localFilters, setLocalFilters] = useState<CustomerFilters>({
     search: '',
@@ -25,6 +28,8 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ onFilterChange, onR
     dateTo: '',
     lastUpdatedFrom: '',
     lastUpdatedTo: '',
+    lastReportSentFrom: '',
+    lastReportSentTo: '',
   });
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -56,6 +61,8 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ onFilterChange, onR
       dateTo: '',
       lastUpdatedFrom: '',
       lastUpdatedTo: '',
+      lastReportSentFrom: '',
+      lastReportSentTo: '',
     });
     onReset();
   };
@@ -130,15 +137,20 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ onFilterChange, onR
               </div>
             </div>
 
-            {/* Last Updated Date Range */}
+            {/* Last Updated/Report Sent Date Range */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-gray-700">Last Updated Range</Label>
+              <Label className="text-sm font-medium text-gray-700">
+                {useReportSentFilter ? 'Last Report Sent Range' : 'Last Updated Range'}
+              </Label>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Input
                     type="date"
-                    value={localFilters.lastUpdatedFrom}
-                    onChange={(e) => handleFilterChange('lastUpdatedFrom', e.target.value)}
+                    value={useReportSentFilter ? localFilters.lastReportSentFrom : localFilters.lastUpdatedFrom}
+                    onChange={(e) => handleFilterChange(
+                      useReportSentFilter ? 'lastReportSentFrom' : 'lastUpdatedFrom',
+                      e.target.value
+                    )}
                     placeholder="From"
                     className="w-full"
                   />
@@ -147,8 +159,11 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ onFilterChange, onR
                 <div>
                   <Input
                     type="date"
-                    value={localFilters.lastUpdatedTo}
-                    onChange={(e) => handleFilterChange('lastUpdatedTo', e.target.value)}
+                    value={useReportSentFilter ? localFilters.lastReportSentTo : localFilters.lastUpdatedTo}
+                    onChange={(e) => handleFilterChange(
+                      useReportSentFilter ? 'lastReportSentTo' : 'lastUpdatedTo',
+                      e.target.value
+                    )}
                     placeholder="To"
                     className="w-full"
                   />
@@ -178,14 +193,24 @@ const CustomersFilters: React.FC<CustomersFiltersProps> = ({ onFilterChange, onR
                     Created to: {new Date(localFilters.dateTo).toLocaleDateString()}
                   </span>
                 )}
-                {localFilters.lastUpdatedFrom && (
+                {!useReportSentFilter && localFilters.lastUpdatedFrom && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700">
                     Updated from: {new Date(localFilters.lastUpdatedFrom).toLocaleDateString()}
                   </span>
                 )}
-                {localFilters.lastUpdatedTo && (
+                {!useReportSentFilter && localFilters.lastUpdatedTo && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700">
                     Updated to: {new Date(localFilters.lastUpdatedTo).toLocaleDateString()}
+                  </span>
+                )}
+                {useReportSentFilter && localFilters.lastReportSentFrom && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700">
+                    Report sent from: {new Date(localFilters.lastReportSentFrom).toLocaleDateString()}
+                  </span>
+                )}
+                {useReportSentFilter && localFilters.lastReportSentTo && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-100 text-purple-700">
+                    Report sent to: {new Date(localFilters.lastReportSentTo).toLocaleDateString()}
                   </span>
                 )}
               </div>
