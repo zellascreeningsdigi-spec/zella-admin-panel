@@ -1,8 +1,9 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, FileText, Home, Users, BarChart3 } from 'lucide-react';
+import { LogOut, FileText, Home, Users, BarChart3, UserCog } from 'lucide-react';
 import logo from "../../logo192.png";
+import { useNavigate } from 'react-router-dom';
 
 interface SidebarProps {
   activeTab: string;
@@ -11,6 +12,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const { logout, user } = useAuth();
+  const navigate = useNavigate();
 
   const allMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
@@ -24,6 +26,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
     user && item.roles.includes(user.role)
   );
 
+  // Show Manage Users only for ashish@zellascreenings.com
+  const canManageUsers = user?.email === 'ashish@zellascreenings.com';
+
   return (
     <div className="h-screen w-[300px] bg-gray-900 text-white flex flex-col">
       <div className='flex items-center justify-center p-5'>
@@ -36,7 +41,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
       </div>
       </div>
 
-      
+
       <nav className="flex-1 px-4">
         <ul className="space-y-2">
           {menuItems.map((item) => {
@@ -57,6 +62,19 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
               </li>
             );
           })}
+
+          {/* Manage Users - Only for ashish@zellascreenings.com */}
+          {canManageUsers && (
+            <li>
+              <button
+                onClick={() => navigate('/manage-users')}
+                className="w-full flex items-center px-4 py-3 rounded-lg transition-colors text-gray-300 hover:bg-gray-800 hover:text-white"
+              >
+                <UserCog className="h-5 w-5 mr-3" />
+                Manage Users
+              </button>
+            </li>
+          )}
         </ul>
       </nav>
       
