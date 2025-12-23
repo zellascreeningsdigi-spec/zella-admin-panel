@@ -77,8 +77,13 @@ const ReportsTab: React.FC = () => {
   };
 
   const handleShowDetails = (customer: Customer) => {
-    // Navigate to company details page
-    navigate(`/company-details/${customer._id}`);
+    // Navigate to dashboard with company-details tab, passing customerId in state
+    navigate('/dashboard', {
+      state: {
+        activeTab: 'company-details',
+        customerId: customer._id
+      }
+    });
   };
 
   if (loading) {
