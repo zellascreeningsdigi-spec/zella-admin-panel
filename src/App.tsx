@@ -4,6 +4,7 @@ import DigiLockerCallback from '@/pages/DigiLockerCallback';
 import Login from '@/pages/Login';
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import DocumentPage from './pages/DocumentPage';
+import CompanyDetailsPage from './pages/CompanyDetailsPage';
 
 function App() {
   return (
@@ -18,6 +19,8 @@ function App() {
             <Route path="/digilocker" element={<DigiLockerCallback />} />
 
             <Route path="/documents" element={<DocumentPage />} />
+
+            <Route path="/company-details/:customerId" element={<CompanyDetailsPage />} />
 
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>

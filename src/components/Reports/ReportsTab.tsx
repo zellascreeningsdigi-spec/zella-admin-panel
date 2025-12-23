@@ -4,19 +4,19 @@ import { apiService } from '@/services/api';
 import { Customer } from '@/types/customer';
 import { RefreshCw, Building2 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import CompaniesTable from './CompaniesTable';
 import CustomersFilters, { CustomerFilters } from '../Customers/CustomersFilters';
 import SendReportDialog from './SendReportDialog';
-import EmailHistoryDialog from './EmailHistoryDialog';
 
 const ReportsTab: React.FC = () => {
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isSendReportOpen, setIsSendReportOpen] = useState(false);
-  const [isEmailHistoryOpen, setIsEmailHistoryOpen] = useState(false);
 
   const fetchCustomers = async (filterParams?: CustomerFilters) => {
     try {
@@ -77,13 +77,8 @@ const ReportsTab: React.FC = () => {
   };
 
   const handleShowDetails = (customer: Customer) => {
-    setSelectedCustomer(customer);
-    setIsEmailHistoryOpen(true);
-  };
-
-  const handleCloseEmailHistory = () => {
-    setIsEmailHistoryOpen(false);
-    setSelectedCustomer(null);
+    // Navigate to company details page
+    navigate(`/company-details/${customer._id}`);
   };
 
   if (loading) {
@@ -191,13 +186,6 @@ const ReportsTab: React.FC = () => {
       <SendReportDialog
         isOpen={isSendReportOpen}
         onClose={handleCloseSendReport}
-        customer={selectedCustomer}
-      />
-
-      {/* Email History Dialog */}
-      <EmailHistoryDialog
-        isOpen={isEmailHistoryOpen}
-        onClose={handleCloseEmailHistory}
         customer={selectedCustomer}
       />
     </div>
