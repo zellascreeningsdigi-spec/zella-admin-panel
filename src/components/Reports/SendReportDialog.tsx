@@ -34,6 +34,7 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
   const [subject, setSubject] = useState('Final Employee Verification Reports');
   const [excelFile, setExcelFile] = useState<File | null>(null);
   const [excelData, setExcelData] = useState<any[]>([]);
+  const [additionalFile, setAdditionalFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
   const [showFooterPreview, setShowFooterPreview] = useState(false);
   const [result, setResult] = useState<{
@@ -42,6 +43,7 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
     details?: any;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const additionalFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen && customer) {
@@ -51,6 +53,7 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
       setSubject('Final Employee Verification Reports');
       setExcelFile(null);
       setExcelData([]);
+      setAdditionalFile(null);
       setResult(null);
     }
   }, [isOpen, customer]);
@@ -102,8 +105,54 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
     }
   };
 
+  const handleAdditionalFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      alert('File size must be less than 10MB');
+      if (additionalFileInputRef.current) {
+        additionalFileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // Validate file type
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/zip',
+      'application/x-zip-compressed'
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      alert('Invalid file type. Allowed types: PDF, Images (JPG, PNG), Word, Excel, ZIP');
+      if (additionalFileInputRef.current) {
+        additionalFileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    setAdditionalFile(file);
+  };
+
+  const handleRemoveAdditionalFile = () => {
+    setAdditionalFile(null);
+    if (additionalFileInputRef.current) {
+      additionalFileInputRef.current.value = '';
+    }
+  };
+
   const handleSendReport = async () => {
-    if (selectedEmails.length === 0 || !customer || !excelFile) {
+    if (selectedEmails.length === 0 || !customer || !excelFile || !additionalFile) {
       return;
     }
 
@@ -116,7 +165,8 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
         selectedEmails,
         subject,
         messageTemplate,
-        excelFile
+        excelFile,
+        additionalFile
       );
 
       if (response.success) {
@@ -321,6 +371,61 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
                 )}
               </div>
 
+              {/* Additional File Upload (Required) */}
+              <div>
+                <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                  Additional Attachment <span className="text-red-500">*</span>
+                </Label>
+
+                {!additionalFile ? (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                    <input
+                      ref={additionalFileInputRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.zip"
+                      onChange={handleAdditionalFileUpload}
+                      className="hidden"
+                      disabled={sending}
+                    />
+                    <Upload className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => additionalFileInputRef.current?.click()}
+                      disabled={sending}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Choose File
+                    </Button>
+                    <p className="text-xs text-gray-500 mt-2">
+                      PDF, Images, Word, Excel, ZIP (max 10MB)
+                    </p>
+                  </div>
+                ) : (
+                  <div className="border border-gray-300 rounded-lg p-3 bg-gray-50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <FileSpreadsheet className="h-5 w-5 text-blue-600 mr-2" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{additionalFile.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {(additionalFile.size / 1024).toFixed(2)} KB
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveAdditionalFile}
+                        disabled={sending}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Email Footer Preview */}
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -374,7 +479,7 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
               </Button>
               <Button
                 onClick={handleSendReport}
-                disabled={selectedEmails.length === 0 || !excelFile || sending}
+                disabled={selectedEmails.length === 0 || !excelFile || !additionalFile || sending}
               >
                 {sending ? (
                   <>

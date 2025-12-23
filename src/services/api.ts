@@ -384,7 +384,8 @@ class ApiService {
     emails: string[],
     subject: string,
     message: string,
-    excelFile: File
+    excelFile: File,
+    additionalFile: File
   ): Promise<ApiResponse<{
     results: any[];
     successCount: number;
@@ -395,6 +396,7 @@ class ApiService {
     formData.append('subject', subject);
     formData.append('message', message);
     formData.append('report', excelFile);
+    formData.append('additionalFile', additionalFile);
 
     const token = this.getAuthToken();
     const response = await fetch(
@@ -430,6 +432,43 @@ class ApiService {
     total: number;
   }>> {
     return this.get(`/customers/${customerId}/email-reports`);
+  }
+
+  // User Management API methods (ashish@zellascreenings.com only)
+  async getAdminUsers(): Promise<ApiResponse<{
+    users: any[];
+  }>> {
+    return this.get('/users/admins');
+  }
+
+  async createAdminUser(userData: {
+    name: string;
+    designation?: string;
+    email: string;
+    password: string;
+    role: 'admin' | 'super-admin';
+  }): Promise<ApiResponse<{
+    user: any;
+  }>> {
+    return this.post('/users/admins', userData);
+  }
+
+  async updateAdminUser(
+    userId: string,
+    updates: {
+      name?: string;
+      designation?: string;
+      role?: 'admin' | 'super-admin';
+      isActive?: boolean;
+    }
+  ): Promise<ApiResponse<{
+    user: any;
+  }>> {
+    return this.put(`/users/admins/${userId}`, updates);
+  }
+
+  async deleteAdminUser(userId: string): Promise<ApiResponse<{}>> {
+    return this.delete(`/users/admins/${userId}`);
   }
 }
 
