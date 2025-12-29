@@ -16,7 +16,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
     { id: 'dashboard', label: 'Dashboard', icon: Home, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
     { id: 'digilocker', label: 'Digilocker', icon: FileText, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
     { id: 'datahub', label: 'Datahub', icon: Users, roles: ['super-admin', 'admin', 'operator', 'viewer', 'customer'] },
-    { id: 'reports', label: 'Reports', icon: BarChart3, roles: ['super-admin', 'admin'] },
+    { id: 'reports', label: 'Reports', icon: BarChart3, roles: ['super-admin', 'admin', 'customer'] },
   ];
 
   // Filter menu items based on user role
@@ -28,15 +28,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const canManageUsers = user?.email === 'ashish@zellascreenings.com';
 
   return (
-    <div className="h-screen w-[300px] bg-gray-900 text-white flex flex-col">
-      <div className='flex items-center justify-center p-5'>
-        <div>
+    <div className="h-screen w-[300px] min-w-[300px] flex-shrink-0 bg-gray-900 text-white flex flex-col">
+      <div className="flex items-center p-5 space-x-3">
+        <div className="flex-shrink-0">
           <img src={logo} width={50} height={50} alt="Zella Screenings Logo"></img>
         </div>
-      <div className="p-6">
-        <h1 className="text-xl font-bold">{user?.role === 'customer' ? 'Zella Screenings - DataHub' : 'Admin Panel'}</h1>
-        {/* <p className="text-gray-400 text-sm mt-1">Zella Screenings</p> */}
-      </div>
+        <div>
+          <h1 className="text-lg font-bold leading-tight">{user?.role === 'customer' ? 'Zella Screenings - DataHub' : 'Admin Panel'}</h1>
+        </div>
       </div>
 
 

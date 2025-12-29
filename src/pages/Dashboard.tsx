@@ -65,9 +65,9 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <Header />
         <main className="flex-1 p-6 overflow-auto">
           {renderContent()}

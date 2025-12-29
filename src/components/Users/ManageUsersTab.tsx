@@ -1,18 +1,25 @@
 import { Button } from '@/components/ui/button';
 import { apiService } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
-import { Plus, Trash2, Shield, ShieldCheck } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import { Plus, Trash2, Shield, ShieldCheck, Edit, Search, User as UserIcon, Building2, Eye } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
 import AddUserDialog from './AddUserDialog';
+import EditUserDialog from './EditUserDialog';
+import { Input } from '@/components/ui/input';
 
 interface User {
   _id: string;
   name: string;
   designation: string;
+  phone?: string;
   email: string;
-  role: 'admin' | 'super-admin';
+  role: 'admin' | 'super-admin' | 'customer' | 'operator' | 'viewer';
   isActive: boolean;
   createdAt: string;
+  customerId?: {
+    _id: string;
+    companyName: string;
+  };
 }
 
 const ManageUsersTab: React.FC = () => {
@@ -20,24 +27,35 @@ const ManageUsersTab: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Pagination and filtering
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [limit] = useState(10);
 
   // Check if current user is ashish@zellascreenings.com
   const canManageUsers = currentUser?.email === 'ashish@zellascreenings.com';
 
-  useEffect(() => {
-    if (canManageUsers) {
-      fetchUsers();
-    }
-  }, [canManageUsers]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiService.getAdminUsers();
+      const response = await apiService.getAllUsers({
+        page: currentPage,
+        limit,
+        search: searchTerm,
+        role: roleFilter
+      });
       if (response.success && response.data) {
         setUsers(response.data.users);
+        setTotalPages(response.data.pagination.totalPages);
+        setTotalUsers(response.data.pagination.totalUsers);
       }
     } catch (err) {
       console.error('Error fetching users:', err);
@@ -45,7 +63,13 @@ const ManageUsersTab: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, limit, searchTerm, roleFilter]);
+
+  useEffect(() => {
+    if (canManageUsers) {
+      fetchUsers();
+    }
+  }, [canManageUsers, fetchUsers]);
 
   const handleDeleteUser = async (userId: string, userName: string) => {
     if (!window.confirm(`Are you sure you want to delete ${userName}?`)) {
@@ -78,6 +102,72 @@ const ManageUsersTab: React.FC = () => {
     }
   };
 
+  const handleEditUser = (user: User) => {
+    setSelectedUser(user);
+    setShowEditDialog(true);
+  };
+
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1); // Reset to first page on search
+  };
+
+  const handleRoleFilterChange = (value: string) => {
+    setRoleFilter(value);
+    setCurrentPage(1); // Reset to first page on filter change
+  };
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'super-admin':
+        return <ShieldCheck className="h-4 w-4 text-purple-600 mr-2" />;
+      case 'admin':
+        return <Shield className="h-4 w-4 text-blue-600 mr-2" />;
+      case 'customer':
+        return <Building2 className="h-4 w-4 text-green-600 mr-2" />;
+      case 'operator':
+        return <UserIcon className="h-4 w-4 text-orange-600 mr-2" />;
+      case 'viewer':
+        return <Eye className="h-4 w-4 text-gray-600 mr-2" />;
+      default:
+        return <UserIcon className="h-4 w-4 text-gray-600 mr-2" />;
+    }
+  };
+
+  const getRoleBadgeClass = (role: string) => {
+    switch (role) {
+      case 'super-admin':
+        return 'bg-purple-100 text-purple-800';
+      case 'admin':
+        return 'bg-blue-100 text-blue-800';
+      case 'customer':
+        return 'bg-green-100 text-green-800';
+      case 'operator':
+        return 'bg-orange-100 text-orange-800';
+      case 'viewer':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getRoleDisplayName = (role: string) => {
+    switch (role) {
+      case 'super-admin':
+        return 'Super Admin';
+      case 'admin':
+        return 'Admin';
+      case 'customer':
+        return 'Customer';
+      case 'operator':
+        return 'Operator';
+      case 'viewer':
+        return 'Viewer';
+      default:
+        return role;
+    }
+  };
+
   if (!canManageUsers) {
     return (
       <div className="bg-white rounded-lg shadow-md p-8">
@@ -95,15 +185,55 @@ const ManageUsersTab: React.FC = () => {
         {/* Header */}
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Manage Admin Users</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Manage Users</h1>
             <p className="text-gray-600 mt-1">
-              Add, edit, or remove admin and super-admin users
+              View and manage all users in the system
             </p>
           </div>
           <Button onClick={() => setShowAddDialog(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            Add User
+            Add Admin User
           </Button>
+        </div>
+
+        {/* Search and Filters */}
+        <div className="p-6 border-b border-gray-200 bg-gray-50">
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Search */}
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Search by name, email, or designation..."
+                  value={searchTerm}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Role Filter */}
+            <div className="w-full md:w-48">
+              <select
+                value={roleFilter}
+                onChange={(e) => handleRoleFilterChange(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">All Roles</option>
+                <option value="super-admin">Super Admin</option>
+                <option value="admin">Admin</option>
+                <option value="customer">Customer</option>
+                <option value="operator">Operator</option>
+                <option value="viewer">Viewer</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Results count */}
+          <div className="mt-3 text-sm text-gray-600">
+            Showing {users.length} of {totalUsers} users
+          </div>
         </div>
 
         {/* Users Table */}
@@ -121,8 +251,11 @@ const ManageUsersTab: React.FC = () => {
             </div>
           ) : users.length === 0 ? (
             <div className="text-center py-12">
-              <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">No admin users found</p>
+              <UserIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">No users found</p>
+              {(searchTerm || roleFilter) && (
+                <p className="text-sm text-gray-500 mt-2">Try adjusting your search or filters</p>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -133,10 +266,13 @@ const ManageUsersTab: React.FC = () => {
                       User
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
+                      Contact
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Role
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Company
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -163,25 +299,27 @@ const ManageUsersTab: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <div className="text-sm text-gray-900">{user.email}</div>
+                        <div>
+                          <div className="text-sm text-gray-900">{user.email}</div>
+                          {user.phone && (
+                            <div className="text-sm text-gray-500">{user.phone}</div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center">
-                          {user.role === 'super-admin' ? (
-                            <ShieldCheck className="h-4 w-4 text-purple-600 mr-2" />
-                          ) : (
-                            <Shield className="h-4 w-4 text-blue-600 mr-2" />
-                          )}
-                          <span
-                            className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                              user.role === 'super-admin'
-                                ? 'bg-purple-100 text-purple-800'
-                                : 'bg-blue-100 text-blue-800'
-                            }`}
-                          >
-                            {user.role === 'super-admin' ? 'Super Admin' : 'Admin'}
+                          {getRoleIcon(user.role)}
+                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getRoleBadgeClass(user.role)}`}>
+                            {getRoleDisplayName(user.role)}
                           </span>
                         </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        {user.customerId ? (
+                          <div className="text-sm text-gray-900">{user.customerId.companyName}</div>
+                        ) : (
+                          <div className="text-sm text-gray-400">—</div>
+                        )}
                       </td>
                       <td className="px-4 py-4">
                         <button
@@ -209,6 +347,14 @@ const ManageUsersTab: React.FC = () => {
                             <Button
                               variant="ghost"
                               size="sm"
+                              onClick={() => handleEditUser(user)}
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               onClick={() => handleDeleteUser(user._id, user.name)}
                               className="text-red-600 hover:text-red-700 hover:bg-red-50"
                             >
@@ -223,6 +369,74 @@ const ManageUsersTab: React.FC = () => {
               </table>
             </div>
           )}
+
+          {/* Pagination */}
+          {!loading && users.length > 0 && totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                Page {currentPage} of {totalPages}
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                >
+                  First
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum: number;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className="min-w-[40px]"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                >
+                  Last
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -232,6 +446,21 @@ const ManageUsersTab: React.FC = () => {
         onClose={() => setShowAddDialog(false)}
         onSuccess={() => {
           setShowAddDialog(false);
+          fetchUsers();
+        }}
+      />
+
+      {/* Edit User Dialog */}
+      <EditUserDialog
+        isOpen={showEditDialog}
+        user={selectedUser}
+        onClose={() => {
+          setShowEditDialog(false);
+          setSelectedUser(null);
+        }}
+        onSuccess={() => {
+          setShowEditDialog(false);
+          setSelectedUser(null);
           fetchUsers();
         }}
       />

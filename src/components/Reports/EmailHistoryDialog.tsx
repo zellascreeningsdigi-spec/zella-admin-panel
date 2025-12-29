@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { apiService } from '@/services/api';
 import { Customer } from '@/types/customer';
-import { Clock, Mail, User, FileSpreadsheet, CheckCircle, XCircle, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock, Mail, User, FileSpreadsheet, CheckCircle, XCircle, AlertCircle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 
 interface EmailHistoryDialogProps {
   isOpen: boolean;
@@ -125,6 +125,27 @@ const EmailHistoryDialog: React.FC<EmailHistoryDialogProps> = ({ isOpen, onClose
     setExpandedReportId(expandedReportId === reportId ? null : reportId);
   };
 
+  const handleDeleteReport = async (reportId: string, subject: string) => {
+    if (!customer?._id) return;
+
+    if (!window.confirm(`Are you sure you want to delete the email report: "${subject}"?\n\nThis action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await apiService.deleteCustomerEmailReport(customer._id, reportId);
+      if (response.success) {
+        // Refresh the list
+        fetchEmailReports();
+      } else {
+        alert(response.message || 'Failed to delete email report');
+      }
+    } catch (err) {
+      console.error('Error deleting email report:', err);
+      alert('Failed to delete email report. Please try again.');
+    }
+  };
+
   if (!customer) return null;
 
   return (
@@ -182,50 +203,103 @@ const EmailHistoryDialog: React.FC<EmailHistoryDialogProps> = ({ isOpen, onClose
                         </div>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleExpand(report._id)}
-                    >
-                      {expandedReportId === report._id ? (
-                        <ChevronUp className="h-4 w-4" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4" />
-                      )}
-                    </Button>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteReport(report._id, report.subject)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => toggleExpand(report._id)}
+                      >
+                        {expandedReportId === report._id ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Report Details */}
                 {expandedReportId === report._id && (
                   <div className="p-4 space-y-4">
-                    {/* Recipients */}
+                    {/* Recipients - Segregated by Status */}
                     <div>
-                      <label className="text-sm font-medium text-gray-700 block mb-2">
-                        Recipients ({report.recipients.length})
+                      <label className="text-sm font-medium text-gray-700 block mb-3">
+                        Email Recipients ({report.recipients.length} total)
                       </label>
-                      <div className="flex flex-wrap gap-2">
-                        {report.recipients.map((email, idx) => {
-                          const result = report.results.details.find(d => d.email === email);
-                          return (
-                            <span
-                              key={idx}
-                              className={`inline-flex items-center px-2 py-1 rounded text-xs ${
-                                result?.success
-                                  ? 'bg-green-50 text-green-700 border border-green-200'
-                                  : 'bg-red-50 text-red-700 border border-red-200'
-                              }`}
-                            >
-                              {email}
-                              {result?.success ? (
-                                <CheckCircle className="h-3 w-3 ml-1" />
-                              ) : (
-                                <XCircle className="h-3 w-3 ml-1" />
-                              )}
+
+                      {/* Successfully Sent Emails */}
+                      {report.results.successCount > 0 && (
+                        <div className="mb-4">
+                          <div className="flex items-center mb-2">
+                            <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                            <span className="text-sm font-medium text-green-700">
+                              Successfully Sent ({report.results.successCount})
                             </span>
-                          );
-                        })}
-                      </div>
+                          </div>
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                            <div className="flex flex-wrap gap-2">
+                              {report.results.details
+                                .filter(d => d.success)
+                                .map((result, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center px-3 py-1 rounded-full text-xs bg-green-100 text-green-800 border border-green-300"
+                                  >
+                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                    {result.email}
+                                  </span>
+                                ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Failed Emails */}
+                      {report.results.failureCount > 0 && (
+                        <div>
+                          <div className="flex items-center mb-2">
+                            <XCircle className="h-4 w-4 text-red-600 mr-1" />
+                            <span className="text-sm font-medium text-red-700">
+                              Failed to Send ({report.results.failureCount})
+                            </span>
+                          </div>
+                          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                            <div className="space-y-2">
+                              {report.results.details
+                                .filter(d => !d.success)
+                                .map((result, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="bg-red-100 border border-red-300 rounded p-2"
+                                  >
+                                    <div className="flex items-start">
+                                      <XCircle className="h-4 w-4 text-red-600 mr-2 mt-0.5 flex-shrink-0" />
+                                      <div className="flex-1">
+                                        <div className="font-medium text-red-900 text-xs">
+                                          {result.email}
+                                        </div>
+                                        {result.error && (
+                                          <div className="text-xs text-red-700 mt-1">
+                                            Error: {result.error}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Message */}

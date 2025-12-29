@@ -23,6 +23,7 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, onClose, onSucces
   const [formData, setFormData] = useState({
     name: '',
     designation: '',
+    phone: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -77,6 +78,7 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, onClose, onSucces
       const response = await apiService.createAdminUser({
         name: formData.name.trim(),
         designation: formData.designation.trim(),
+        phone: formData.phone.trim(),
         email: formData.email.trim(),
         password: formData.password,
         role: formData.role
@@ -92,6 +94,7 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, onClose, onSucces
         setFormData({
           name: '',
           designation: '',
+          phone: '',
           email: '',
           password: '',
           confirmPassword: '',
@@ -121,6 +124,7 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, onClose, onSucces
       setFormData({
         name: '',
         designation: '',
+        phone: '',
         email: '',
         password: '',
         confirmPassword: '',
@@ -172,6 +176,19 @@ const AddUserDialog: React.FC<AddUserDialogProps> = ({ isOpen, onClose, onSucces
                   value={formData.designation}
                   onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
                   placeholder="e.g., Senior Executive Analyst"
+                  disabled={submitting}
+                />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="e.g., +91 9876543210"
                   disabled={submitting}
                 />
               </div>

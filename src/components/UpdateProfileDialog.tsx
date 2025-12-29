@@ -23,6 +23,7 @@ const UpdateProfileDialog: React.FC<UpdateProfileDialogProps> = ({ isOpen, onClo
   const { user, updateUser } = useAuth();
   const [name, setName] = useState('');
   const [designation, setDesignation] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
     success: boolean;
@@ -33,6 +34,7 @@ const UpdateProfileDialog: React.FC<UpdateProfileDialogProps> = ({ isOpen, onClo
     if (isOpen && user) {
       setName(user.name || '');
       setDesignation(user.designation || '');
+      setPhone(user.phone || '');
       setResult(null);
     }
   }, [isOpen, user]);
@@ -52,7 +54,7 @@ const UpdateProfileDialog: React.FC<UpdateProfileDialogProps> = ({ isOpen, onClo
     setResult(null);
 
     try {
-      const response = await apiService.updateProfile(name.trim(), designation.trim());
+      const response = await apiService.updateProfile(name.trim(), designation.trim(), phone.trim());
 
       if (response.success) {
         // Update user in context
@@ -101,7 +103,7 @@ const UpdateProfileDialog: React.FC<UpdateProfileDialogProps> = ({ isOpen, onClo
             Update Profile
           </DialogTitle>
           <DialogDescription>
-            Update your name and designation. These details will be used in reports.
+            Update your name, designation, and phone number. These details will be used in reports.
           </DialogDescription>
         </DialogHeader>
 
@@ -139,6 +141,24 @@ const UpdateProfileDialog: React.FC<UpdateProfileDialogProps> = ({ isOpen, onClo
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   This will be displayed in email reports sent to companies
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
+                  Phone Number
+                </Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="e.g., +91 9876543210"
+                  disabled={loading}
+                  className="mt-2"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  This will be displayed in email footers
                 </p>
               </div>
             </div>

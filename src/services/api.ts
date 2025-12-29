@@ -231,8 +231,8 @@ class ApiService {
     return this.post('/auth/reset-password', { currentPassword, newPassword });
   }
 
-  async updateProfile(name: string, designation: string): Promise<ApiResponse<{ user: any }>> {
-    return this.put('/auth/profile', { name, designation });
+  async updateProfile(name: string, designation: string, phone?: string): Promise<ApiResponse<{ user: any }>> {
+    return this.put('/auth/profile', { name, designation, phone });
   }
 
   // Customers API methods
@@ -438,7 +438,35 @@ class ApiService {
     return this.get(`/customers/${customerId}/email-reports`);
   }
 
+  async deleteCustomerEmailReport(customerId: string, reportId: string): Promise<ApiResponse<{}>> {
+    return this.delete(`/customers/${customerId}/email-reports/${reportId}`);
+  }
+
   // User Management API methods (ashish@zellascreenings.com only)
+  async getAllUsers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    role?: string;
+  }): Promise<ApiResponse<{
+    users: any[];
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalUsers: number;
+      limit: number;
+    };
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.role) queryParams.append('role', params.role);
+
+    const endpoint = queryParams.toString() ? `/users/all?${queryParams}` : '/users/all';
+    return this.get(endpoint);
+  }
+
   async getAdminUsers(): Promise<ApiResponse<{
     users: any[];
   }>> {
@@ -448,6 +476,7 @@ class ApiService {
   async createAdminUser(userData: {
     name: string;
     designation?: string;
+    phone?: string;
     email: string;
     password: string;
     role: 'admin' | 'super-admin';
@@ -462,6 +491,9 @@ class ApiService {
     updates: {
       name?: string;
       designation?: string;
+      phone?: string;
+      email?: string;
+      password?: string;
       role?: 'admin' | 'super-admin';
       isActive?: boolean;
     }
@@ -473,6 +505,94 @@ class ApiService {
 
   async deleteAdminUser(userId: string): Promise<ApiResponse<{}>> {
     return this.delete(`/users/admins/${userId}`);
+  }
+
+  // Reports API methods
+  async getReports(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+    customerId?: string;
+    sortBy?: string;
+    sortOrder?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<{
+    reports: any[];
+    currentPage: number;
+    totalPages: number;
+    totalReports: number;
+  }> {
+    const queryString = new URLSearchParams(
+      Object.entries(params || {})
+        .filter(([_, value]) => value !== undefined)
+        .map(([key, value]) => [key, String(value)])
+    ).toString();
+
+    // Backend returns this structure directly, not wrapped in ApiResponse
+    return this.get(`/reports${queryString ? `?${queryString}` : ''}`) as any;
+  }
+
+  async getReportById(reportId: string): Promise<any> {
+    // Backend returns report directly, not wrapped in ApiResponse
+    return this.get(`/reports/${reportId}`) as any;
+  }
+
+  async createReport(reportData: {
+    reportType: string;
+    description: string;
+    customerId: string;
+    emails: string[];
+    dueDate?: string;
+    priority?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.post('/reports', reportData);
+  }
+
+  async uploadReportDocument(reportId: string, formData: FormData): Promise<any> {
+    const token = this.getAuthToken();
+
+    const response = await fetch(`${API_BASE_URL}/reports/${reportId}/documents`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Upload failed');
+    }
+
+    // Backend returns report directly
+    return data;
+  }
+
+  async deleteReportDocument(reportId: string, documentId: string): Promise<ApiResponse<{}>> {
+    return this.delete(`/reports/${reportId}/documents/${documentId}`);
+  }
+
+  async submitReport(reportId: string): Promise<any> {
+    // Backend returns report directly
+    return this.post(`/reports/${reportId}/submit`) as any;
+  }
+
+  async deleteReport(reportId: string): Promise<ApiResponse<{}>> {
+    return this.delete(`/reports/${reportId}`);
+  }
+
+  async updateReportStatus(reportId: string, status: string, reviewNotes?: string): Promise<ApiResponse<any>> {
+    return this.patch(`/reports/${reportId}/status`, { status, reviewNotes });
+  }
+
+  private async patch<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    });
   }
 }
 

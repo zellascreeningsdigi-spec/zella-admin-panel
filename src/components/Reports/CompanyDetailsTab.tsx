@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { apiService } from '@/services/api';
 import { Customer } from '@/types/customer';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, RefreshCw, Mail, Calendar, FileText, Building2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Mail, Calendar, FileText, Building2, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface CompanyDetailsTabProps {
@@ -59,6 +59,27 @@ const CompanyDetailsTab: React.FC<CompanyDetailsTabProps> = ({ onBack }) => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleDeleteReport = async (reportId: string, subject: string) => {
+    if (!customerId) return;
+
+    if (!window.confirm(`Are you sure you want to delete the email report: "${subject}"?\n\nThis action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await apiService.deleteCustomerEmailReport(customerId, reportId);
+      if (response.success) {
+        // Refresh the company details
+        fetchCompanyDetails();
+      } else {
+        alert(response.message || 'Failed to delete email report');
+      }
+    } catch (err) {
+      console.error('Error deleting email report:', err);
+      alert('Failed to delete email report. Please try again.');
+    }
   };
 
   if (loading) {
@@ -204,29 +225,87 @@ const CompanyDetailsTab: React.FC<CompanyDetailsTabProps> = ({ onBack }) => {
                           ? 'Partially Sent'
                           : 'Failed'}
                       </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteReport(report._id, report.subject)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
 
-                  {/* Recipients */}
+                  {/* Recipients - Segregated by Status */}
                   <div className="mb-3">
-                    <label className="text-sm font-medium text-gray-700 block mb-2">
-                      Recipients ({report.recipients?.length || 0})
+                    <label className="text-sm font-medium text-gray-700 block mb-3">
+                      Email Recipients ({report.recipients?.length || 0} total)
                     </label>
-                    <div className="flex flex-wrap gap-2">
-                      {report.results?.details?.map((result: any, idx: number) => (
-                        <span
-                          key={idx}
-                          className={`inline-flex items-center px-2 py-1 rounded text-xs ${
-                            result.success
-                              ? 'bg-green-50 text-green-700 border border-green-200'
-                              : 'bg-red-50 text-red-700 border border-red-200'
-                          }`}
-                        >
-                          {result.email}
-                          {result.success ? ' ✓' : ' ✗'}
-                        </span>
-                      ))}
-                    </div>
+
+                    {/* Successfully Sent Emails */}
+                    {report.results?.successCount > 0 && (
+                      <div className="mb-4">
+                        <div className="flex items-center mb-2">
+                          <CheckCircle className="h-4 w-4 text-green-600 mr-1" />
+                          <span className="text-sm font-medium text-green-700">
+                            Successfully Sent ({report.results.successCount})
+                          </span>
+                        </div>
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                          <div className="flex flex-wrap gap-2">
+                            {report.results.details
+                              ?.filter((d: any) => d.success)
+                              .map((result: any, idx: number) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center px-3 py-1 rounded-full text-xs bg-green-100 text-green-800 border border-green-300"
+                                >
+                                  <CheckCircle className="h-3 w-3 mr-1" />
+                                  {result.email}
+                                </span>
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Failed Emails */}
+                    {report.results?.failureCount > 0 && (
+                      <div>
+                        <div className="flex items-center mb-2">
+                          <XCircle className="h-4 w-4 text-red-600 mr-1" />
+                          <span className="text-sm font-medium text-red-700">
+                            Failed to Send ({report.results.failureCount})
+                          </span>
+                        </div>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                          <div className="space-y-2">
+                            {report.results.details
+                              ?.filter((d: any) => !d.success)
+                              .map((result: any, idx: number) => (
+                                <div
+                                  key={idx}
+                                  className="bg-red-100 border border-red-300 rounded p-2"
+                                >
+                                  <div className="flex items-start">
+                                    <XCircle className="h-4 w-4 text-red-600 mr-2 mt-0.5 flex-shrink-0" />
+                                    <div className="flex-1">
+                                      <div className="font-medium text-red-900 text-xs">
+                                        {result.email}
+                                      </div>
+                                      {result.error && (
+                                        <div className="text-xs text-red-700 mt-1">
+                                          Error: {result.error}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Message */}
