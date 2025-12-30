@@ -63,14 +63,14 @@ export interface Report {
     rowCount: number;
     uploadedAt: string;
   };
-  additionalAttachment?: {
+  additionalAttachments?: Array<{
     fileName: string;
     fileSize: number;
     s3Key: string;
     s3Url?: string;
     mimeType: string;
     uploadedAt: string;
-  };
+  }>;
   createdAt: string;
   updatedAt: string;
 }

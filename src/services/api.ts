@@ -389,7 +389,7 @@ class ApiService {
     subject: string,
     message: string,
     excelFile: File,
-    additionalFile: File
+    additionalFiles: File[]
   ): Promise<ApiResponse<{
     results: any[];
     successCount: number;
@@ -400,7 +400,11 @@ class ApiService {
     formData.append('subject', subject);
     formData.append('message', message);
     formData.append('report', excelFile);
-    formData.append('additionalFile', additionalFile);
+
+    // Append all additional files
+    additionalFiles.forEach((file) => {
+      formData.append('additionalFiles', file);
+    });
 
     const token = this.getAuthToken();
     const response = await fetch(

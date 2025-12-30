@@ -22,9 +22,9 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
   const isCustomer = user?.role === 'customer';
   const isSuperAdmin = user?.role === 'super-admin';
   const isSubmitted = report.status === 'submitted' || report.status === 'reviewed';
-  const canUpload = isCustomer || isSuperAdmin;
-  const canDelete = !isSubmitted && (isSuperAdmin || (isCustomer && report.status !== 'submitted'));
-  const canSubmit = isCustomer && !isSubmitted && report.documents.length > 0;
+  const canUpload = isSuperAdmin; // Only super-admin can upload
+  const canDelete = !isSubmitted && isSuperAdmin; // Only super-admin can delete
+  const canSubmit = false; // Customers cannot submit anymore
 
   const refreshReport = async () => {
     try {
@@ -127,7 +127,7 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
   const failedEmails = report.requestedEmails.filter(e => e.status === 'failed');
 
   return (
-    <div className="space-y-6 pb-6 max-h-full">
+    <div className="space-y-6 pb-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
@@ -152,230 +152,37 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
         )}
       </div>
 
-      {/* Status and Info */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${REPORT_STATUS_COLORS[report.status]}`}>
-              {report.status}
-            </span>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Priority</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${PRIORITY_COLORS[report.priority]}`}>
-              {report.priority}
-            </span>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Documents</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{report.documents.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Due Date</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm">{formatDate(report.dueDate)}</div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Report Details */}
       <Card>
         <CardHeader>
-          <CardTitle>Report Details</CardTitle>
+          <CardTitle>Report Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="text-sm font-medium text-gray-700">Description:</label>
+            <label className="text-sm font-medium text-gray-700">Subject:</label>
+            <p className="mt-1 text-sm text-gray-900 font-medium">{report.reportType}</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium text-gray-700">Message:</label>
             <p className="mt-1 text-sm text-gray-600 whitespace-pre-wrap">{report.description}</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700">Requested By:</label>
-              <p className="mt-1 text-sm text-gray-600">
-                {report.requestedBy.name} ({report.requestedBy.email})
-              </p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Requested On:</label>
-              <p className="mt-1 text-sm text-gray-600">{formatDate(report.createdAt)}</p>
-            </div>
-            {report.submittedAt && (
-              <>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Submitted By:</label>
-                  <p className="mt-1 text-sm text-gray-600">
-                    {report.submittedBy?.name} ({report.submittedBy?.email})
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Submitted On:</label>
-                  <p className="mt-1 text-sm text-gray-600">{formatDate(report.submittedAt)}</p>
-                </div>
-              </>
-            )}
+          <div>
+            <label className="text-sm font-medium text-gray-700">Sent On:</label>
+            <p className="mt-1 text-sm text-gray-600">{formatDate(report.createdAt)}</p>
           </div>
         </CardContent>
       </Card>
 
-      {/* Original Attachment */}
-      {report.originalAttachment && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Original Request Attachment (XLSX)</CardTitle>
-            <CardDescription>XLSX file sent with the report request email</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex items-center space-x-3">
-                <FileText className="h-8 w-8 text-blue-600" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{report.originalAttachment.fileName}</p>
-                  <p className="text-xs text-gray-500">
-                    {formatFileSize(report.originalAttachment.fileSize)} • {report.originalAttachment.rowCount} rows
-                  </p>
-                </div>
-              </div>
-              {report.originalAttachment.s3Url && (
-                <a
-                  href={report.originalAttachment.s3Url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </a>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Additional Attachment */}
-      {report.additionalAttachment && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Additional Attachment</CardTitle>
-            <CardDescription>Additional file sent with the report request email</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-200">
-              <div className="flex items-center space-x-3">
-                <FileText className="h-8 w-8 text-purple-600" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{report.additionalAttachment.fileName}</p>
-                  <p className="text-xs text-gray-500">
-                    {formatFileSize(report.additionalAttachment.fileSize)}
-                  </p>
-                </div>
-              </div>
-              {report.additionalAttachment.s3Url && (
-                <a
-                  href={report.additionalAttachment.s3Url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </a>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Email Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Email Notifications</CardTitle>
-          <CardDescription>Email delivery status for this report request</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Successfully Sent Emails */}
-            {sentEmails.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-                  <div className="flex items-center">
-                    <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
-                    <span className="text-sm font-medium text-green-900">Successfully Sent ({sentEmails.length})</span>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  {sentEmails.map((email, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 pl-7 bg-white border border-gray-200 rounded">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{email.email}</p>
-                        <p className="text-xs text-gray-500">{formatDate(email.sentAt)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Failed Emails */}
-            {failedEmails.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
-                  <div className="flex items-center">
-                    <XCircle className="h-5 w-5 text-red-600 mr-2" />
-                    <span className="text-sm font-medium text-red-900">Failed to Send ({failedEmails.length})</span>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  {failedEmails.map((email, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 pl-7 bg-white border border-red-200 rounded">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">{email.email}</p>
-                        <p className="text-xs text-red-600">{email.error || 'Unknown error'}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Document Upload */}
+      {/* Document Upload - Super Admin Only */}
       {canUpload && (
         <Card>
           <CardHeader>
-            <CardTitle>Upload Documents</CardTitle>
+            <CardTitle>Upload Reports</CardTitle>
             <CardDescription>
-              {isSubmitted
-                ? 'Report submitted - You can still upload additional documents but cannot delete existing ones'
-                : 'Drag and drop files or click to browse. Max 100MB per file.'}
+              Upload additional reports .Drag and drop files or click to browse.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {isSubmitted && (
-              <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                <div className="flex items-center">
-                  <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" />
-                  <p className="text-xs text-yellow-800">
-                    This report has been submitted. You can upload additional files but cannot delete existing ones.
-                  </p>
-                </div>
-              </div>
-            )}
             <div
               {...getRootProps()}
               className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
@@ -403,31 +210,86 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
         </Card>
       )}
 
-      {/* Uploaded Documents */}
+      {/* Uploaded Reports - Combined Section */}
       <Card>
         <CardHeader>
-          <CardTitle>Uploaded Documents ({report.documents.length})</CardTitle>
+          <CardTitle>Uploaded Reports</CardTitle>
+          <CardDescription>All report files available for download</CardDescription>
         </CardHeader>
         <CardContent>
-          {report.documents.length === 0 ? (
+          {!report.originalAttachment &&
+           (!report.additionalAttachments || report.additionalAttachments.length === 0) &&
+           report.documents.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <FileText className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-              <p className="text-sm">No documents uploaded yet</p>
+              <p className="text-sm">No reports available yet</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
+              {/* Original XLSX Attachment */}
+              {report.originalAttachment && (
+                <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center space-x-3">
+                    <FileText className="h-8 w-8 text-blue-600" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{report.originalAttachment.fileName}</p>
+                      <p className="text-xs text-gray-500">
+                        {formatFileSize(report.originalAttachment.fileSize)}
+                      </p>
+                    </div>
+                  </div>
+                  {report.originalAttachment.s3Url && (
+                    <a
+                      href={report.originalAttachment.s3Url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {/* Additional Attachments */}
+              {report.additionalAttachments && report.additionalAttachments.map((attachment, index) => (
+                <div key={`additional-${index}`} className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="flex items-center space-x-3">
+                    <FileText className="h-8 w-8 text-purple-600" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{attachment.fileName}</p>
+                      <p className="text-xs text-gray-500">
+                        {formatFileSize(attachment.fileSize)}
+                      </p>
+                    </div>
+                  </div>
+                  {attachment.s3Url && (
+                    <a
+                      href={attachment.s3Url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </a>
+                  )}
+                </div>
+              ))}
+
+              {/* Uploaded Documents */}
               {report.documents.map((doc) => (
                 <div
                   key={doc._id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100"
+                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200"
                 >
-                  <div className="flex items-center space-x-3 flex-1">
-                    <FileText className="h-5 w-5 text-gray-500" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{doc.originalName}</p>
+                  <div className="flex items-center space-x-3">
+                    <FileText className="h-8 w-8 text-gray-600" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{doc.originalName}</p>
                       <p className="text-xs text-gray-500">
-                        {formatFileSize(doc.fileSize)} • Uploaded by {doc.uploadedBy.name} on{' '}
-                        {formatDate(doc.uploadedAt)}
+                        {formatFileSize(doc.fileSize)}
                       </p>
                     </div>
                   </div>
@@ -437,9 +299,10 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
                         href={doc.s3Url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                        className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
                       >
-                        <Download className="h-4 w-4" />
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
                       </a>
                     )}
                     {canDelete && (

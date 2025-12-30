@@ -34,7 +34,7 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
   const [subject, setSubject] = useState('Final Employee Verification Reports');
   const [excelFile, setExcelFile] = useState<File | null>(null);
   const [excelData, setExcelData] = useState<any[]>([]);
-  const [additionalFile, setAdditionalFile] = useState<File | null>(null);
+  const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
   const [showFooterPreview, setShowFooterPreview] = useState(false);
   const [result, setResult] = useState<{
@@ -53,7 +53,7 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
       setSubject('Final Employee Verification Reports');
       setExcelFile(null);
       setExcelData([]);
-      setAdditionalFile(null);
+      setAdditionalFiles([]);
       setResult(null);
     }
   }, [isOpen, customer]);
@@ -106,20 +106,11 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
   };
 
   const handleAdditionalFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
-    // Validate file size (max 10MB)
+    // Validate file size (max 10MB per file)
     const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      alert('File size must be less than 10MB');
-      if (additionalFileInputRef.current) {
-        additionalFileInputRef.current.value = '';
-      }
-      return;
-    }
-
-    // Validate file type
     const allowedTypes = [
       'application/pdf',
       'image/jpeg',
@@ -133,26 +124,38 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
       'application/x-zip-compressed'
     ];
 
-    if (!allowedTypes.includes(file.type)) {
-      alert('Invalid file type. Allowed types: PDF, Images (JPG, PNG), Word, Excel, ZIP');
-      if (additionalFileInputRef.current) {
-        additionalFileInputRef.current.value = '';
+    const validFiles: File[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      if (file.size > maxSize) {
+        alert(`${file.name}: File size must be less than 10MB`);
+        continue;
       }
-      return;
+
+      if (!allowedTypes.includes(file.type)) {
+        alert(`${file.name}: Invalid file type. Allowed types: PDF, Images (JPG, PNG), Word, Excel, ZIP`);
+        continue;
+      }
+
+      validFiles.push(file);
     }
 
-    setAdditionalFile(file);
-  };
+    if (validFiles.length > 0) {
+      setAdditionalFiles((prev) => [...prev, ...validFiles]);
+    }
 
-  const handleRemoveAdditionalFile = () => {
-    setAdditionalFile(null);
     if (additionalFileInputRef.current) {
       additionalFileInputRef.current.value = '';
     }
   };
 
+  const handleRemoveAdditionalFile = (index: number) => {
+    setAdditionalFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSendReport = async () => {
-    if (selectedEmails.length === 0 || !customer || !excelFile || !additionalFile) {
+    if (selectedEmails.length === 0 || !customer || !excelFile || additionalFiles.length === 0) {
       return;
     }
 
@@ -166,7 +169,7 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
         subject,
         messageTemplate,
         excelFile,
-        additionalFile
+        additionalFiles
       );
 
       if (response.success) {
@@ -371,57 +374,62 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
                 )}
               </div>
 
-              {/* Additional File Upload (Required) */}
+              {/* Additional Files Upload (Required) */}
               <div>
                 <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Additional Attachment <span className="text-red-500">*</span>
+                  Additional Attachments <span className="text-red-500">*</span> ({additionalFiles.length} files)
                 </Label>
 
-                {!additionalFile ? (
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
-                    <input
-                      ref={additionalFileInputRef}
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.zip"
-                      onChange={handleAdditionalFileUpload}
-                      className="hidden"
-                      disabled={sending}
-                    />
-                    <Upload className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => additionalFileInputRef.current?.click()}
-                      disabled={sending}
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Choose File
-                    </Button>
-                    <p className="text-xs text-gray-500 mt-2">
-                      PDF, Images, Word, Excel, ZIP (max 10MB)
-                    </p>
-                  </div>
-                ) : (
-                  <div className="border border-gray-300 rounded-lg p-3 bg-gray-50">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <FileSpreadsheet className="h-5 w-5 text-blue-600 mr-2" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{additionalFile.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {(additionalFile.size / 1024).toFixed(2)} KB
-                          </p>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors mb-3">
+                  <input
+                    ref={additionalFileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.zip"
+                    onChange={handleAdditionalFileUpload}
+                    className="hidden"
+                    disabled={sending}
+                  />
+                  <Upload className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => additionalFileInputRef.current?.click()}
+                    disabled={sending}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Add Files
+                  </Button>
+                  <p className="text-xs text-gray-500 mt-2">
+                    PDF, Images, Word, Excel, ZIP (max 10MB per file, multiple files supported)
+                  </p>
+                </div>
+
+                {additionalFiles.length > 0 && (
+                  <div className="space-y-2">
+                    {additionalFiles.map((file, index) => (
+                      <div key={index} className="border border-gray-300 rounded-lg p-3 bg-gray-50">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <FileSpreadsheet className="h-5 w-5 text-blue-600 mr-2" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{file.name}</p>
+                              <p className="text-xs text-gray-500">
+                                {(file.size / 1024).toFixed(2)} KB
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveAdditionalFile(index)}
+                            disabled={sending}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleRemoveAdditionalFile}
-                        disabled={sending}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -479,7 +487,7 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
               </Button>
               <Button
                 onClick={handleSendReport}
-                disabled={selectedEmails.length === 0 || !excelFile || !additionalFile || sending}
+                disabled={selectedEmails.length === 0 || !excelFile || additionalFiles.length === 0 || sending}
               >
                 {sending ? (
                   <>

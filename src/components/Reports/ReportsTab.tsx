@@ -173,13 +173,11 @@ const ReportsTab: React.FC = () => {
   // If viewing a specific report, show the detail view
   if (selectedReport) {
     return (
-      <div className="h-full">
-        <ReportDetailsView
-          report={selectedReport}
-          onBack={handleBackFromReport}
-          onUpdate={fetchReports}
-        />
-      </div>
+      <ReportDetailsView
+        report={selectedReport}
+        onBack={handleBackFromReport}
+        onUpdate={fetchReports}
+      />
     );
   }
 
@@ -191,7 +189,7 @@ const ReportsTab: React.FC = () => {
           <p className="text-gray-600 mt-1">
             {viewMode === 'companies'
               ? `Send reports to companies (${customers.length} total companies)`
-              : `Track report submissions (${reports.length} total reports)`}
+              : `View reports (${reports.length} total reports)`}
           </p>
         </div>
         <div className="flex space-x-3">
@@ -217,7 +215,7 @@ const ReportsTab: React.FC = () => {
                 }`}
               >
                 <FileText className="h-4 w-4 inline mr-2" />
-                Track Submissions
+                View Reports
               </button>
             </div>
           )}
