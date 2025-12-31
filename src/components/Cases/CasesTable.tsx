@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -47,6 +48,8 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
   const [globalFilter, setGlobalFilter] = useState('');
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(initialPageIndex || 0);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [caseToDelete, setCaseToDelete] = useState<string | null>(null);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -104,6 +107,19 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
       setIsProcessing(null);
     }
   }, [onCaseUpdated]);
+
+  const handleDeleteClick = (caseId: string) => {
+    setCaseToDelete(caseId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (caseToDelete && onDeleteCase) {
+      onDeleteCase(caseToDelete);
+    }
+    setDeleteDialogOpen(false);
+    setCaseToDelete(null);
+  };
 
   const getDigiLockerStatusBadge = (status?: string) => {
     if (!status || status === 'not_initiated') {
@@ -225,17 +241,17 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
         ),
       },
       {
-        accessorKey: 'appNo',
+        accessorKey: 'name',
         header: 'Candidate Name',
         cell: ({ row }) => (
-          <div className="font-mono text-sm">{row.getValue('appNo')}</div>
+          <div className="font-medium">{row.getValue('name')}</div>
         ),
       },
       {
-        accessorKey: 'name',
+        accessorKey: 'initiatorName',
         header: 'Initiator Name',
         cell: ({ row }) => (
-          <div className="font-medium">{row.getValue('name')}</div>
+          <div className="font-medium">{row.getValue('initiatorName') || '-'}</div>
         ),
       },
       {
@@ -299,7 +315,7 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
                 variant="outline"
                 size="sm"
                 title="Delete"
-                onClick={() => onDeleteCase?.(caseData._id)}
+                onClick={() => caseData._id && handleDeleteClick(caseData._id)}
                 className="hover:bg-red-50 hover:border-red-200"
               >
                 <Trash2 className="h-4 w-4 text-red-600" />
@@ -558,6 +574,17 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
           {table.getPageCount()} ({table.getFilteredRowModel().rows.length} total cases)
         </div>
       </div>
+
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={confirmDelete}
+        title="Delete Case"
+        description="Are you sure you want to delete this case? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        destructive
+      />
     </div>
   );
 };

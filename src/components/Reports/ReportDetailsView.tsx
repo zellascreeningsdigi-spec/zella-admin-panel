@@ -5,7 +5,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import apiService from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useDropzone } from 'react-dropzone';
+import XLSXViewer from './XLSXViewer';
 
 interface ReportDetailsViewProps {
   report: Report;
@@ -18,6 +20,9 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
   const [report, setReport] = useState<Report>(initialReport);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
 
   const isCustomer = user?.role === 'customer';
   const isSuperAdmin = user?.role === 'super-admin';
@@ -75,24 +80,29 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
   });
 
   const handleDeleteDocument = async (documentId: string) => {
-    if (!window.confirm('Are you sure you want to delete this document?')) {
-      return;
-    }
+    setDocumentToDelete(documentId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteDocument = async () => {
+    if (!documentToDelete) return;
 
     try {
-      await apiService.deleteReportDocument(report._id, documentId);
+      await apiService.deleteReportDocument(report._id, documentToDelete);
       await refreshReport();
     } catch (error) {
       console.error('Delete error:', error);
       alert('Failed to delete document');
+    } finally {
+      setDocumentToDelete(null);
     }
   };
 
-  const handleSubmitReport = async () => {
-    if (!window.confirm('Are you sure you want to submit this report? You will not be able to delete files after submission.')) {
-      return;
-    }
+  const handleSubmitReport = () => {
+    setSubmitDialogOpen(true);
+  };
 
+  const confirmSubmitReport = async () => {
     try {
       setSubmitting(true);
       await apiService.submitReport(report._id);
@@ -127,7 +137,7 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
   const failedEmails = report.requestedEmails.filter(e => e.status === 'failed');
 
   return (
-    <div className="space-y-6 pb-6">
+    <div className="space-y-4 pb-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
@@ -173,6 +183,23 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
         </CardContent>
       </Card>
 
+      {/* Original XLSX Report */}
+      {report.originalAttachment && report.originalAttachment.s3Url && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Original Report</CardTitle>
+            <CardDescription>Email report spreadsheet</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <XLSXViewer
+              fileUrl={report.originalAttachment.s3Url}
+              fileName={report.originalAttachment.fileName}
+              fileSize={report.originalAttachment.fileSize}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Document Upload - Super Admin Only */}
       {canUpload && (
         <Card>
@@ -185,19 +212,19 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
           <CardContent>
             <div
               {...getRootProps()}
-              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors
+              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
                 ${isDragActive ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-purple-400'}
                 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <input {...getInputProps()} />
-              <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+              <Upload className="h-10 w-10 mx-auto text-gray-400 mb-3" />
               {uploading ? (
                 <p className="text-sm text-gray-600">Uploading...</p>
               ) : isDragActive ? (
                 <p className="text-sm text-purple-600 font-medium">Drop files here</p>
               ) : (
                 <>
-                  <p className="text-sm text-gray-600 mb-2">
+                  <p className="text-sm text-gray-600 mb-1">
                     Drag and drop files here, or click to select
                   </p>
                   <p className="text-xs text-gray-500">
@@ -217,46 +244,19 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
           <CardDescription>All report files available for download</CardDescription>
         </CardHeader>
         <CardContent>
-          {!report.originalAttachment &&
-           (!report.additionalAttachments || report.additionalAttachments.length === 0) &&
+          {(!report.additionalAttachments || report.additionalAttachments.length === 0) &&
            report.documents.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <FileText className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-              <p className="text-sm">No reports available yet</p>
+            <div className="text-center py-6 text-gray-500">
+              <FileText className="h-10 w-10 mx-auto mb-2 text-gray-400" />
+              <p className="text-sm">No additional reports uploaded yet</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {/* Original XLSX Attachment */}
-              {report.originalAttachment && (
-                <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center space-x-3">
-                    <FileText className="h-8 w-8 text-blue-600" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{report.originalAttachment.fileName}</p>
-                      <p className="text-xs text-gray-500">
-                        {formatFileSize(report.originalAttachment.fileSize)}
-                      </p>
-                    </div>
-                  </div>
-                  {report.originalAttachment.s3Url && (
-                    <a
-                      href={report.originalAttachment.s3Url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download
-                    </a>
-                  )}
-                </div>
-              )}
-
+            <div className="space-y-2">
               {/* Additional Attachments */}
               {report.additionalAttachments && report.additionalAttachments.map((attachment, index) => (
-                <div key={`additional-${index}`} className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <div key={`additional-${index}`} className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200">
                   <div className="flex items-center space-x-3">
-                    <FileText className="h-8 w-8 text-purple-600" />
+                    <FileText className="h-6 w-6 text-purple-600" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">{attachment.fileName}</p>
                       <p className="text-xs text-gray-500">
@@ -269,9 +269,9 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
                       href={attachment.s3Url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                      className="flex items-center px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
                     >
-                      <Download className="h-4 w-4 mr-2" />
+                      <Download className="h-4 w-4 mr-1.5" />
                       Download
                     </a>
                   )}
@@ -282,10 +282,10 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
               {report.documents.map((doc) => (
                 <div
                   key={doc._id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200"
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
                 >
                   <div className="flex items-center space-x-3">
-                    <FileText className="h-8 w-8 text-gray-600" />
+                    <FileText className="h-6 w-6 text-gray-600" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">{doc.originalName}</p>
                       <p className="text-xs text-gray-500">
@@ -299,9 +299,9 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
                         href={doc.s3Url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                        className="flex items-center px-3 py-1.5 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors"
                       >
-                        <Download className="h-4 w-4 mr-2" />
+                        <Download className="h-4 w-4 mr-1.5" />
                         Download
                       </a>
                     )}
@@ -320,6 +320,30 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={confirmDeleteDocument}
+        title="Delete Document"
+        description="Are you sure you want to delete this document? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        destructive={true}
+      />
+
+      {/* Submit Confirmation Dialog */}
+      <ConfirmationDialog
+        open={submitDialogOpen}
+        onOpenChange={setSubmitDialogOpen}
+        onConfirm={confirmSubmitReport}
+        title="Submit Report"
+        description="Are you sure you want to submit this report? You will not be able to delete files after submission."
+        confirmText="Submit"
+        cancelText="Cancel"
+        destructive={false}
+      />
     </div>
   );
 };

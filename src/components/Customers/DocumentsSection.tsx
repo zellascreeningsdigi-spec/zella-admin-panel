@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiService } from '@/services/api';
 import { Customer, CustomerDocument } from '@/types/customer';
@@ -28,6 +29,9 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
   const [downloading, setDownloading] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
   const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -77,12 +81,15 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
   }, [customer._id, fetchDocuments, onDocumentsUpdated]);
 
   const handleFileDelete = async (docId: string) => {
-    if (!window.confirm('Are you sure you want to delete this document?')) {
-      return;
-    }
+    setDocumentToDelete(docId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmFileDelete = async () => {
+    if (!documentToDelete) return;
 
     try {
-      const response = await apiService.deleteCustomerDocument(customer._id!, docId);
+      const response = await apiService.deleteCustomerDocument(customer._id!, documentToDelete);
       if (response.success) {
         await fetchDocuments();
         onDocumentsUpdated?.();
@@ -90,6 +97,8 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
     } catch (error) {
       console.error('Error deleting document:', error);
       alert('Failed to delete document. Please try again.');
+    } finally {
+      setDocumentToDelete(null);
     }
   };
 
@@ -113,16 +122,16 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
     }
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (selectedDocuments.size === 0) {
       alert('Please select at least one document to delete.');
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to delete ${selectedDocuments.size} document(s)?`)) {
-      return;
-    }
+    setBulkDeleteDialogOpen(true);
+  };
 
+  const confirmBulkDelete = async () => {
     setIsDeleting(true);
     let deletedCount = 0;
     let failedCount = 0;
@@ -405,6 +414,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
   }
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between mb-4">
@@ -901,6 +911,31 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
         )}
       </CardContent>
     </Card>
+
+    {/* Delete Confirmation Dialog */}
+    <ConfirmationDialog
+      open={deleteDialogOpen}
+      onOpenChange={setDeleteDialogOpen}
+      onConfirm={confirmFileDelete}
+      title="Delete Document"
+      description="Are you sure you want to delete this document? This action cannot be undone."
+      confirmText="Delete"
+      cancelText="Cancel"
+      destructive={true}
+    />
+
+    {/* Bulk Delete Confirmation Dialog */}
+    <ConfirmationDialog
+      open={bulkDeleteDialogOpen}
+      onOpenChange={setBulkDeleteDialogOpen}
+      onConfirm={confirmBulkDelete}
+      title="Delete Multiple Documents"
+      description={`Are you sure you want to delete ${selectedDocuments.size} document(s)? This action cannot be undone.`}
+      confirmText="Delete All"
+      cancelText="Cancel"
+      destructive={true}
+    />
+    </>
   );
 };
 

@@ -58,7 +58,7 @@ const CasesTab: React.FC<CasesTabProps> = ({ pageIndex }) => {
           date: backendCase.formSubmitDate || backendCase.createdAt,
           name: backendCase.name,
           phone: backendCase.phone,
-          appNo: backendCase.appNo,
+          initiatorName: backendCase.initiatorName,
           companyName: backendCase.companyName,
           status: backendCase.status,
           digiLockerStatus: backendCase.digiLockerStatus,
@@ -163,10 +163,9 @@ const CasesTab: React.FC<CasesTabProps> = ({ pageIndex }) => {
     const sampleData = [
       {
         bgvid: 'ZS001',
-        initiatorName: 'John Doe',
+        candidateName: 'John Doe',
         phone: '9876543210',
         email: 'john.doe@example.com',
-        appNo: 'APP001',
         companyName: 'ABC Company',
         address: '123 Main Street',
         city: 'Mumbai',
@@ -175,10 +174,9 @@ const CasesTab: React.FC<CasesTabProps> = ({ pageIndex }) => {
       },
       {
         bgvid: 'ZS002',
-        initiatorName: 'Jane Smith',
+        candidateName: 'Jane Smith',
         phone: '9876543211',
         email: 'jane.smith@example.com',
-        appNo: 'APP002',
         companyName: 'XYZ Corp',
         address: '456 Park Avenue',
         city: 'Delhi',

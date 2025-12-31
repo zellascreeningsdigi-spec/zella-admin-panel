@@ -12,8 +12,8 @@ export interface Case {
   code: string;
   date: string;
   name: string;
+  initiatorName?: string;
   phone: string;
-  appNo: string;
   companyName: string;
   status: 'pending' | 'completed' | 'insufficiency';
   digiLockerStatus?: 'not_initiated' | 'initiated' | 'auth_success' | 'documents_fetched' | 'completed' | 'failed';

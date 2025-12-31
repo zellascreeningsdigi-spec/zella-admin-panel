@@ -18,8 +18,8 @@ interface CaseFormData {
     code: string;
     date: string;
     name: string;
+    initiatorName: string;
     phone: string;
-    appNo: string;
     companyName: string;
     email: string;
     address: string;
@@ -39,8 +39,8 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
         code: '',
         date: '',
         name: '',
+        initiatorName: '',
         phone: '',
-        appNo: '',
         companyName: '',
         email: '',
         address: '',
@@ -59,8 +59,8 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
                 code: editCase.code || '',
                 date: editCase.date || '',
                 name: editCase.name || '',
+                initiatorName: (editCase as any).initiatorName || '',
                 phone: editCase.phone || '',
-                appNo: editCase.appNo || '',
                 companyName: editCase.companyName || '',
                 email: editCase.email || '',
                 address: editCase.address || '',
@@ -74,8 +74,8 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
                 code: '',
                 date: '',
                 name: '',
+                initiatorName: '',
                 phone: '',
-                appNo: '',
                 companyName: '',
                 email: '',
                 address: '',
@@ -113,13 +113,10 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
             newErrors.date = 'Date is required';
         }
         if (!formData.name.trim()) {
-            newErrors.name = 'Initiator Name is required';
+            newErrors.name = 'Candidate Name is required';
         }
         if (!formData.phone.trim()) {
             newErrors.phone = 'Phone is required';
-        }
-        if (!formData.appNo.trim()) {
-            newErrors.appNo = 'Candidate Name is required';
         }
         if (!formData.companyName.trim()) {
             newErrors.companyName = 'Company Name is required';
@@ -162,8 +159,8 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
                 code: formData.code.trim(),
                 date: formData.date,
                 name: formData.name.trim(),
+                ...(formData.initiatorName && { initiatorName: formData.initiatorName.trim() }),
                 phone: formData.phone.trim(),
-                appNo: formData.appNo.trim(),
                 companyName: formData.companyName.trim(),
                 ...(formData.email && { email: formData.email.trim() }),
                 ...(formData.address && { address: formData.address.trim() }),
@@ -189,8 +186,8 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
                     code: '',
                     date: '',
                     name: '',
+                    initiatorName: '',
                     phone: '',
-                    appNo: '',
                     companyName: '',
                     email: '',
                     address: '',
@@ -226,8 +223,8 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
                 code: '',
                 date: '',
                 name: '',
+                initiatorName: '',
                 phone: '',
-                appNo: '',
                 companyName: '',
                 email: '',
                 address: '',
@@ -287,22 +284,36 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
                             )}
                         </div>
 
-                        {/* Name - Required */}
+                        {/* Candidate Name - Required */}
                         <div className="space-y-2">
                             <Label htmlFor="name">
-                                Initiator Name <span className="text-red-500">*</span>
+                                Candidate Name <span className="text-red-500">*</span>
                             </Label>
                             <Input
                                 id="name"
                                 type="text"
                                 value={formData.name}
                                 onChange={(e) => handleInputChange('name', e.target.value)}
-                                placeholder="Enter Initiator Name"
+                                placeholder="Enter Candidate Name"
                                 className={errors.name ? 'border-red-500' : ''}
                             />
                             {errors.name && (
                                 <p className="text-sm text-red-500">{errors.name}</p>
                             )}
+                        </div>
+
+                        {/* Initiator Name - Optional */}
+                        <div className="space-y-2">
+                            <Label htmlFor="initiatorName">
+                                Initiator Name
+                            </Label>
+                            <Input
+                                id="initiatorName"
+                                type="text"
+                                value={formData.initiatorName}
+                                onChange={(e) => handleInputChange('initiatorName', e.target.value)}
+                                placeholder="Enter Initiator Name"
+                            />
                         </div>
 
                         {/* Phone - Required */}
@@ -320,24 +331,6 @@ const AddCaseDialog: React.FC<AddCaseDialogProps> = ({
                             />
                             {errors.phone && (
                                 <p className="text-sm text-red-500">{errors.phone}</p>
-                            )}
-                        </div>
-
-                        {/* Application Number - Required */}
-                        <div className="space-y-2">
-                            <Label htmlFor="appNo">
-                                Candidate Name <span className="text-red-500">*</span>
-                            </Label>
-                            <Input
-                                id="appNo"
-                                type="text"
-                                value={formData.appNo}
-                                onChange={(e) => handleInputChange('appNo', e.target.value)}
-                                placeholder="Enter candidate name"
-                                className={errors.appNo ? 'border-red-500' : ''}
-                            />
-                            {errors.appNo && (
-                                <p className="text-sm text-red-500">{errors.appNo}</p>
                             )}
                         </div>
 

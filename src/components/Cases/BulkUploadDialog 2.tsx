@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertCircle, CheckCircle, Download, FileText, Upload } from 'lucide-react';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import * as XLSX from 'xlsx';
 
 interface BulkUploadDialogProps {
@@ -23,6 +23,7 @@ interface ParsedCase {
     name: string;
     phone: string;
     email: string;
+    appNo: string;
     companyName?: string;
     address?: string;
     city: string;
@@ -37,15 +38,20 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
     const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
 
-    const requiredFields = useMemo(() => ['candidatename', 'phone', 'email', 'city', 'state', 'pin'], []);
-    const optionalFields = useMemo(() => ['bgvid', 'companyName', 'address'], []);
+    const requiredFields = ['initiatorname', 'phone', 'email', 'city', 'state', 'pin'];
+    const optionalFields = ['bgvid', 'appNo', 'companyName', 'address'];
 
     const generateCode = (index: number): string => {
         const number = (index + 1).toString().padStart(3, '0');
         return `ZS${number}`;
     };
 
-    const validateField = useCallback((value: any, field: string): string | null => {
+    const generateAppNo = (index: number): string => {
+        const number = (index + 1).toString().padStart(3, '0');
+        return `APP${number}`;
+    };
+
+    const validateField = (value: any, field: string, row: number): string | null => {
         console.log(field, value);
         if (requiredFields.includes(field) && (!value || value.toString().trim() === '')) {
             return `${field} is required`;
@@ -73,9 +79,9 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
         }
 
         return null;
-    }, [requiredFields]);
+    };
 
-    const parseFile = useCallback(async (file: File) => {
+    const parseFile = async (file: File) => {
         setIsProcessing(true);
         setValidationErrors([]);
         setParsedData([]);
@@ -96,6 +102,9 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
             const headers = jsonData[0] as string[];
             const dataRows = jsonData.slice(1) as any[][];
 
+            // Normalize headers (remove spaces, convert to lowercase)
+            const normalizedHeaders = headers.map(h => h?.toString().toLowerCase().replace(/\s+/g, ''));
+
             const errors: ValidationError[] = [];
             const cases: ParsedCase[] = [];
 
@@ -113,7 +122,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
 
                 // Validate required fields
                 requiredFields.forEach(field => {
-                    const error = validateField(caseData[field], field);
+                    const error = validateField(caseData[field], field, rowIndex + 2);
                     if (error) {
                         errors.push({ row: rowIndex + 2, field, message: error });
                     }
@@ -122,21 +131,23 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
                 // Validate optional fields if present
                 optionalFields.forEach(field => {
                     if (caseData[field] !== undefined) {
-                        const error = validateField(caseData[field], field);
+                        const error = validateField(caseData[field], field, rowIndex + 2);
                         if (error) {
                             errors.push({ row: rowIndex + 2, field, message: error });
                         }
                     }
                 });
 
-                // Generate code if not provided
+                // Generate code and appNo if not provided
                 const code = caseData.bgvid || generateCode(rowIndex);
+                const appNo = caseData.appno || generateAppNo(rowIndex);
 
                 cases.push({
                     code,
-                    name: caseData.candidatename || '',
+                    name: caseData.initiatorname || '',
                     phone: caseData.phone || '',
                     email: caseData.email || '',
+                    appNo,
                     companyName: caseData.companyname || '',
                     address: caseData.address || '',
                     city: caseData.city || '',
@@ -153,7 +164,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
         } finally {
             setIsProcessing(false);
         }
-    }, [optionalFields, requiredFields, validateField]);
+    };
 
     const handleDrag = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -183,7 +194,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
                 setValidationErrors([{ row: 0, field: 'file', message: 'Please select an Excel (.xlsx) or CSV file' }]);
             }
         }
-    }, [parseFile]);
+    }, []);
 
     const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -205,9 +216,10 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
         const sampleData = [
             {
                 bgvid: 'ZS001',
-                candidateName: 'John Doe',
+                initiatorName: 'John Doe',
                 phone: '9876543210',
                 email: 'john.doe@example.com',
+                appNo: 'APP001',
                 companyName: 'ABC Company',
                 address: '123 Main Street',
                 city: 'Mumbai',
@@ -216,9 +228,10 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
             },
             {
                 bgvid: 'ZS002',
-                candidateName: 'Jane Smith',
+                initiatorName: 'Jane Smith',
                 phone: '9876543211',
                 email: 'jane.smith@example.com',
+                appNo: 'APP002',
                 companyName: 'XYZ Corp',
                 address: '456 Park Avenue',
                 city: 'Delhi',
@@ -336,9 +349,10 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
                                         <thead>
                                             <tr className="border-b">
                                                 <th className="text-left p-2">BGVID</th>
-                                                <th className="text-left p-2">Candidate Name</th>
+                                                <th className="text-left p-2">Initiator Name</th>
                                                 <th className="text-left p-2">Phone</th>
                                                 <th className="text-left p-2">Email</th>
+                                                <th className="text-left p-2">App No</th>
                                                 <th className="text-left p-2">City</th>
                                                 <th className="text-left p-2">State</th>
                                             </tr>
@@ -350,6 +364,7 @@ const BulkUploadDialog: React.FC<BulkUploadDialogProps> = ({ isOpen, onClose, on
                                                     <td className="p-2">{caseData.name}</td>
                                                     <td className="p-2">{caseData.phone}</td>
                                                     <td className="p-2">{caseData.email}</td>
+                                                    <td className="p-2">{caseData.appNo}</td>
                                                     <td className="p-2">{caseData.city}</td>
                                                     <td className="p-2">{caseData.state}</td>
                                                 </tr>

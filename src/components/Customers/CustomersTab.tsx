@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiService } from '@/services/api';
 import { Customer } from '@/types/customer';
@@ -74,19 +75,28 @@ const CustomersTab: React.FC = () => {
     setIsAddCustomerOpen(true);
   };
 
-  const handleDeleteCustomer = async (customerId: string | undefined) => {
-    if (!customerId) return;
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
 
-    if (window.confirm('Are you sure you want to delete this customer?')) {
-      try {
-        const response = await apiService.deleteCustomer(customerId);
-        if (response.success) {
-          fetchCustomers();
-        }
-      } catch (error) {
-        console.error('Error deleting customer:', error);
-        alert('Failed to delete customer. Please try again.');
+  const handleDeleteCustomer = (customerId: string | undefined) => {
+    if (!customerId) return;
+    setCustomerToDelete(customerId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteCustomer = async () => {
+    if (!customerToDelete) return;
+
+    try {
+      const response = await apiService.deleteCustomer(customerToDelete);
+      if (response.success) {
+        fetchCustomers();
       }
+    } catch (error) {
+      console.error('Error deleting customer:', error);
+      alert('Failed to delete customer. Please try again.');
+    } finally {
+      setCustomerToDelete(null);
     }
   };
 
@@ -301,6 +311,18 @@ const CustomersTab: React.FC = () => {
         isOpen={isBulkUploadOpen}
         onClose={() => setIsBulkUploadOpen(false)}
         onUploadComplete={handleCustomerAdded}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={confirmDeleteCustomer}
+        title="Delete Customer"
+        description="Are you sure you want to delete this customer? This will also delete all associated data and cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        destructive={true}
       />
     </div>
   );

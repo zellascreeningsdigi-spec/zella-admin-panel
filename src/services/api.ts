@@ -171,7 +171,6 @@ class ApiService {
         name: caseData.name,
         phone: caseData.phone,
         email: caseData.email || '',
-        appNo: caseData.appNo,
         companyName: caseData.companyName,
         code: caseData.code
       },
@@ -193,9 +192,9 @@ class ApiService {
       // userEmail: 'maheshwariharsh38@gmail.com',
       caseData: {
         name: caseData.name,
+        initiatorName: caseData.initiatorName,
         phone: caseData.phone,
         email: caseData.email || '',
-        appNo: caseData.appNo,
         companyName: caseData.companyName,
         code: caseData.code,
         caseId: caseData.id,
