@@ -109,8 +109,8 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    // Validate file size (max 10MB per file)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    // Validate file size (max 200MB per file)
+    const maxSize = 200 * 1024 * 1024; // 200MB
     const allowedTypes = [
       'application/pdf',
       'image/jpeg',
@@ -129,7 +129,7 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
       const file = files[i];
 
       if (file.size > maxSize) {
-        alert(`${file.name}: File size must be less than 10MB`);
+        alert(`${file.name}: File size must be less than 200MB`);
         continue;
       }
 
@@ -401,7 +401,7 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
                     Add Files
                   </Button>
                   <p className="text-xs text-gray-500 mt-2">
-                    PDF, Images, Word, Excel, ZIP (max 10MB per file, multiple files supported)
+                    PDF, Images, Word, Excel, ZIP (max 200MB per file, multiple files supported)
                   </p>
                 </div>
 
