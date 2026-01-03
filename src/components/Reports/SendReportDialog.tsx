@@ -109,8 +109,8 @@ const SendReportDialog: React.FC<SendReportDialogProps> = ({ isOpen, onClose, cu
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    // Validate file size (max 200MB per file)
-    const maxSize = 200 * 1024 * 1024; // 200MB
+    // Validate file size (max 250MB per file)
+    const maxSize = 250 * 1024 * 1024; // 200MB
     const allowedTypes = [
       'application/pdf',
       'image/jpeg',
