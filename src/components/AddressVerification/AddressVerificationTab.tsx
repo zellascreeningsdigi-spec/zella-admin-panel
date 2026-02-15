@@ -33,6 +33,7 @@ const AddressVerificationTab = () => {
   useEffect(() => {
     fetchVerifications();
     fetchStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   const fetchVerifications = async () => {

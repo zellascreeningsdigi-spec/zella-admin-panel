@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { ArrowLeft, Upload, Trash2, Download, Send, CheckCircle, XCircle, AlertCircle, FileText, Calendar, User } from 'lucide-react';
-import { Report, REPORT_STATUS_COLORS, PRIORITY_COLORS } from '@/types/report';
+import { ArrowLeft, Upload, Trash2, Download, Send, FileText } from 'lucide-react';
+import { Report } from '@/types/report';
 import { useAuth } from '@/contexts/AuthContext';
 import apiService from '@/services/api';
 import { Button } from '@/components/ui/button';
@@ -24,14 +24,13 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
 
-  const isCustomer = user?.role === 'customer';
   const isSuperAdmin = user?.role === 'super-admin';
   const isSubmitted = report.status === 'submitted' || report.status === 'reviewed';
   const canUpload = isSuperAdmin; // Only super-admin can upload
   const canDelete = !isSubmitted && isSuperAdmin; // Only super-admin can delete
   const canSubmit = false; // Customers cannot submit anymore
 
-  const refreshReport = async () => {
+  const refreshReport = useCallback(async () => {
     try {
       const response = await apiService.getReportById(report._id);
       if (response) {
@@ -40,7 +39,7 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
     } catch (error) {
       console.error('Error refreshing report:', error);
     }
-  };
+  }, [report._id]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (!canUpload || uploading) return;
@@ -133,8 +132,6 @@ const ReportDetailsView: React.FC<ReportDetailsViewProps> = ({ report: initialRe
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
-  const sentEmails = report.requestedEmails.filter(e => e.status === 'sent');
-  const failedEmails = report.requestedEmails.filter(e => e.status === 'failed');
 
   return (
     <div className="space-y-4 pb-4">

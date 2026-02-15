@@ -70,6 +70,7 @@ const AddressVerificationPage = () => {
       fetchVerificationData();
       captureGeolocation();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const fetchVerificationData = async () => {

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   useReactTable,
@@ -39,7 +39,7 @@ const AddressVerificationTable = ({
 }: AddressVerificationTableProps) => {
   const navigate = useNavigate();
 
-  const handleSendWhatsApp = (verification: AddressVerification) => {
+  const handleSendWhatsApp = useCallback((verification: AddressVerification) => {
     // Get the verification link from the verification object
     const verificationLink = verification.verificationLink || '';
 
@@ -88,9 +88,9 @@ SECURE | AUTHENTICATE`;
 
     // Open WhatsApp in new tab
     window.open(whatsappUrl, '_blank');
-  };
+  }, []);
 
-  const handleViewReport = async (verification: AddressVerification) => {
+  const handleViewReport = useCallback(async (verification: AddressVerification) => {
     if (!verification._id) return;
     try {
       await apiService.viewAddressVerificationReport(verification._id);
@@ -98,9 +98,9 @@ SECURE | AUTHENTICATE`;
       console.error('View report error:', error);
       // Error already shown by apiService
     }
-  };
+  }, []);
 
-  const handleDownloadReport = async (verification: AddressVerification) => {
+  const handleDownloadReport = useCallback(async (verification: AddressVerification) => {
     if (!verification._id) return;
     try {
       await apiService.downloadAddressVerificationReport(verification._id, verification.code);
@@ -108,7 +108,7 @@ SECURE | AUTHENTICATE`;
       console.error('Download report error:', error);
       alert('Failed to download report. Please try again.');
     }
-  };
+  }, []);
 
   const columns = useMemo<ColumnDef<AddressVerification>[]>(
     () => [

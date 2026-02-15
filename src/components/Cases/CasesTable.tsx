@@ -325,7 +325,8 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
         },
       },
     ],
-    [isProcessing, handleDigilockerAction, onEditCase, onDeleteCase, navigate, currentPageIndex]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isProcessing, handleDigilockerAction, onEditCase, navigate, currentPageIndex]
   );
 
   const table = useReactTable({

@@ -592,7 +592,7 @@ SECURE | AUTHENTICATE`;
                             {isImage(verification.verificationData.houseImageOne.docName) ? (
                               <img
                                 src={verification.verificationData.houseImageOne.s3Url}
-                                alt="House Image One"
+                                alt="House One"
                                 className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
                                 onClick={() => setSelectedImage(verification.verificationData!.houseImageOne!.s3Url)}
                               />
@@ -630,7 +630,7 @@ SECURE | AUTHENTICATE`;
                             {isImage(verification.verificationData.houseImageTwo.docName) ? (
                               <img
                                 src={verification.verificationData.houseImageTwo.s3Url}
-                                alt="House Image Two"
+                                alt="House Two"
                                 className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
                                 onClick={() => setSelectedImage(verification.verificationData!.houseImageTwo!.s3Url)}
                               />
