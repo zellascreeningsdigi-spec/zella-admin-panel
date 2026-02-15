@@ -7,6 +7,34 @@ interface ApiResponse<T = any> {
   error?: string;
 }
 
+interface VerificationSubmitData {
+  // Contact Information
+  contactPersonName: string;
+  contactPersonRelation: string;
+  numberOfFamilyMembers?: number;
+  contactPhoneNo?: string;
+
+  // ID Proof
+  idProofType: 'aadhaar' | 'pan' | 'voter_id' | 'passport' | 'driving_license' | 'other';
+  idProofNumber?: string;
+
+  // Address Details
+  periodOfStay?: string;
+  differentAddress?: string;
+  residentialStatus: 'owned' | 'rented' | 'company_provided' | 'pg' | 'other';
+  landmark?: string;
+  remarks?: string;
+
+  // Geolocation
+  latitude?: number;
+  longitude?: number;
+
+  // Legacy fields
+  addressConfirmed?: boolean;
+  correctedAddress?: string;
+  candidateComments?: string;
+}
+
 class ApiService {
   private getAuthToken(): string | null {
     return localStorage.getItem('auth_token');
@@ -596,6 +624,174 @@ class ApiService {
       method: 'PATCH',
       body: data ? JSON.stringify(data) : undefined,
     });
+  }
+
+  // Address Verification API methods
+  async getAddressVerifications(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    verificationStatus?: string;
+    search?: string;
+  }): Promise<ApiResponse<{
+    verifications: any[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.verificationStatus) queryParams.append('verificationStatus', params.verificationStatus);
+    if (params?.search) queryParams.append('search', params.search);
+
+    const queryString = queryParams.toString();
+    return this.get(`/address-verifications${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getAddressVerificationStats(): Promise<ApiResponse<{
+    stats: {
+      total: number;
+      pending: number;
+      verified: number;
+      failed: number;
+      linkSent: number;
+      expired: number;
+      successRate: number;
+    };
+  }>> {
+    return this.get('/address-verifications/stats');
+  }
+
+  async getAddressVerificationById(id: string): Promise<ApiResponse<any>> {
+    return this.get(`/address-verifications/${id}`);
+  }
+
+  async createAddressVerification(data: any): Promise<ApiResponse<any>> {
+    return this.post('/address-verifications', data);
+  }
+
+  async updateAddressVerification(id: string, data: any): Promise<ApiResponse<any>> {
+    return this.put(`/address-verifications/${id}`, data);
+  }
+
+  async deleteAddressVerification(id: string): Promise<ApiResponse<{}>> {
+    return this.delete(`/address-verifications/${id}`);
+  }
+
+  async bulkCreateAddressVerifications(verifications: any[]): Promise<ApiResponse<{
+    created: number;
+    failed: number;
+    errors?: any[];
+  }>> {
+    return this.post('/address-verifications/bulk', { verifications });
+  }
+
+  async sendVerificationLink(id: string): Promise<ApiResponse<{
+    verificationToken: string;
+    verificationLink: string;
+    emailSent: boolean;
+    expiresAt: string;
+  }>> {
+    return this.post(`/address-verifications/${id}/send-link`);
+  }
+
+  // Generate report (HTML view in new tab)
+  async viewAddressVerificationReport(id: string): Promise<void> {
+    const token = this.getAuthToken();
+    const url = `${API_BASE_URL}/address-verifications/${id}/report?format=html`;
+
+    // Fetch the HTML report and open in new window
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to generate report' }));
+        console.error('Report generation error:', errorData);
+        throw new Error(errorData.message || 'Failed to generate report');
+      }
+
+      const html = await response.text();
+
+      // Open in new window with HTML content
+      const newWindow = window.open('', '_blank');
+      if (newWindow) {
+        newWindow.document.write(html);
+        newWindow.document.close();
+      }
+    } catch (error) {
+      console.error('View report error:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Failed to generate report'}`);
+      throw error;
+    }
+  }
+
+  // Download report as PDF
+  async downloadAddressVerificationReport(id: string, code: string): Promise<void> {
+    const token = this.getAuthToken();
+    const url = `${API_BASE_URL}/address-verifications/${id}/report?format=pdf`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to download report');
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `Address_Verification_Report_${code}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Download report error:', error);
+      throw error;
+    }
+  }
+
+  // Public verification endpoints (no auth required)
+  async getVerificationByToken(token: string): Promise<ApiResponse<any>> {
+    return fetch(`${API_BASE_URL}/address-verifications/public/${token}`)
+      .then(res => res.json());
+  }
+
+  async submitVerification(token: string, data: VerificationSubmitData): Promise<ApiResponse<any>> {
+    return fetch(`${API_BASE_URL}/address-verifications/public/${token}/submit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    }).then(res => res.json());
+  }
+
+  async uploadVerificationDocument(token: string, file: File, docType: string): Promise<ApiResponse<any>> {
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('docType', docType);
+
+    return fetch(`${API_BASE_URL}/address-verifications/public/${token}/upload-document`, {
+      method: 'POST',
+      body: formData,
+    }).then(res => res.json());
   }
 }
 

@@ -9,6 +9,7 @@ import CustomersTab from '@/components/Customers/CustomersTab';
 import ReportsTab from '@/components/Reports/ReportsTab';
 import ManageUsersTab from '@/components/Users/ManageUsersTab';
 import CompanyDetailsTab from '@/components/Reports/CompanyDetailsTab';
+import AddressVerificationTab from '@/components/AddressVerification/AddressVerificationTab';
 
 const Dashboard: React.FC = () => {
   const { user, loading } = useAuth();
@@ -55,6 +56,8 @@ const Dashboard: React.FC = () => {
         return <CasesTab pageIndex={casesPageIndex} />;
       case 'datahub':
         return <CustomersTab />;
+      case 'address-verification':
+        return <AddressVerificationTab />;
       case 'reports':
         return <ReportsTab />;
       case 'manage-users':
