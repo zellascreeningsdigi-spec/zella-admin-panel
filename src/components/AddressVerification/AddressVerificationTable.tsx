@@ -90,15 +90,10 @@ SECURE | AUTHENTICATE`;
     window.open(whatsappUrl, '_blank');
   }, []);
 
-  const handleViewReport = useCallback(async (verification: AddressVerification) => {
+  const handleViewReport = useCallback((verification: AddressVerification) => {
     if (!verification._id) return;
-    try {
-      await apiService.viewAddressVerificationReport(verification._id);
-    } catch (error) {
-      console.error('View report error:', error);
-      // Error already shown by apiService
-    }
-  }, []);
+    navigate(`/address-verifications/${verification._id}/report`);
+  }, [navigate]);
 
   const handleDownloadReport = useCallback(async (verification: AddressVerification) => {
     if (!verification._id) return;

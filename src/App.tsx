@@ -6,6 +6,7 @@ import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-d
 import DocumentPage from './pages/DocumentPage';
 import AddressVerificationPage from './pages/AddressVerificationPage';
 import VerificationDetailPage from './pages/VerificationDetailPage';
+import ReportViewPage from './pages/ReportViewPage';
 
 function App() {
   return (
@@ -22,6 +23,8 @@ function App() {
             <Route path="/documents" element={<DocumentPage />} />
 
             <Route path="/verification/address/:token" element={<AddressVerificationPage />} />
+
+            <Route path="/address-verifications/:id/report" element={<ReportViewPage />} />
 
             <Route path="/address-verifications/:id" element={<VerificationDetailPage />} />
 

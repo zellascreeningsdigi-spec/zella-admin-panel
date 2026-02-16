@@ -735,6 +735,32 @@ class ApiService {
     }
   }
 
+  // Get report as HTML string
+  async getAddressVerificationReportHTML(id: string): Promise<string> {
+    const token = this.getAuthToken();
+    const url = `${API_BASE_URL}/address-verifications/${id}/report?format=html`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to load report' }));
+        throw new Error(errorData.message || 'Failed to load report');
+      }
+
+      const html = await response.text();
+      return html;
+    } catch (error) {
+      console.error('Get report HTML error:', error);
+      throw error;
+    }
+  }
+
   // Download report as PDF
   async downloadAddressVerificationReport(id: string, code: string): Promise<void> {
     const token = this.getAuthToken();
