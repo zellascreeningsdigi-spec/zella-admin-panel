@@ -749,7 +749,16 @@ class ApiService {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to download report');
+        const errorData = await response.json().catch(() => ({ message: 'Failed to download report' }));
+        throw new Error(errorData.message || 'Failed to download report');
+      }
+
+      // Check if response is actually a PDF
+      const contentType = response.headers.get('content-type');
+      if (!contentType?.includes('application/pdf')) {
+        const text = await response.text();
+        console.error('Expected PDF but got:', contentType, text.substring(0, 200));
+        throw new Error('Invalid response format: Expected PDF but received ' + contentType);
       }
 
       const blob = await response.blob();
@@ -763,6 +772,7 @@ class ApiService {
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
       console.error('Download report error:', error);
+      alert(`Failed to download report: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   }
