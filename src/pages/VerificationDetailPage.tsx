@@ -475,6 +475,12 @@ SECURE | AUTHENTICATE`;
                           <Label className="text-gray-600 text-sm font-medium">Longitude</Label>
                           <p className="text-base font-mono mt-1">{verification.verificationData.longitude}</p>
                         </div>
+                        {verification.verificationData.gpsAddress && (
+                          <div className="md:col-span-2">
+                            <Label className="text-gray-600 text-sm font-medium">GPS Address</Label>
+                            <p className="text-base mt-1">{verification.verificationData.gpsAddress}</p>
+                          </div>
+                        )}
                         <div className="md:col-span-2">
                           <a
                             href={`https://www.google.com/maps?q=${verification.verificationData.latitude},${verification.verificationData.longitude}`}

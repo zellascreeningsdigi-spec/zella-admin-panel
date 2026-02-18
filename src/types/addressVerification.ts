@@ -62,6 +62,7 @@ export interface VerificationData {
   // Geolocation
   latitude?: number;
   longitude?: number;
+  gpsAddress?: string;
 
   // Document Uploads (6 specific documents)
   idProofOne?: DocumentUpload;
