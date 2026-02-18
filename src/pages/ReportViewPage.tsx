@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Printer, Download } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import apiService from '@/services/api';
 
@@ -34,10 +34,6 @@ const ReportViewPage: React.FC = () => {
 
     fetchReport();
   }, [id]);
-
-  const handlePrint = () => {
-    window.print();
-  };
 
   const handleDownloadPDF = async () => {
     if (!id) return;
@@ -93,10 +89,6 @@ const ReportViewPage: React.FC = () => {
             <h1 className="text-xl font-semibold text-gray-900">Address Verification Report</h1>
           </div>
           <div className="flex items-center space-x-3">
-            <Button variant="outline" onClick={handlePrint}>
-              <Printer className="w-4 h-4 mr-2" />
-              Print
-            </Button>
             <Button onClick={handleDownloadPDF} className="bg-blue-600 hover:bg-blue-700">
               <Download className="w-4 h-4 mr-2" />
               Download PDF
