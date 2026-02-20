@@ -1,11 +1,43 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, User, FileText, Home, Phone, Mail, Calendar, AlertCircle, CheckCircle, XCircle, Send, MessageCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, User, FileText, Home, Phone, Mail, Calendar, AlertCircle, CheckCircle, XCircle, Send, MessageCircle, Pencil, Save, X, Upload, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AddressVerification } from '@/types/addressVerification';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import apiService from '@/services/api';
+
+const idProofTypeOptions = [
+  { value: 'aadhaar', label: 'Aadhaar' },
+  { value: 'pan', label: 'PAN' },
+  { value: 'voter_id', label: 'Voter ID' },
+  { value: 'passport', label: 'Passport' },
+  { value: 'driving_license', label: 'Driving License' },
+  { value: 'other', label: 'Other' },
+];
+const residentialStatusOptions = [
+  { value: 'owned', label: 'Owned' },
+  { value: 'rented', label: 'Rented' },
+  { value: 'company_provided', label: 'Company Provided' },
+  { value: 'pg', label: 'PG' },
+  { value: 'other', label: 'Other' },
+];
+const addressTypeOptions = [
+  { value: 'current', label: 'Current' },
+  { value: 'permanent', label: 'Permanent' },
+  { value: 'office', label: 'Office' },
+];
+
+const DOCUMENT_SLOTS = [
+  { docType: 'id_proof_one', fieldName: 'idProofOne', label: 'ID Proof One' },
+  { docType: 'id_proof_two', fieldName: 'idProofTwo', label: 'ID Proof Two' },
+  { docType: 'house_image_one', fieldName: 'houseImageOne', label: 'House Image One' },
+  { docType: 'house_image_two', fieldName: 'houseImageTwo', label: 'House Image Two' },
+  { docType: 'signature', fieldName: 'signature', label: 'Signature' },
+  { docType: 'selfie', fieldName: 'candidateSelfie', label: 'Candidate Selfie' },
+];
 
 const VerificationDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +51,42 @@ const VerificationDetailPage = () => {
   const [status, setStatus] = useState<string>('');
   const [verificationStatus, setVerificationStatus] = useState<string>('');
   const [verifierComments, setVerifierComments] = useState<string>('');
+
+  // Inline edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [editForm, setEditForm] = useState({
+    name: '', fathersName: '', phone: '', email: '',
+    companyName: '', applicantNo: '', address: '', presentAddress: '',
+    city: '', state: '', pin: '', landmark: '',
+    addressType: 'current' as 'current' | 'permanent' | 'office',
+  });
+
+  const [editVerificationData, setEditVerificationData] = useState({
+    contactPersonName: '',
+    contactPersonRelation: '',
+    numberOfFamilyMembers: '' as string | number,
+    contactPhoneNo: '',
+    idProofType: '' as string,
+    idProofNumber: '',
+    periodOfStay: '',
+    differentAddress: '',
+    residentialStatus: '' as string,
+    landmark: '',
+    remarks: '',
+    candidateComments: '',
+  });
+
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+
+  // Document management state
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+  const [deletingDoc, setDeletingDoc] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [docToDelete, setDocToDelete] = useState<{ docType: string; label: string } | null>(null);
+  const [activeUploadDocType, setActiveUploadDocType] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (id) {
@@ -47,6 +115,114 @@ const VerificationDetailPage = () => {
       navigate('/dashboard', { state: { activeTab: 'address-verification' } });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStartEditing = () => {
+    if (!verification) return;
+    setEditForm({
+      name: verification.name || '',
+      fathersName: verification.fathersName || '',
+      phone: verification.phone || '',
+      email: verification.email || '',
+      companyName: verification.companyName || '',
+      applicantNo: verification.applicantNo || '',
+      address: verification.address || '',
+      presentAddress: verification.presentAddress || '',
+      city: verification.city || '',
+      state: verification.state || '',
+      pin: verification.pin || '',
+      landmark: verification.landmark || '',
+      addressType: verification.addressType || 'current',
+    });
+    const vd = verification.verificationData;
+    setEditVerificationData({
+      contactPersonName: vd?.contactPersonName || '',
+      contactPersonRelation: vd?.contactPersonRelation || '',
+      numberOfFamilyMembers: vd?.numberOfFamilyMembers ?? '',
+      contactPhoneNo: vd?.contactPhoneNo || '',
+      idProofType: vd?.idProofType || '',
+      idProofNumber: vd?.idProofNumber || '',
+      periodOfStay: vd?.periodOfStay || '',
+      differentAddress: vd?.differentAddress || '',
+      residentialStatus: vd?.residentialStatus || '',
+      landmark: vd?.landmark || '',
+      remarks: vd?.remarks || '',
+      candidateComments: vd?.candidateComments || '',
+    });
+    setEditErrors({});
+    setIsEditing(true);
+  };
+
+  const handleCancelEditing = () => {
+    setIsEditing(false);
+    setEditErrors({});
+  };
+
+  const handleEditFormChange = (field: string, value: string) => {
+    setEditForm(prev => ({ ...prev, [field]: value }));
+    setEditErrors(prev => {
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const handleEditVdChange = (field: string, value: string | number) => {
+    setEditVerificationData(prev => ({ ...prev, [field]: value }));
+    setEditErrors(prev => {
+      const next = { ...prev };
+      delete next[`vd_${field}`];
+      return next;
+    });
+  };
+
+  const validateEditForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!editForm.name.trim()) errors.name = 'Name is required';
+    if (!editForm.phone.trim()) errors.phone = 'Phone is required';
+    else if (!/^\d{10}$/.test(editForm.phone.replace(/\D/g, '')))
+      errors.phone = 'Phone must be 10 digits';
+    if (!editForm.email.trim()) errors.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email))
+      errors.email = 'Invalid email format';
+    if (!editForm.companyName.trim()) errors.companyName = 'Company name is required';
+    if (!editForm.address.trim()) errors.address = 'Address is required';
+    if (editForm.pin && !/^\d{6}$/.test(editForm.pin))
+      errors.pin = 'PIN must be 6 digits';
+    setEditErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSaveEdits = async () => {
+    if (!id || !verification) return;
+    if (!validateEditForm()) return;
+
+    setSaving(true);
+    try {
+      const payload = {
+        ...editForm,
+        verificationData: {
+          ...verification.verificationData,
+          ...editVerificationData,
+          numberOfFamilyMembers: editVerificationData.numberOfFamilyMembers === ''
+            ? undefined
+            : Number(editVerificationData.numberOfFamilyMembers),
+        },
+      };
+
+      const response = await apiService.updateAddressVerification(id, payload);
+      if (response.success) {
+        setIsEditing(false);
+        await fetchVerification();
+      } else {
+        throw new Error(response.message || 'Update failed');
+      }
+    } catch (error: any) {
+      console.error('Save edits error:', error);
+      alert(error.message || 'Failed to save changes');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -175,6 +351,66 @@ SECURE | AUTHENTICATE`;
     window.open(whatsappUrl, '_blank');
   };
 
+  const triggerFileUpload = (docType: string) => {
+    setActiveUploadDocType(docType);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeUploadDocType) return;
+    await handleUploadDocument(file, activeUploadDocType);
+    setActiveUploadDocType(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleUploadDocument = async (file: File, docType: string) => {
+    if (!id) return;
+    setUploadingDoc(docType);
+    try {
+      const response = await apiService.adminUploadVerificationDocument(id, file, docType);
+      if (response.success) {
+        await fetchVerification();
+      } else {
+        throw new Error(response.message || 'Upload failed');
+      }
+    } catch (error: any) {
+      console.error('Upload document error:', error);
+      alert(error.message || 'Failed to upload document');
+    } finally {
+      setUploadingDoc(null);
+    }
+  };
+
+  const handleDeleteDocument = (docType: string, label: string) => {
+    setDocToDelete({ docType, label });
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteDocument = async () => {
+    if (!id || !docToDelete) return;
+    setDeletingDoc(docToDelete.docType);
+    try {
+      const response = await apiService.adminDeleteVerificationDocument(id, docToDelete.docType);
+      if (response.success) {
+        await fetchVerification();
+      } else {
+        throw new Error(response.message || 'Delete failed');
+      }
+    } catch (error: any) {
+      console.error('Delete document error:', error);
+      alert(error.message || 'Failed to delete document');
+    } finally {
+      setDeletingDoc(null);
+      setDocToDelete(null);
+    }
+  };
+
   const isImage = (filename: string) => /\.(jpg|jpeg|png)$/i.test(filename);
   const isPDF = (filename: string) => /\.pdf$/i.test(filename);
 
@@ -238,6 +474,37 @@ SECURE | AUTHENTICATE`;
                   <MessageCircle className="w-4 h-4 mr-2" />
                   WhatsApp
                 </Button>
+              )}
+              {!isEditing ? (
+                <Button
+                  onClick={handleStartEditing}
+                  variant="outline"
+                  size="sm"
+                >
+                  <Pencil className="w-4 h-4 mr-2" />
+                  Edit
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    onClick={handleCancelEditing}
+                    variant="outline"
+                    size="sm"
+                    disabled={saving}
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleSaveEdits}
+                    size="sm"
+                    disabled={saving}
+                    className="bg-brand-green hover:bg-green-700 text-white"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </>
               )}
               <span
                 className={`px-4 py-2 rounded-full text-sm font-medium ${
@@ -326,56 +593,138 @@ SECURE | AUTHENTICATE`;
                   </div>
                   <div>
                     <Label className="text-gray-600 text-sm font-medium">Applicant No</Label>
-                    <p className="text-base mt-1">{verification.applicantNo || '-'}</p>
+                    {isEditing ? (
+                      <Input className="mt-1" value={editForm.applicantNo} onChange={e => handleEditFormChange('applicantNo', e.target.value)} />
+                    ) : (
+                      <p className="text-base mt-1">{verification.applicantNo || '-'}</p>
+                    )}
                   </div>
                   <div>
                     <Label className="text-gray-600 text-sm font-medium">Full Name</Label>
-                    <p className="text-base font-semibold mt-1">{verification.name}</p>
+                    {isEditing ? (
+                      <>
+                        <Input className="mt-1" value={editForm.name} onChange={e => handleEditFormChange('name', e.target.value)} />
+                        {editErrors.name && <p className="text-red-500 text-xs mt-1">{editErrors.name}</p>}
+                      </>
+                    ) : (
+                      <p className="text-base font-semibold mt-1">{verification.name}</p>
+                    )}
                   </div>
                   <div>
                     <Label className="text-gray-600 text-sm font-medium">Father's Name</Label>
-                    <p className="text-base mt-1">{verification.fathersName || '-'}</p>
+                    {isEditing ? (
+                      <Input className="mt-1" value={editForm.fathersName} onChange={e => handleEditFormChange('fathersName', e.target.value)} />
+                    ) : (
+                      <p className="text-base mt-1">{verification.fathersName || '-'}</p>
+                    )}
                   </div>
                   <div>
                     <Label className="text-gray-600 text-sm font-medium">Email Address</Label>
-                    <p className="flex items-center gap-2 mt-1">
-                      <Mail className="w-4 h-4 text-gray-400" />
-                      <span className="text-base">{verification.email}</span>
-                    </p>
+                    {isEditing ? (
+                      <>
+                        <Input className="mt-1" type="email" value={editForm.email} onChange={e => handleEditFormChange('email', e.target.value)} />
+                        {editErrors.email && <p className="text-red-500 text-xs mt-1">{editErrors.email}</p>}
+                      </>
+                    ) : (
+                      <p className="flex items-center gap-2 mt-1">
+                        <Mail className="w-4 h-4 text-gray-400" />
+                        <span className="text-base">{verification.email}</span>
+                      </p>
+                    )}
                   </div>
                   <div>
                     <Label className="text-gray-600 text-sm font-medium">Phone Number</Label>
-                    <p className="flex items-center gap-2 mt-1">
-                      <Phone className="w-4 h-4 text-gray-400" />
-                      <span className="text-base">{verification.phone}</span>
-                    </p>
+                    {isEditing ? (
+                      <>
+                        <Input className="mt-1" type="tel" value={editForm.phone} onChange={e => handleEditFormChange('phone', e.target.value)} />
+                        {editErrors.phone && <p className="text-red-500 text-xs mt-1">{editErrors.phone}</p>}
+                      </>
+                    ) : (
+                      <p className="flex items-center gap-2 mt-1">
+                        <Phone className="w-4 h-4 text-gray-400" />
+                        <span className="text-base">{verification.phone}</span>
+                      </p>
+                    )}
                   </div>
                   <div className="md:col-span-2">
                     <Label className="text-gray-600 text-sm font-medium">Company Name</Label>
-                    <p className="text-base mt-1">{verification.companyName}</p>
+                    {isEditing ? (
+                      <>
+                        <Input className="mt-1" value={editForm.companyName} onChange={e => handleEditFormChange('companyName', e.target.value)} />
+                        {editErrors.companyName && <p className="text-red-500 text-xs mt-1">{editErrors.companyName}</p>}
+                      </>
+                    ) : (
+                      <p className="text-base mt-1">{verification.companyName}</p>
+                    )}
                   </div>
                   <div className="md:col-span-2">
                     <Label className="text-gray-600 text-sm font-medium">Address</Label>
-                    <p className="flex items-start gap-2 mt-1">
-                      <Home className="w-4 h-4 text-gray-400 mt-1" />
-                      <span className="text-base">{verification.address}</span>
-                    </p>
+                    {isEditing ? (
+                      <>
+                        <textarea className="mt-1 w-full px-3 py-2 text-sm border border-input rounded-md bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" rows={2} value={editForm.address} onChange={e => handleEditFormChange('address', e.target.value)} />
+                        {editErrors.address && <p className="text-red-500 text-xs mt-1">{editErrors.address}</p>}
+                      </>
+                    ) : (
+                      <p className="flex items-start gap-2 mt-1">
+                        <Home className="w-4 h-4 text-gray-400 mt-1" />
+                        <span className="text-base">{verification.address}</span>
+                      </p>
+                    )}
                   </div>
+                  {(isEditing || verification.presentAddress) && (
+                    <div className="md:col-span-2">
+                      <Label className="text-gray-600 text-sm font-medium">Present Address</Label>
+                      {isEditing ? (
+                        <textarea className="mt-1 w-full px-3 py-2 text-sm border border-input rounded-md bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" rows={2} value={editForm.presentAddress} onChange={e => handleEditFormChange('presentAddress', e.target.value)} />
+                      ) : (
+                        <p className="text-base mt-1">{verification.presentAddress || '-'}</p>
+                      )}
+                    </div>
+                  )}
                   <div>
                     <Label className="text-gray-600 text-sm font-medium">City</Label>
-                    <p className="text-base mt-1">{verification.city || '-'}</p>
+                    {isEditing ? (
+                      <Input className="mt-1" value={editForm.city} onChange={e => handleEditFormChange('city', e.target.value)} />
+                    ) : (
+                      <p className="text-base mt-1">{verification.city || '-'}</p>
+                    )}
                   </div>
                   <div>
                     <Label className="text-gray-600 text-sm font-medium">State</Label>
-                    <p className="text-base mt-1">{verification.state || '-'}</p>
+                    {isEditing ? (
+                      <Input className="mt-1" value={editForm.state} onChange={e => handleEditFormChange('state', e.target.value)} />
+                    ) : (
+                      <p className="text-base mt-1">{verification.state || '-'}</p>
+                    )}
                   </div>
                   <div>
                     <Label className="text-gray-600 text-sm font-medium">PIN Code</Label>
-                    <p className="text-base mt-1">{verification.pin || '-'}</p>
+                    {isEditing ? (
+                      <>
+                        <Input className="mt-1" maxLength={6} value={editForm.pin} onChange={e => handleEditFormChange('pin', e.target.value)} />
+                        {editErrors.pin && <p className="text-red-500 text-xs mt-1">{editErrors.pin}</p>}
+                      </>
+                    ) : (
+                      <p className="text-base mt-1">{verification.pin || '-'}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-gray-600 text-sm font-medium">Landmark</Label>
+                    {isEditing ? (
+                      <Input className="mt-1" value={editForm.landmark} onChange={e => handleEditFormChange('landmark', e.target.value)} />
+                    ) : (
+                      <p className="text-base mt-1">{verification.landmark || '-'}</p>
+                    )}
                   </div>
                   <div>
                     <Label className="text-gray-600 text-sm font-medium">Address Type</Label>
-                    <p className="text-base mt-1 capitalize">{verification.addressType}</p>
+                    {isEditing ? (
+                      <select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={editForm.addressType} onChange={e => handleEditFormChange('addressType', e.target.value)}>
+                        {addressTypeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    ) : (
+                      <p className="text-base mt-1 capitalize">{verification.addressType}</p>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -396,19 +745,35 @@ SECURE | AUTHENTICATE`;
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <Label className="text-gray-600 text-sm font-medium">Contact Person Name</Label>
-                        <p className="text-base font-semibold mt-1">{verification.verificationData.contactPersonName || '-'}</p>
+                        {isEditing ? (
+                          <Input className="mt-1" value={editVerificationData.contactPersonName} onChange={e => handleEditVdChange('contactPersonName', e.target.value)} />
+                        ) : (
+                          <p className="text-base font-semibold mt-1">{verification.verificationData.contactPersonName || '-'}</p>
+                        )}
                       </div>
                       <div>
                         <Label className="text-gray-600 text-sm font-medium">Relation</Label>
-                        <p className="text-base mt-1">{verification.verificationData.contactPersonRelation || '-'}</p>
+                        {isEditing ? (
+                          <Input className="mt-1" value={editVerificationData.contactPersonRelation} onChange={e => handleEditVdChange('contactPersonRelation', e.target.value)} />
+                        ) : (
+                          <p className="text-base mt-1">{verification.verificationData.contactPersonRelation || '-'}</p>
+                        )}
                       </div>
                       <div>
                         <Label className="text-gray-600 text-sm font-medium">Contact Phone</Label>
-                        <p className="text-base mt-1">{verification.verificationData.contactPhoneNo || '-'}</p>
+                        {isEditing ? (
+                          <Input className="mt-1" type="tel" value={editVerificationData.contactPhoneNo} onChange={e => handleEditVdChange('contactPhoneNo', e.target.value)} />
+                        ) : (
+                          <p className="text-base mt-1">{verification.verificationData.contactPhoneNo || '-'}</p>
+                        )}
                       </div>
                       <div>
                         <Label className="text-gray-600 text-sm font-medium">Number of Family Members</Label>
-                        <p className="text-base mt-1">{verification.verificationData.numberOfFamilyMembers || '-'}</p>
+                        {isEditing ? (
+                          <Input className="mt-1" type="number" min={0} value={editVerificationData.numberOfFamilyMembers} onChange={e => handleEditVdChange('numberOfFamilyMembers', e.target.value)} />
+                        ) : (
+                          <p className="text-base mt-1">{verification.verificationData.numberOfFamilyMembers || '-'}</p>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -426,31 +791,61 @@ SECURE | AUTHENTICATE`;
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <Label className="text-gray-600 text-sm font-medium">ID Proof Type</Label>
-                        <p className="text-base font-semibold capitalize mt-1">
-                          {verification.verificationData.idProofType?.replace(/_/g, ' ') || '-'}
-                        </p>
+                        {isEditing ? (
+                          <select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={editVerificationData.idProofType} onChange={e => handleEditVdChange('idProofType', e.target.value)}>
+                            <option value="">Select...</option>
+                            {idProofTypeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        ) : (
+                          <p className="text-base font-semibold capitalize mt-1">
+                            {verification.verificationData.idProofType?.replace(/_/g, ' ') || '-'}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <Label className="text-gray-600 text-sm font-medium">ID Proof Number</Label>
-                        <p className="text-base font-mono mt-1">{verification.verificationData.idProofNumber || '-'}</p>
+                        {isEditing ? (
+                          <Input className="mt-1" value={editVerificationData.idProofNumber} onChange={e => handleEditVdChange('idProofNumber', e.target.value)} />
+                        ) : (
+                          <p className="text-base font-mono mt-1">{verification.verificationData.idProofNumber || '-'}</p>
+                        )}
                       </div>
                       <div>
                         <Label className="text-gray-600 text-sm font-medium">Residential Status</Label>
-                        <p className="text-base capitalize mt-1">
-                          {verification.verificationData.residentialStatus?.replace(/_/g, ' ') || '-'}
-                        </p>
+                        {isEditing ? (
+                          <select className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={editVerificationData.residentialStatus} onChange={e => handleEditVdChange('residentialStatus', e.target.value)}>
+                            <option value="">Select...</option>
+                            {residentialStatusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        ) : (
+                          <p className="text-base capitalize mt-1">
+                            {verification.verificationData.residentialStatus?.replace(/_/g, ' ') || '-'}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <Label className="text-gray-600 text-sm font-medium">Period of Stay</Label>
-                        <p className="text-base mt-1">{verification.verificationData.periodOfStay || '-'}</p>
+                        {isEditing ? (
+                          <Input className="mt-1" value={editVerificationData.periodOfStay} onChange={e => handleEditVdChange('periodOfStay', e.target.value)} />
+                        ) : (
+                          <p className="text-base mt-1">{verification.verificationData.periodOfStay || '-'}</p>
+                        )}
                       </div>
                       <div className="md:col-span-2">
                         <Label className="text-gray-600 text-sm font-medium">Landmark</Label>
-                        <p className="text-base mt-1">{verification.verificationData.landmark || '-'}</p>
+                        {isEditing ? (
+                          <Input className="mt-1" value={editVerificationData.landmark} onChange={e => handleEditVdChange('landmark', e.target.value)} />
+                        ) : (
+                          <p className="text-base mt-1">{verification.verificationData.landmark || '-'}</p>
+                        )}
                       </div>
                       <div className="md:col-span-2">
                         <Label className="text-gray-600 text-sm font-medium">Remarks</Label>
-                        <p className="text-base mt-1">{verification.verificationData.remarks || '-'}</p>
+                        {isEditing ? (
+                          <textarea className="mt-1 w-full px-3 py-2 text-sm border border-input rounded-md bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" rows={3} value={editVerificationData.remarks} onChange={e => handleEditVdChange('remarks', e.target.value)} />
+                        ) : (
+                          <p className="text-base mt-1">{verification.verificationData.remarks || '-'}</p>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -497,255 +892,6 @@ SECURE | AUTHENTICATE`;
                   </Card>
                 )}
 
-                {/* Document Gallery */}
-                <Card>
-                  <CardHeader className="bg-orange-50 border-b border-orange-200">
-                    <CardTitle className="flex items-center gap-2 text-gray-900">
-                      <FileText className="w-5 h-5 text-orange-600" />
-                      Uploaded Documents
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {/* ID Proof One */}
-                      {verification.verificationData.idProofOne && (
-                        <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-lg transition-shadow">
-                          <div className="aspect-video bg-gray-100 relative overflow-hidden">
-                            {isImage(verification.verificationData.idProofOne.docName) ? (
-                              <img
-                                src={verification.verificationData.idProofOne.s3Url}
-                                alt="ID Proof One"
-                                className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                                onClick={() => setSelectedImage(verification.verificationData!.idProofOne!.s3Url)}
-                              />
-                            ) : isPDF(verification.verificationData.idProofOne.docName) ? (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <FileText className="w-16 h-16 text-red-500" />
-                              </div>
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <FileText className="w-16 h-16 text-gray-400" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="p-4">
-                            <Label className="text-gray-700 font-semibold text-base block mb-2">ID Proof One</Label>
-                            <p className="text-sm text-gray-600 truncate mb-2" title={verification.verificationData.idProofOne.docName}>
-                              {verification.verificationData.idProofOne.docName}
-                            </p>
-                            <p className="text-xs text-gray-500 flex items-center gap-1 mb-3">
-                              <Calendar className="w-3 h-3" />
-                              {new Date(verification.verificationData.idProofOne.uploadedAt).toLocaleDateString()}
-                            </p>
-                            <a
-                              href={verification.verificationData.idProofOne.s3Url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-brand-green hover:underline text-sm font-medium"
-                            >
-                              View Full Document →
-                            </a>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* ID Proof Two */}
-                      {verification.verificationData.idProofTwo && (
-                        <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-lg transition-shadow">
-                          <div className="aspect-video bg-gray-100 relative overflow-hidden">
-                            {isImage(verification.verificationData.idProofTwo.docName) ? (
-                              <img
-                                src={verification.verificationData.idProofTwo.s3Url}
-                                alt="ID Proof Two"
-                                className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                                onClick={() => setSelectedImage(verification.verificationData!.idProofTwo!.s3Url)}
-                              />
-                            ) : isPDF(verification.verificationData.idProofTwo.docName) ? (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <FileText className="w-16 h-16 text-red-500" />
-                              </div>
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <FileText className="w-16 h-16 text-gray-400" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="p-4">
-                            <Label className="text-gray-700 font-semibold text-base block mb-2">ID Proof Two</Label>
-                            <p className="text-sm text-gray-600 truncate mb-2" title={verification.verificationData.idProofTwo.docName}>
-                              {verification.verificationData.idProofTwo.docName}
-                            </p>
-                            <p className="text-xs text-gray-500 flex items-center gap-1 mb-3">
-                              <Calendar className="w-3 h-3" />
-                              {new Date(verification.verificationData.idProofTwo.uploadedAt).toLocaleDateString()}
-                            </p>
-                            <a
-                              href={verification.verificationData.idProofTwo.s3Url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-brand-green hover:underline text-sm font-medium"
-                            >
-                              View Full Document →
-                            </a>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* House Image One */}
-                      {verification.verificationData.houseImageOne && (
-                        <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-lg transition-shadow">
-                          <div className="aspect-video bg-gray-100 relative overflow-hidden">
-                            {isImage(verification.verificationData.houseImageOne.docName) ? (
-                              <img
-                                src={verification.verificationData.houseImageOne.s3Url}
-                                alt="House One"
-                                className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                                onClick={() => setSelectedImage(verification.verificationData!.houseImageOne!.s3Url)}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <FileText className="w-16 h-16 text-gray-400" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="p-4">
-                            <Label className="text-gray-700 font-semibold text-base block mb-2">House Image One</Label>
-                            <p className="text-sm text-gray-600 truncate mb-2" title={verification.verificationData.houseImageOne.docName}>
-                              {verification.verificationData.houseImageOne.docName}
-                            </p>
-                            <p className="text-xs text-gray-500 flex items-center gap-1 mb-3">
-                              <Calendar className="w-3 h-3" />
-                              {new Date(verification.verificationData.houseImageOne.uploadedAt).toLocaleDateString()}
-                            </p>
-                            <a
-                              href={verification.verificationData.houseImageOne.s3Url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-brand-green hover:underline text-sm font-medium"
-                            >
-                              View Full Document →
-                            </a>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* House Image Two */}
-                      {verification.verificationData.houseImageTwo && (
-                        <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-lg transition-shadow">
-                          <div className="aspect-video bg-gray-100 relative overflow-hidden">
-                            {isImage(verification.verificationData.houseImageTwo.docName) ? (
-                              <img
-                                src={verification.verificationData.houseImageTwo.s3Url}
-                                alt="House Two"
-                                className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                                onClick={() => setSelectedImage(verification.verificationData!.houseImageTwo!.s3Url)}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <FileText className="w-16 h-16 text-gray-400" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="p-4">
-                            <Label className="text-gray-700 font-semibold text-base block mb-2">House Image Two</Label>
-                            <p className="text-sm text-gray-600 truncate mb-2" title={verification.verificationData.houseImageTwo.docName}>
-                              {verification.verificationData.houseImageTwo.docName}
-                            </p>
-                            <p className="text-xs text-gray-500 flex items-center gap-1 mb-3">
-                              <Calendar className="w-3 h-3" />
-                              {new Date(verification.verificationData.houseImageTwo.uploadedAt).toLocaleDateString()}
-                            </p>
-                            <a
-                              href={verification.verificationData.houseImageTwo.s3Url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-brand-green hover:underline text-sm font-medium"
-                            >
-                              View Full Document →
-                            </a>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Signature */}
-                      {verification.verificationData.signature && (
-                        <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-lg transition-shadow">
-                          <div className="aspect-video bg-gray-100 relative overflow-hidden">
-                            {isImage(verification.verificationData.signature.docName) ? (
-                              <img
-                                src={verification.verificationData.signature.s3Url}
-                                alt="Signature"
-                                className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                                onClick={() => setSelectedImage(verification.verificationData!.signature!.s3Url)}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <FileText className="w-16 h-16 text-gray-400" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="p-4">
-                            <Label className="text-gray-700 font-semibold text-base block mb-2">Signature</Label>
-                            <p className="text-sm text-gray-600 truncate mb-2" title={verification.verificationData.signature.docName}>
-                              {verification.verificationData.signature.docName}
-                            </p>
-                            <p className="text-xs text-gray-500 flex items-center gap-1 mb-3">
-                              <Calendar className="w-3 h-3" />
-                              {new Date(verification.verificationData.signature.uploadedAt).toLocaleDateString()}
-                            </p>
-                            <a
-                              href={verification.verificationData.signature.s3Url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-brand-green hover:underline text-sm font-medium"
-                            >
-                              View Full Document →
-                            </a>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Candidate Selfie */}
-                      {verification.verificationData.candidateSelfie && (
-                        <div className="border-2 border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-lg transition-shadow">
-                          <div className="aspect-video bg-gray-100 relative overflow-hidden">
-                            {isImage(verification.verificationData.candidateSelfie.docName) ? (
-                              <img
-                                src={verification.verificationData.candidateSelfie.s3Url}
-                                alt="Candidate Selfie"
-                                className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                                onClick={() => setSelectedImage(verification.verificationData!.candidateSelfie!.s3Url)}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <FileText className="w-16 h-16 text-gray-400" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="p-4">
-                            <Label className="text-gray-700 font-semibold text-base block mb-2">Candidate Selfie</Label>
-                            <p className="text-sm text-gray-600 truncate mb-2" title={verification.verificationData.candidateSelfie.docName}>
-                              {verification.verificationData.candidateSelfie.docName}
-                            </p>
-                            <p className="text-xs text-gray-500 flex items-center gap-1 mb-3">
-                              <Calendar className="w-3 h-3" />
-                              {new Date(verification.verificationData.candidateSelfie.uploadedAt).toLocaleDateString()}
-                            </p>
-                            <a
-                              href={verification.verificationData.candidateSelfie.s3Url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-brand-green hover:underline text-sm font-medium"
-                            >
-                              View Full Document →
-                            </a>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
                 {/* Submission Metadata */}
                 <Card>
                   <CardHeader className="bg-gray-100 border-b border-gray-200">
@@ -770,6 +916,136 @@ SECURE | AUTHENTICATE`;
                 </Card>
               </>
             )}
+
+            {/* Document Gallery - Always visible (independent of submission status) */}
+            <Card>
+              <CardHeader className="bg-orange-50 border-b border-orange-200">
+                <CardTitle className="flex items-center gap-2 text-gray-900">
+                  <FileText className="w-5 h-5 text-orange-600" />
+                  Uploaded Documents
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileInputChange}
+                  accept="image/jpeg,image/png,image/jpg,application/pdf"
+                  className="hidden"
+                />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {DOCUMENT_SLOTS.map((slot) => {
+                    const doc = verification.verificationData?.[slot.fieldName as keyof typeof verification.verificationData] as any;
+                    const isUploading = uploadingDoc === slot.docType;
+                    const isDeleting = deletingDoc === slot.docType;
+
+                    if (doc && doc.docName) {
+                      return (
+                        <div key={slot.docType} className="border-2 border-gray-200 rounded-lg overflow-hidden bg-white hover:shadow-lg transition-shadow">
+                          <div className="aspect-video bg-gray-100 relative overflow-hidden">
+                            {isImage(doc.docName) ? (
+                              <img
+                                src={doc.s3Url}
+                                alt={slot.label}
+                                className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+                                onClick={() => setSelectedImage(doc.s3Url)}
+                              />
+                            ) : isPDF(doc.docName) ? (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <FileText className="w-16 h-16 text-red-500" />
+                              </div>
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <FileText className="w-16 h-16 text-gray-400" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <Label className="text-gray-700 font-semibold text-base">{slot.label}</Label>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => triggerFileUpload(slot.docType)}
+                                  disabled={isUploading || isDeleting}
+                                  className="p-1.5 text-gray-500 hover:text-brand-green hover:bg-green-50 rounded-md transition-colors disabled:opacity-50"
+                                  title="Replace document"
+                                >
+                                  {isUploading ? (
+                                    <div className="w-4 h-4 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Upload className="w-4 h-4" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteDocument(slot.docType, slot.label)}
+                                  disabled={isUploading || isDeleting}
+                                  className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                                  title="Delete document"
+                                >
+                                  {isDeleting ? (
+                                    <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-4 h-4" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                            <p className="text-sm text-gray-600 truncate mb-2" title={doc.docName}>
+                              {doc.docName}
+                            </p>
+                            <p className="text-xs text-gray-500 flex items-center gap-1 mb-3">
+                              <Calendar className="w-3 h-3" />
+                              {new Date(doc.uploadedAt).toLocaleDateString()}
+                            </p>
+                            <a
+                              href={doc.s3Url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-brand-green hover:underline text-sm font-medium"
+                            >
+                              View Full Document →
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Empty slot - show upload placeholder
+                    return (
+                      <div
+                        key={slot.docType}
+                        className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-gray-50 hover:border-brand-green hover:bg-green-50/30 transition-colors"
+                      >
+                        <div className="aspect-video flex flex-col items-center justify-center p-6">
+                          <Upload className="w-10 h-10 text-gray-400 mb-3" />
+                          <Label className="text-gray-600 font-semibold text-base mb-2">{slot.label}</Label>
+                          <p className="text-sm text-gray-400 mb-4">No document uploaded</p>
+                          <Button
+                            onClick={() => triggerFileUpload(slot.docType)}
+                            disabled={isUploading}
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                          >
+                            {isUploading ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-brand-green border-t-transparent rounded-full animate-spin" />
+                                Uploading...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-4 h-4" />
+                                Upload
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Right Column - Admin Actions */}
@@ -779,6 +1055,12 @@ SECURE | AUTHENTICATE`;
                 <CardTitle>Admin Actions</CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-4">
+                {isEditing && (
+                  <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-yellow-800">Editing in progress. Save or cancel before taking other actions.</p>
+                  </div>
+                )}
                 {/* Current Status Display (Read-Only) */}
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
                   <div>
@@ -826,7 +1108,8 @@ SECURE | AUTHENTICATE`;
                     value={verifierComments}
                     onChange={(e) => setVerifierComments(e.target.value)}
                     rows={5}
-                    className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-green"
+                    disabled={isEditing}
+                    className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-green disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="Add your comments here..."
                   />
                 </div>
@@ -852,7 +1135,7 @@ SECURE | AUTHENTICATE`;
                   </p>
                   <Button
                     onClick={handleApprove}
-                    disabled={updating}
+                    disabled={updating || isEditing}
                     className="w-full bg-green-600 hover:bg-green-700 text-white"
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
@@ -860,7 +1143,7 @@ SECURE | AUTHENTICATE`;
                   </Button>
                   <Button
                     onClick={handleReject}
-                    disabled={updating}
+                    disabled={updating || isEditing}
                     variant="destructive"
                     className="w-full"
                   >
@@ -873,6 +1156,16 @@ SECURE | AUTHENTICATE`;
           </div>
         </div>
       </div>
+
+      <ConfirmationDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        onConfirm={confirmDeleteDocument}
+        title="Delete Document"
+        description={`Are you sure you want to delete "${docToDelete?.label}"? This will permanently remove the file. This cannot be undone.`}
+        confirmText="Delete"
+        destructive={true}
+      />
 
       {/* Image Lightbox */}
       {selectedImage && (

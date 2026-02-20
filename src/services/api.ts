@@ -700,6 +700,41 @@ class ApiService {
     return this.post(`/address-verifications/${id}/send-link`);
   }
 
+  async adminUploadVerificationDocument(verificationId: string, file: File, docType: string): Promise<ApiResponse<any>> {
+    const token = this.getAuthToken();
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('docType', docType);
+
+    const response = await fetch(`${API_BASE_URL}/address-verifications/${verificationId}/upload-document`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        throw new Error('Authentication required');
+      }
+      throw new Error(data.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return data;
+  }
+
+  async adminDeleteVerificationDocument(verificationId: string, docType: string): Promise<ApiResponse<{}>> {
+    return this.delete(`/address-verifications/${verificationId}/document/${docType}`);
+  }
+
   // Generate report (HTML view in new tab)
   async viewAddressVerificationReport(id: string): Promise<void> {
     const token = this.getAuthToken();
