@@ -864,6 +864,204 @@ class ApiService {
       body: formData,
     }).then(res => res.json());
   }
+
+  // ========== Document Collection API methods ==========
+
+  async getDocumentCollections(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    verificationStatus?: string;
+    search?: string;
+    customerId?: string;
+  }): Promise<ApiResponse<{
+    collections: any[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.verificationStatus) queryParams.append('verificationStatus', params.verificationStatus);
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.customerId) queryParams.append('customerId', params.customerId);
+
+    const queryString = queryParams.toString();
+    return this.get(`/document-collections${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getDocumentCollectionStats(params?: { customerId?: string }): Promise<ApiResponse<{
+    stats: {
+      total: number;
+      pending: number;
+      approved: number;
+      rejected: number;
+      linkSent: number;
+      completed: number;
+      successRate: number;
+    };
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.customerId) queryParams.append('customerId', params.customerId);
+    const queryString = queryParams.toString();
+    return this.get(`/document-collections/stats${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getDocumentCollectionCompanies(params?: { search?: string }): Promise<ApiResponse<{ companies: any[] }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.search) queryParams.append('search', params.search);
+    const queryString = queryParams.toString();
+    return this.get(`/document-collections/companies${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async sendAllDocumentCollectionLinks(customerId: string): Promise<ApiResponse<{ sent: number; failed: number; total: number }>> {
+    return this.post('/document-collections/send-all-links', { customerId });
+  }
+
+  async getDocumentCollectionById(id: string): Promise<ApiResponse<any>> {
+    return this.get(`/document-collections/${id}`);
+  }
+
+  async createDocumentCollection(data: any): Promise<ApiResponse<any>> {
+    return this.post('/document-collections', data);
+  }
+
+  async updateDocumentCollection(id: string, data: any): Promise<ApiResponse<any>> {
+    return this.put(`/document-collections/${id}`, data);
+  }
+
+  async deleteDocumentCollection(id: string): Promise<ApiResponse<{}>> {
+    return this.delete(`/document-collections/${id}`);
+  }
+
+  async bulkCreateDocumentCollections(collections: any[]): Promise<ApiResponse<{
+    created: number;
+    failed: number;
+    errors?: any[];
+  }>> {
+    return this.post('/document-collections/bulk', { collections });
+  }
+
+  async sendDocumentCollectionLink(id: string): Promise<ApiResponse<{
+    verificationToken: string;
+    verificationLink: string;
+    emailSent: boolean;
+    expiresAt: string;
+  }>> {
+    return this.post(`/document-collections/${id}/send-link`);
+  }
+
+  async adminUploadDocumentCollectionFile(collectionId: string, file: File, docType: string): Promise<ApiResponse<any>> {
+    const token = this.getAuthToken();
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('docType', docType);
+
+    const response = await fetch(`${API_BASE_URL}/document-collections/${collectionId}/upload-document`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        throw new Error('Authentication required');
+      }
+      throw new Error(data.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return data;
+  }
+
+  async generateDocumentCollectionDocx(id: string): Promise<ApiResponse<any>> {
+    return this.post(`/document-collections/${id}/generate-docx`);
+  }
+
+  async downloadDocumentCollectionDocx(id: string): Promise<ApiResponse<{
+    downloadUrl: string;
+    fileName: string;
+    generatedAt: string;
+  }>> {
+    return this.get(`/document-collections/${id}/download-docx`);
+  }
+
+  async deleteDocumentCollectionDocument(collectionId: string, docType: string): Promise<ApiResponse<any>> {
+    return this.delete(`/document-collections/${collectionId}/documents/${docType}`);
+  }
+
+  async downloadAllDocumentCollectionDocuments(collectionId: string): Promise<void> {
+    const token = this.getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/document-collections/${collectionId}/download-all-documents`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to download documents');
+    }
+
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let filename = 'documents.zip';
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+      if (filenameMatch) {
+        filename = filenameMatch[1];
+      }
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }
+
+  // Public document collection endpoints (no auth)
+  async getDocumentCollectionByToken(token: string): Promise<ApiResponse<any>> {
+    return fetch(`${API_BASE_URL}/document-collections/public/${token}`)
+      .then(res => res.json());
+  }
+
+  async submitDocumentCollection(token: string, data: any): Promise<ApiResponse<any>> {
+    return fetch(`${API_BASE_URL}/document-collections/public/${token}/submit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    }).then(res => res.json());
+  }
+
+  async uploadDocumentCollectionDocument(token: string, file: File, docType: string): Promise<ApiResponse<any>> {
+    const formData = new FormData();
+    formData.append('document', file);
+    formData.append('docType', docType);
+
+    return fetch(`${API_BASE_URL}/document-collections/public/${token}/upload-document`, {
+      method: 'POST',
+      body: formData,
+    }).then(res => res.json());
+  }
 }
 
 export const apiService = new ApiService();

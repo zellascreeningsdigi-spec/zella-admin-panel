@@ -7,6 +7,9 @@ import DocumentPage from './pages/DocumentPage';
 import AddressVerificationPage from './pages/AddressVerificationPage';
 import VerificationDetailPage from './pages/VerificationDetailPage';
 import ReportViewPage from './pages/ReportViewPage';
+import DocumentCollectionPage from './pages/DocumentCollectionPage';
+import DocumentCollectionDetailPage from './pages/DocumentCollectionDetailPage';
+import DocumentCollectionDocumentsPage from './pages/DocumentCollectionDocumentsPage';
 
 function App() {
   return (
@@ -27,6 +30,12 @@ function App() {
             <Route path="/address-verifications/:id/report" element={<ReportViewPage />} />
 
             <Route path="/address-verifications/:id" element={<VerificationDetailPage />} />
+
+            <Route path="/verification/documents/:token" element={<DocumentCollectionPage />} />
+
+            <Route path="/document-collections/:id/documents" element={<DocumentCollectionDocumentsPage />} />
+
+            <Route path="/document-collections/:id" element={<DocumentCollectionDetailPage />} />
 
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>

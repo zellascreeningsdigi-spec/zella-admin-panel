@@ -10,6 +10,7 @@ import ReportsTab from '@/components/Reports/ReportsTab';
 import ManageUsersTab from '@/components/Users/ManageUsersTab';
 import CompanyDetailsTab from '@/components/Reports/CompanyDetailsTab';
 import AddressVerificationTab from '@/components/AddressVerification/AddressVerificationTab';
+import DocumentCollectionTab from '@/components/DocumentCollection/DocumentCollectionTab';
 
 const Dashboard: React.FC = () => {
   const { user, loading } = useAuth();
@@ -58,6 +59,13 @@ const Dashboard: React.FC = () => {
         return <CustomersTab />;
       case 'address-verification':
         return <AddressVerificationTab />;
+      case 'document-collection':
+        return (
+          <DocumentCollectionTab
+            initialSelectedCompanyId={location.state?.selectedCompanyId}
+            initialSelectedCompanyName={location.state?.selectedCompanyName}
+          />
+        );
       case 'reports':
         return <ReportsTab />;
       case 'manage-users':
