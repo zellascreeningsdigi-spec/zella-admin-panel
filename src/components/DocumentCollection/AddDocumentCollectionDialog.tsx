@@ -143,7 +143,13 @@ const AddDocumentCollectionDialog = ({
       if (editCollection?._id) {
         response = await apiService.updateDocumentCollection(editCollection._id, formData);
       } else {
-        response = await apiService.createDocumentCollection(formData);
+        // Snapshot BGV form config from the selected customer
+        const selectedCustomer = customers.find(c => c._id === formData.customerId);
+        const payload = {
+          ...formData,
+          formConfig: selectedCustomer?.bgvFormConfig || undefined,
+        };
+        response = await apiService.createDocumentCollection(payload);
       }
 
       if (response.success) {

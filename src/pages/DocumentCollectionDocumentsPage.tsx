@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, FileText, Upload, Eye, Calendar, FolderOpen, Search, Trash2, X, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -69,11 +69,33 @@ const DocumentCollectionDocumentsPage = () => {
     }
   };
 
+  const activeSlots = useMemo(() => {
+    const builtInSlots = DOCUMENT_SLOTS.filter(slot => {
+      const key = slot.fieldName as keyof NonNullable<NonNullable<typeof collection>['formConfig']>['documentTypes'];
+      return collection?.formConfig?.documentTypes?.[key] !== false;
+    }).map(slot => ({ ...slot, isCustom: false }));
+
+    // Append enabled custom document types
+    const customTypes = collection?.formConfig?.customDocumentTypes || [];
+    const customSlots = customTypes
+      .filter(ct => ct.enabled)
+      .map(ct => ({
+        docType: ct.key,
+        fieldName: ct.key,
+        label: ct.label,
+        isCustom: true,
+      }));
+
+    return [...builtInSlots, ...customSlots];
+  }, [collection]);
+
   const getUploadedDocuments = () => {
     if (!collection) return [];
-    return DOCUMENT_SLOTS
+    return activeSlots
       .map(slot => {
-        const doc = collection.documents?.[slot.fieldName as keyof typeof collection.documents] as any;
+        const doc = slot.isCustom
+          ? collection.customDocuments?.[slot.fieldName] as any
+          : collection.documents?.[slot.fieldName as keyof typeof collection.documents] as any;
         if (doc && doc.docName) {
           return { ...doc, docType: slot.docType, fieldName: slot.fieldName, label: slot.label };
         }
@@ -204,7 +226,7 @@ const DocumentCollectionDocumentsPage = () => {
           <CardHeader className="bg-teal-50 border-b border-teal-200">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-teal-600" /> Uploaded Documents ({getUploadedDocuments().length} / {DOCUMENT_SLOTS.length} uploaded)
+                <FileText className="w-5 h-5 text-teal-600" /> Uploaded Documents ({getUploadedDocuments().length} / {activeSlots.length} uploaded)
               </CardTitle>
               <div className="flex items-center gap-2">
                 {getUploadedDocuments().length > 0 && (
@@ -352,8 +374,10 @@ const DocumentCollectionDocumentsPage = () => {
             {/* Grid View (default) */}
             {!showAllDocuments && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {DOCUMENT_SLOTS.map((slot) => {
-                  const doc = collection.documents?.[slot.fieldName as keyof typeof collection.documents] as any;
+                {activeSlots.map((slot) => {
+                  const doc = slot.isCustom
+                    ? collection.customDocuments?.[slot.fieldName] as any
+                    : collection.documents?.[slot.fieldName as keyof typeof collection.documents] as any;
                   const isUploading = uploadingDoc === slot.docType;
 
                   // Apply search filter

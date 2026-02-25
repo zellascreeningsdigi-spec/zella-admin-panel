@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,15 +8,30 @@ import { CheckCircle, ChevronRight, ChevronLeft, Mail, Phone, Plus, Trash2 } fro
 import { Stepper, Step } from '@/components/ui/stepper';
 import { apiService } from '@/services/api';
 import type { BGVFormData, Employment, Reference, Address, GapDetailEntry } from '@/types/documentCollection';
+import type { BGVFormConfig } from '@/types/customer';
 
-const steps: Step[] = [
-  { id: 1, title: 'Personal Info', description: 'Basic Details' },
-  { id: 2, title: 'Education', description: 'Academic Details' },
-  { id: 3, title: 'Employment', description: 'Work History' },
-  { id: 4, title: 'References', description: 'Professional Refs' },
-  { id: 5, title: 'Gap Details', description: 'Career Gaps' },
-  { id: 6, title: 'LOA', description: 'Authorization' },
-  { id: 7, title: 'Documents', description: 'Upload Files' },
+const ALL_STEPS = [
+  { configKey: 'personalInfo', title: 'Personal Info', description: 'Basic Details', alwaysEnabled: true },
+  { configKey: 'education', title: 'Education', description: 'Academic Details' },
+  { configKey: 'employment', title: 'Employment', description: 'Work History' },
+  { configKey: 'references', title: 'References', description: 'Professional Refs' },
+  { configKey: 'gapDetails', title: 'Gap Details', description: 'Career Gaps' },
+  { configKey: 'loa', title: 'LOA', description: 'Authorization', alwaysEnabled: true },
+  { configKey: 'documents', title: 'Documents', description: 'Upload Files', alwaysEnabled: true },
+];
+
+const ALL_DOC_TYPES = [
+  { key: 'aadhaar', label: 'Aadhaar Card', required: true },
+  { key: 'pan', label: 'PAN Card', required: true },
+  { key: 'degreeMarksheet', label: 'Degree / Marksheet', required: true },
+  { key: 'addressProof', label: 'Address Proof', required: true },
+  { key: 'passport', label: 'Passport (if available)', required: false },
+  { key: 'passportDeclaration', label: 'Passport Declaration (if no passport)', required: false },
+  { key: 'relievingLetter', label: 'Relieving Letter', required: false },
+  { key: 'paySlip', label: 'Pay Slip (Latest)', required: false },
+  { key: 'offerLetter', label: 'Offer Letter', required: false },
+  { key: 'cv', label: 'CV / Resume', required: false },
+  { key: 'signature', label: 'Signature', required: true },
 ];
 
 const emptyEmployment: Employment = {
@@ -67,6 +82,38 @@ const DocumentCollectionPage = () => {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [caseData, setCaseData] = useState<any>(null);
+  const [formConfig, setFormConfig] = useState<BGVFormConfig | undefined>(undefined);
+
+  const enabledSteps = useMemo(() => {
+    const steps = formConfig?.steps;
+    return ALL_STEPS.filter(step => {
+      if (step.alwaysEnabled) return true;
+      const key = step.configKey as keyof NonNullable<BGVFormConfig['steps']>;
+      return steps?.[key] !== false;
+    }).map((step, i) => ({ ...step, id: i + 1 }));
+  }, [formConfig]);
+
+  const enabledDocTypes = useMemo(() => {
+    const docTypes = formConfig?.documentTypes;
+    const builtIn = ALL_DOC_TYPES.filter(dt => {
+      const key = dt.key as keyof NonNullable<BGVFormConfig['documentTypes']>;
+      return docTypes?.[key] !== false;
+    });
+
+    // Append enabled custom document types
+    const customTypes = (formConfig?.customDocumentTypes || [])
+      .filter(ct => ct.enabled)
+      .map(ct => ({ key: ct.key, label: ct.label, required: false }));
+
+    return [...builtIn, ...customTypes];
+  }, [formConfig]);
+
+  const stepperSteps: Step[] = useMemo(() =>
+    enabledSteps.map(s => ({ id: s.id, title: s.title, description: s.description })),
+    [enabledSteps]
+  );
+
+  const currentStepConfig = enabledSteps[currentStep - 1]?.configKey;
 
   const [formData, setFormData] = useState<BGVFormData>({
     personalInfo: {
@@ -122,6 +169,7 @@ const DocumentCollectionPage = () => {
       const response = await apiService.getDocumentCollectionByToken(token!);
       if (response.success && response.data) {
         setCaseData(response.data);
+        setFormConfig(response.data.formConfig);
         // Restore form data with deep merge to preserve pre-initialized defaults for empty arrays
         setFormData(prev => {
           const serverData = response.data.formData;
@@ -274,11 +322,14 @@ const DocumentCollectionPage = () => {
   };
 
   const handleFileChange = (docType: string, file: File | null) => {
-    setDocuments(prev => ({ ...prev, [docType]: file }));
+    setDocuments(prev => {
+      // Lazily add custom doc keys that aren't in the initial state
+      return { ...prev, [docType]: file };
+    });
   };
 
   const handleNext = () => {
-    setCurrentStep(prev => Math.min(prev + 1, 7));
+    setCurrentStep(prev => Math.min(prev + 1, enabledSteps.length));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -293,7 +344,7 @@ const DocumentCollectionPage = () => {
 
     try {
       // Upload all documents that are selected
-      const docTypeMap: Record<string, string> = {
+      const builtInDocTypeMap: Record<string, string> = {
         aadhaar: 'aadhaar', pan: 'pan', degreeMarksheet: 'degree_marksheet',
         addressProof: 'address_proof', passport: 'passport',
         passportDeclaration: 'passport_declaration', relievingLetter: 'relieving_letter',
@@ -302,16 +353,29 @@ const DocumentCollectionPage = () => {
 
       const uploadPromises = Object.entries(documents)
         .filter(([, file]) => file !== null)
-        .map(([key, file]) =>
-          apiService.uploadDocumentCollectionDocument(token!, file!, docTypeMap[key])
-        );
+        .map(([key, file]) => {
+          // For custom types, use the key directly (no snake_case conversion)
+          const docType = builtInDocTypeMap[key] || key;
+          return apiService.uploadDocumentCollectionDocument(token!, file!, docType);
+        });
 
       if (uploadPromises.length > 0) {
         await Promise.all(uploadPromises);
       }
 
+      // Build submission data — only include enabled sections
+      const steps = formConfig?.steps;
+      const submissionData: any = {
+        personalInfo: formData.personalInfo,
+        loa: formData.loa,
+      };
+      if (steps?.education !== false) submissionData.education = formData.education;
+      if (steps?.employment !== false) submissionData.employmentHistory = formData.employmentHistory;
+      if (steps?.references !== false) submissionData.references = formData.references;
+      if (steps?.employment !== false && steps?.gapDetails !== false) submissionData.gapDetails = formData.gapDetails;
+
       // Submit form data
-      const submitResponse = await apiService.submitDocumentCollection(token!, { formData });
+      const submitResponse = await apiService.submitDocumentCollection(token!, { formData: submissionData });
       if (!submitResponse.success) {
         throw new Error(submitResponse.message || 'Failed to submit');
       }
@@ -409,18 +473,18 @@ const DocumentCollectionPage = () => {
         </div>
 
         <div className="mb-8">
-          <Stepper steps={steps} currentStep={currentStep} />
+          <Stepper steps={stepperSteps} currentStep={currentStep} />
         </div>
 
         <Card className="shadow-xl">
           <CardContent className="pt-6">
             <form onSubmit={handleSubmit}>
 
-              {/* ===== STEP 1: Personal Information ===== */}
-              {currentStep === 1 && (
+              {/* ===== STEP: Personal Information ===== */}
+              {currentStepConfig === 'personalInfo' && (
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 pb-2 border-b-2 border-brand-green">
-                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">1</div>
+                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
                     <h3 className="text-xl font-semibold">Personal Information</h3>
                   </div>
 
@@ -481,11 +545,11 @@ const DocumentCollectionPage = () => {
                 </div>
               )}
 
-              {/* ===== STEP 2: Education ===== */}
-              {currentStep === 2 && (
+              {/* ===== STEP: Education ===== */}
+              {currentStepConfig === 'education' && (
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 pb-2 border-b-2 border-brand-green">
-                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">2</div>
+                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
                     <h3 className="text-xl font-semibold">Education Details</h3>
                   </div>
 
@@ -515,12 +579,12 @@ const DocumentCollectionPage = () => {
                 </div>
               )}
 
-              {/* ===== STEP 3: Employment History ===== */}
-              {currentStep === 3 && (
+              {/* ===== STEP: Employment History ===== */}
+              {currentStepConfig === 'employment' && (
                 <div className="space-y-6">
                   <div className="flex items-center justify-between pb-2 border-b-2 border-brand-green">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">3</div>
+                      <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
                       <h3 className="text-xl font-semibold">Employment History</h3>
                     </div>
                     {formData.employmentHistory.length < 3 && (
@@ -591,12 +655,12 @@ const DocumentCollectionPage = () => {
                 </div>
               )}
 
-              {/* ===== STEP 4: References ===== */}
-              {currentStep === 4 && (
+              {/* ===== STEP: References ===== */}
+              {currentStepConfig === 'references' && (
                 <div className="space-y-6">
                   <div className="flex items-center justify-between pb-2 border-b-2 border-brand-green">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">4</div>
+                      <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
                       <h3 className="text-xl font-semibold">Professional References</h3>
                     </div>
                     <Button type="button" variant="outline" size="sm" onClick={addReference}>
@@ -632,11 +696,11 @@ const DocumentCollectionPage = () => {
                 </div>
               )}
 
-              {/* ===== STEP 5: Gap Details ===== */}
-              {currentStep === 5 && (
+              {/* ===== STEP: Gap Details ===== */}
+              {currentStepConfig === 'gapDetails' && (
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 pb-2 border-b-2 border-brand-green">
-                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">5</div>
+                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
                     <h3 className="text-xl font-semibold">Gap Period Details</h3>
                   </div>
 
@@ -669,11 +733,11 @@ const DocumentCollectionPage = () => {
                 </div>
               )}
 
-              {/* ===== STEP 6: LOA ===== */}
-              {currentStep === 6 && (
+              {/* ===== STEP: LOA ===== */}
+              {currentStepConfig === 'loa' && (
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 pb-2 border-b-2 border-brand-green">
-                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">6</div>
+                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
                     <h3 className="text-xl font-semibold">Letter of Authorization</h3>
                   </div>
 
@@ -723,29 +787,17 @@ const DocumentCollectionPage = () => {
                 </div>
               )}
 
-              {/* ===== STEP 7: Document Upload ===== */}
-              {currentStep === 7 && (
+              {/* ===== STEP: Document Upload ===== */}
+              {currentStepConfig === 'documents' && (
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 pb-2 border-b-2 border-brand-green">
-                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">7</div>
+                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
                     <h3 className="text-xl font-semibold">Document Upload</h3>
                   </div>
                   <p className="text-sm text-gray-600">Upload required documents (max 5MB each, PDF/JPG/PNG)</p>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {[
-                      { key: 'aadhaar', label: 'Aadhaar Card', required: true },
-                      { key: 'pan', label: 'PAN Card', required: true },
-                      { key: 'degreeMarksheet', label: 'Degree / Marksheet', required: true },
-                      { key: 'addressProof', label: 'Address Proof', required: true },
-                      { key: 'passport', label: 'Passport (if available)', required: false },
-                      { key: 'passportDeclaration', label: 'Passport Declaration (if no passport)', required: false },
-                      { key: 'relievingLetter', label: 'Relieving Letter', required: false },
-                      { key: 'paySlip', label: 'Pay Slip (Latest)', required: false },
-                      { key: 'offerLetter', label: 'Offer Letter', required: false },
-                      { key: 'cv', label: 'CV / Resume', required: false },
-                      { key: 'signature', label: 'Signature', required: true },
-                    ].map(({ key, label, required }) => (
+                    {enabledDocTypes.map(({ key, label, required }) => (
                       <div key={key} className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-brand-green transition-colors">
                         <Label htmlFor={`doc-${key}`} className="text-gray-700 font-medium">
                           {label} {required && <span className="text-red-500">*</span>}

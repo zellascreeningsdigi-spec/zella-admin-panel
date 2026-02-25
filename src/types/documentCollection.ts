@@ -106,12 +106,18 @@ export interface DocumentCollectionDocuments {
   signature?: DocumentUpload;
 }
 
+export interface CustomDocumentsMap {
+  [key: string]: DocumentUpload | undefined;
+}
+
 export interface GeneratedDocx {
   s3Key: string;
   s3Url: string;
   fileName: string;
   generatedAt: string;
 }
+
+import type { BGVFormConfig } from './customer';
 
 export interface DocumentCollection {
   _id?: string;
@@ -121,6 +127,7 @@ export interface DocumentCollection {
   email: string;
   customerId: string;
   companyName: string;
+  formConfig?: BGVFormConfig;
   status: 'pending' | 'approved' | 'rejected';
   verificationStatus: 'not_initiated' | 'link_sent' | 'in_progress' | 'completed' | 'expired';
   verificationLink?: string;
@@ -128,6 +135,7 @@ export interface DocumentCollection {
   expiresAt?: string;
   formData?: BGVFormData;
   documents?: DocumentCollectionDocuments;
+  customDocuments?: CustomDocumentsMap;
   generatedDocx?: GeneratedDocx;
   submittedAt?: string;
   ipAddress?: string;

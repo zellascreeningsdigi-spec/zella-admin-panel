@@ -10,6 +10,7 @@ import CompanyListTable from './CompanyListTable';
 import AddDocumentCollectionDialog from './AddDocumentCollectionDialog';
 import BulkUploadDialog from './BulkUploadDialog';
 import DocumentCollectionFilters from './DocumentCollectionFilters';
+import BGVFormConfigEditor from './BGVFormConfigEditor';
 
 interface DocumentCollectionTabProps {
   initialSelectedCompanyId?: string;
@@ -387,6 +388,11 @@ const DocumentCollectionTab = ({
       </div>
 
       {renderStats()}
+
+      <BGVFormConfigEditor
+        customerId={selectedCompany.customerId}
+        companyName={selectedCompany.companyName}
+      />
 
       <DocumentCollectionFilters
         filters={filters}

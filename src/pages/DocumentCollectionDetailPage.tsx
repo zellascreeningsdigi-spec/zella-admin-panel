@@ -173,6 +173,7 @@ const DocumentCollectionDetailPage = () => {
   }
 
   const fd = collection.formData;
+  const config = collection.formConfig;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -291,6 +292,7 @@ const DocumentCollectionDetailPage = () => {
                 </Card>
 
                 {/* Education */}
+                {config?.steps?.education !== false && (
                 <Card>
                   <CardHeader className="bg-green-50 border-b border-green-200">
                     <CardTitle className="flex items-center gap-2"><GraduationCap className="w-5 h-5 text-green-600" /> Education</CardTitle>
@@ -307,9 +309,10 @@ const DocumentCollectionDetailPage = () => {
                     </div>
                   </CardContent>
                 </Card>
+                )}
 
                 {/* Employment History */}
-                {fd.employmentHistory && fd.employmentHistory.length > 0 && (
+                {config?.steps?.employment !== false && fd.employmentHistory && fd.employmentHistory.length > 0 && (
                   <Card>
                     <CardHeader className="bg-purple-50 border-b border-purple-200">
                       <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-purple-600" /> Employment History</CardTitle>
@@ -337,7 +340,7 @@ const DocumentCollectionDetailPage = () => {
                 )}
 
                 {/* References */}
-                {fd.references && fd.references.length > 0 && (
+                {config?.steps?.references !== false && fd.references && fd.references.length > 0 && (
                   <Card>
                     <CardHeader className="bg-orange-50 border-b border-orange-200">
                       <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-orange-600" /> References</CardTitle>
@@ -363,7 +366,7 @@ const DocumentCollectionDetailPage = () => {
                 )}
 
                 {/* Gap Details */}
-                {fd.gapDetails && Array.isArray(fd.gapDetails) && fd.gapDetails.length > 0 && (
+                {config?.steps?.gapDetails !== false && fd.gapDetails && Array.isArray(fd.gapDetails) && fd.gapDetails.length > 0 && (
                   <Card>
                     <CardHeader className="bg-yellow-50 border-b border-yellow-200">
                       <CardTitle className="flex items-center gap-2"><Clock className="w-5 h-5 text-yellow-600" /> Gap Details</CardTitle>

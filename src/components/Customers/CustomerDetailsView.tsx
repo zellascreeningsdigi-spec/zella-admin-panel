@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import DocumentsSection from './DocumentsSection';
 import SendEmailModal from './SendEmailModal';
 
+
 interface CustomerDetailsViewProps {
   customerId: string;
   onBack: () => void;
