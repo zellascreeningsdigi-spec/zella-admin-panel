@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, User, FileText, Briefcase, GraduationCap, Users, Clock, ShieldCheck, Download, RefreshCw, CheckCircle, XCircle, AlertCircle, Send, MessageCircle } from 'lucide-react';
+import { ArrowLeft, User, FileText, Briefcase, GraduationCap, Users, Clock, ShieldCheck, Download, RefreshCw, CheckCircle, XCircle, AlertCircle, Send, MessageCircle, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +20,7 @@ const DocumentCollectionDetailPage = () => {
   const [updating, setUpdating] = useState(false);
   const [generatingDocx, setGeneratingDocx] = useState(false);
   const [adminComments, setAdminComments] = useState('');
+  const [downloadingAll, setDownloadingAll] = useState(false);
 
   useEffect(() => {
     if (id) fetchCollection();
@@ -125,6 +126,18 @@ const DocumentCollectionDetailPage = () => {
       alert(error.message || 'Failed to generate DOCX');
     } finally {
       setGeneratingDocx(false);
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    if (!id) return;
+    setDownloadingAll(true);
+    try {
+      await apiService.downloadAllDocumentCollectionDocuments(id);
+    } catch (error: any) {
+      alert(error.message || 'Failed to download documents');
+    } finally {
+      setDownloadingAll(false);
     }
   };
 
@@ -498,6 +511,25 @@ const DocumentCollectionDetailPage = () => {
                       )}
                     </div>
                   )}
+                </CardContent>
+              </Card>
+
+              {/* Download All Documents */}
+              <Card>
+                <CardContent className="p-4">
+                  <Button
+                    onClick={handleDownloadAll}
+                    disabled={downloadingAll}
+                    variant="outline"
+                    className="w-full gap-2"
+                  >
+                    {downloadingAll ? (
+                      <div className="w-4 h-4 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Archive className="w-4 h-4" />
+                    )}
+                    {downloadingAll ? 'Downloading...' : 'Download All Documents'}
+                  </Button>
                 </CardContent>
               </Card>
 
