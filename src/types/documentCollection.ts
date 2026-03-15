@@ -99,9 +99,6 @@ export interface DocumentCollectionDocuments {
   addressProof?: DocumentUpload;
   passport?: DocumentUpload;
   passportDeclaration?: DocumentUpload;
-  relievingLetter?: DocumentUpload;
-  paySlip?: DocumentUpload;
-  offerLetter?: DocumentUpload;
   cv?: DocumentUpload;
   signature?: DocumentUpload;
 }

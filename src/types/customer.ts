@@ -34,9 +34,6 @@ export interface BGVFormConfig {
     addressProof: boolean;
     passport: boolean;
     passportDeclaration: boolean;
-    relievingLetter: boolean;
-    paySlip: boolean;
-    offerLetter: boolean;
     cv: boolean;
     signature: boolean;
   };
@@ -57,9 +54,6 @@ export const DEFAULT_BGV_FORM_CONFIG: BGVFormConfig = {
     addressProof: true,
     passport: true,
     passportDeclaration: true,
-    relievingLetter: true,
-    paySlip: true,
-    offerLetter: true,
     cv: true,
     signature: true,
   },

@@ -15,9 +15,6 @@ const DOCUMENT_SLOTS = [
   { docType: 'address_proof', fieldName: 'addressProof', label: 'Address Proof' },
   { docType: 'passport', fieldName: 'passport', label: 'Passport' },
   { docType: 'passport_declaration', fieldName: 'passportDeclaration', label: 'Passport Declaration' },
-  { docType: 'relieving_letter', fieldName: 'relievingLetter', label: 'Relieving Letter' },
-  { docType: 'pay_slip', fieldName: 'paySlip', label: 'Pay Slip' },
-  { docType: 'offer_letter', fieldName: 'offerLetter', label: 'Offer Letter' },
   { docType: 'cv', fieldName: 'cv', label: 'CV / Resume' },
   { docType: 'signature', fieldName: 'signature', label: 'Signature' },
 ];
@@ -75,6 +72,17 @@ const DocumentCollectionDocumentsPage = () => {
       return collection?.formConfig?.documentTypes?.[key] !== false;
     }).map(slot => ({ ...slot, isCustom: false }));
 
+    // Append per-employment document slots
+    const employmentHistory = collection?.formData?.employmentHistory || [];
+    const empSlots = employmentHistory.flatMap((emp: any, i: number) => {
+      const name = emp.companyName || `Employment ${i + 1}`;
+      return [
+        { docType: `relievingLetter_emp_${i}`, fieldName: `relievingLetter_emp_${i}`, label: `Relieving Letter - ${name}`, isCustom: true },
+        { docType: `offerLetter_emp_${i}`, fieldName: `offerLetter_emp_${i}`, label: `Offer Letter - ${name}`, isCustom: true },
+        { docType: `paySlip_emp_${i}`, fieldName: `paySlip_emp_${i}`, label: `Pay Slip - ${name}`, isCustom: true },
+      ];
+    });
+
     // Append enabled custom document types
     const customTypes = collection?.formConfig?.customDocumentTypes || [];
     const customSlots = customTypes
@@ -86,7 +94,7 @@ const DocumentCollectionDocumentsPage = () => {
         isCustom: true,
       }));
 
-    return [...builtInSlots, ...customSlots];
+    return [...builtInSlots, ...empSlots, ...customSlots];
   }, [collection]);
 
   const getUploadedDocuments = () => {

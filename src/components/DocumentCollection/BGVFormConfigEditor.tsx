@@ -27,9 +27,6 @@ const DOC_TYPE_LABELS: { key: keyof BGVFormConfig['documentTypes']; label: strin
   { key: 'addressProof', label: 'Address Proof' },
   { key: 'passport', label: 'Passport' },
   { key: 'passportDeclaration', label: 'Passport Declaration' },
-  { key: 'relievingLetter', label: 'Relieving Letter' },
-  { key: 'paySlip', label: 'Pay Slip' },
-  { key: 'offerLetter', label: 'Offer Letter' },
   { key: 'cv', label: 'CV / Resume' },
   { key: 'signature', label: 'Signature' },
 ];

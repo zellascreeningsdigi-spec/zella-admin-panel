@@ -208,6 +208,10 @@ const VerificationDetailPage = () => {
           numberOfFamilyMembers: editVerificationData.numberOfFamilyMembers === ''
             ? undefined
             : Number(editVerificationData.numberOfFamilyMembers),
+          // Preserve geo-tagging — these should never be modified by admin edits
+          latitude: verification.verificationData?.latitude,
+          longitude: verification.verificationData?.longitude,
+          gpsAddress: verification.verificationData?.gpsAddress,
         },
       };
 

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { CheckCircle, ChevronRight, ChevronLeft, Mail, Phone, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle, ChevronRight, ChevronLeft, Mail, Phone, Plus, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { Stepper, Step } from '@/components/ui/stepper';
 import { apiService } from '@/services/api';
 import type { BGVFormData, Employment, Reference, Address, GapDetailEntry } from '@/types/documentCollection';
@@ -25,12 +25,9 @@ const ALL_DOC_TYPES = [
   { key: 'pan', label: 'PAN Card', required: true },
   { key: 'degreeMarksheet', label: 'Degree / Marksheet', required: true },
   { key: 'addressProof', label: 'Address Proof', required: true },
-  { key: 'passport', label: 'Passport (if available)', required: false },
-  { key: 'passportDeclaration', label: 'Passport Declaration (if no passport)', required: false },
-  { key: 'relievingLetter', label: 'Relieving Letter', required: false },
-  { key: 'paySlip', label: 'Pay Slip (Latest)', required: false },
-  { key: 'offerLetter', label: 'Offer Letter', required: false },
-  { key: 'cv', label: 'CV / Resume', required: false },
+  { key: 'passport', label: 'Passport (if available)', required: true },
+  { key: 'passportDeclaration', label: 'Passport Declaration (if no passport)', required: true },
+  { key: 'cv', label: 'CV / Resume', required: true },
   { key: 'signature', label: 'Signature', required: true },
 ];
 
@@ -93,21 +90,6 @@ const DocumentCollectionPage = () => {
     }).map((step, i) => ({ ...step, id: i + 1 }));
   }, [formConfig]);
 
-  const enabledDocTypes = useMemo(() => {
-    const docTypes = formConfig?.documentTypes;
-    const builtIn = ALL_DOC_TYPES.filter(dt => {
-      const key = dt.key as keyof NonNullable<BGVFormConfig['documentTypes']>;
-      return docTypes?.[key] !== false;
-    });
-
-    // Append enabled custom document types
-    const customTypes = (formConfig?.customDocumentTypes || [])
-      .filter(ct => ct.enabled)
-      .map(ct => ({ key: ct.key, label: ct.label, required: false }));
-
-    return [...builtIn, ...customTypes];
-  }, [formConfig]);
-
   const stepperSteps: Step[] = useMemo(() =>
     enabledSteps.map(s => ({ id: s.id, title: s.title, description: s.description })),
     [enabledSteps]
@@ -137,9 +119,41 @@ const DocumentCollectionPage = () => {
 
   const [documents, setDocuments] = useState<Record<string, File | null>>({
     aadhaar: null, pan: null, degreeMarksheet: null, addressProof: null,
-    passport: null, passportDeclaration: null, relievingLetter: null,
-    paySlip: null, offerLetter: null, cv: null, signature: null
+    passport: null, passportDeclaration: null, cv: null, signature: null
   });
+
+  // Upload status tracking per document type
+  const [uploadStatus, setUploadStatus] = useState<Record<string, 'idle' | 'uploading' | 'success' | 'error'>>({});
+  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+
+  const enabledDocTypes = useMemo(() => {
+    const docTypes = formConfig?.documentTypes;
+    const builtIn = ALL_DOC_TYPES.filter(dt => {
+      const key = dt.key as keyof NonNullable<BGVFormConfig['documentTypes']>;
+      return docTypes?.[key] !== false;
+    });
+
+    // Append enabled custom document types
+    const customTypes = (formConfig?.customDocumentTypes || [])
+      .filter(ct => ct.enabled)
+      .map(ct => ({ key: ct.key, label: ct.label, required: true as const }));
+
+    return [...builtIn, ...customTypes];
+  }, [formConfig]);
+
+  // Per-employment document groups (each employment has 3 sub-doc types shown as one card)
+  const employmentDocGroups = useMemo(() => {
+    if (formConfig?.steps?.employment === false) return [];
+    return formData.employmentHistory.map((emp, i) => ({
+      label: emp.companyName || `Employment ${i + 1}`,
+      index: i,
+      subDocs: [
+        { key: `relievingLetter_emp_${i}`, label: 'Relieving Letter' },
+        { key: `offerLetter_emp_${i}`, label: 'Offer Letter' },
+        { key: `paySlip_emp_${i}`, label: 'Pay Slip' },
+      ],
+    }));
+  }, [formConfig, formData.employmentHistory]);
 
   useEffect(() => {
     if (token) fetchData();
@@ -321,11 +335,38 @@ const DocumentCollectionPage = () => {
     setFormData(prev => ({ ...prev, loa: { ...prev.loa, [field]: value } }));
   };
 
-  const handleFileChange = (docType: string, file: File | null) => {
-    setDocuments(prev => {
-      // Lazily add custom doc keys that aren't in the initial state
-      return { ...prev, [docType]: file };
-    });
+  const handleFileChange = async (docType: string, file: File | null) => {
+    if (!file) {
+      setDocuments(prev => ({ ...prev, [docType]: null }));
+      setUploadStatus(prev => ({ ...prev, [docType]: 'idle' }));
+      setUploadErrors(prev => { const next = { ...prev }; delete next[docType]; return next; });
+      return;
+    }
+
+    // Set file and start uploading
+    setDocuments(prev => ({ ...prev, [docType]: file }));
+    setUploadStatus(prev => ({ ...prev, [docType]: 'uploading' }));
+    setUploadErrors(prev => { const next = { ...prev }; delete next[docType]; return next; });
+
+    try {
+      // Map built-in keys to snake_case for the API
+      const builtInDocTypeMap: Record<string, string> = {
+        aadhaar: 'aadhaar', pan: 'pan', degreeMarksheet: 'degree_marksheet',
+        addressProof: 'address_proof', passport: 'passport',
+        passportDeclaration: 'passport_declaration', cv: 'cv', signature: 'signature'
+      };
+      const apiDocType = builtInDocTypeMap[docType] || docType;
+      const response = await apiService.uploadDocumentCollectionDocument(token!, file, apiDocType);
+      if (response.success) {
+        setUploadStatus(prev => ({ ...prev, [docType]: 'success' }));
+      } else {
+        throw new Error(response.message || 'Upload failed');
+      }
+    } catch (err: any) {
+      setUploadStatus(prev => ({ ...prev, [docType]: 'error' }));
+      setUploadErrors(prev => ({ ...prev, [docType]: err.message || 'Upload failed' }));
+      setDocuments(prev => ({ ...prev, [docType]: null }));
+    }
   };
 
   const handleNext = () => {
@@ -343,25 +384,7 @@ const DocumentCollectionPage = () => {
     setSubmitting(true);
 
     try {
-      // Upload all documents that are selected
-      const builtInDocTypeMap: Record<string, string> = {
-        aadhaar: 'aadhaar', pan: 'pan', degreeMarksheet: 'degree_marksheet',
-        addressProof: 'address_proof', passport: 'passport',
-        passportDeclaration: 'passport_declaration', relievingLetter: 'relieving_letter',
-        paySlip: 'pay_slip', offerLetter: 'offer_letter', cv: 'cv', signature: 'signature'
-      };
-
-      const uploadPromises = Object.entries(documents)
-        .filter(([, file]) => file !== null)
-        .map(([key, file]) => {
-          // For custom types, use the key directly (no snake_case conversion)
-          const docType = builtInDocTypeMap[key] || key;
-          return apiService.uploadDocumentCollectionDocument(token!, file!, docType);
-        });
-
-      if (uploadPromises.length > 0) {
-        await Promise.all(uploadPromises);
-      }
+      // Documents are uploaded eagerly on file selection, so no batch upload needed here
 
       // Build submission data — only include enabled sections
       const steps = formConfig?.steps;
@@ -788,44 +811,141 @@ const DocumentCollectionPage = () => {
               )}
 
               {/* ===== STEP: Document Upload ===== */}
-              {currentStepConfig === 'documents' && (
+              {currentStepConfig === 'documents' && (() => {
+                const allRequiredUploaded = enabledDocTypes
+                  .filter(dt => dt.required)
+                  .every(dt => uploadStatus[dt.key] === 'success');
+                const allEmpDocsUploaded = employmentDocGroups.every(group =>
+                  group.subDocs.some(sd => uploadStatus[sd.key] === 'success')
+                );
+                const anyUploading = Object.values(uploadStatus).some(s => s === 'uploading');
+                const canSubmit = allRequiredUploaded && allEmpDocsUploaded && !anyUploading;
+
+                return (
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 pb-2 border-b-2 border-brand-green">
                     <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
                     <h3 className="text-xl font-semibold">Document Upload</h3>
                   </div>
-                  <p className="text-sm text-gray-600">Upload required documents (max 5MB each, PDF/JPG/PNG)</p>
+                  <p className="text-sm text-gray-600">Upload all documents (max 5MB each, PDF/JPG/PNG). Documents are uploaded immediately when selected.</p>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {enabledDocTypes.map(({ key, label, required }) => (
-                      <div key={key} className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-brand-green transition-colors">
-                        <Label htmlFor={`doc-${key}`} className="text-gray-700 font-medium">
-                          {label} {required && <span className="text-red-500">*</span>}
-                        </Label>
-                        <input
-                          type="file"
-                          id={`doc-${key}`}
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          onChange={e => handleFileChange(key, e.target.files?.[0] || null)}
-                          className="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-brand-green-50 file:text-brand-green hover:file:bg-brand-green-100"
-                        />
-                        {documents[key] && (
-                          <p className="text-xs text-brand-green font-medium mt-2">&#10003; {documents[key]!.name}</p>
-                        )}
-                      </div>
-                    ))}
+                    {enabledDocTypes.map(({ key, label }) => {
+                      const status = uploadStatus[key] || 'idle';
+                      const errorMsg = uploadErrors[key];
+                      return (
+                        <div key={key} className={`border-2 border-dashed rounded-lg p-4 transition-colors ${
+                          status === 'success' ? 'border-green-400 bg-green-50' :
+                          status === 'error' ? 'border-red-400 bg-red-50' :
+                          status === 'uploading' ? 'border-yellow-400 bg-yellow-50' :
+                          'border-gray-300 hover:border-brand-green'
+                        }`}>
+                          <Label htmlFor={`doc-${key}`} className="text-gray-700 font-medium">
+                            {label} <span className="text-red-500">*</span>
+                          </Label>
+                          <input
+                            type="file"
+                            id={`doc-${key}`}
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            disabled={status === 'uploading'}
+                            onChange={e => handleFileChange(key, e.target.files?.[0] || null)}
+                            className="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-brand-green-50 file:text-brand-green hover:file:bg-brand-green-100 disabled:opacity-50"
+                          />
+                          {status === 'uploading' && (
+                            <p className="text-xs text-yellow-700 font-medium mt-2 flex items-center gap-1">
+                              <Loader2 className="w-3 h-3 animate-spin" /> Uploading...
+                            </p>
+                          )}
+                          {status === 'success' && documents[key] && (
+                            <p className="text-xs text-green-700 font-medium mt-2 flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" /> {documents[key]!.name}
+                            </p>
+                          )}
+                          {status === 'error' && errorMsg && (
+                            <p className="text-xs text-red-600 font-medium mt-2 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" /> {errorMsg}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
+
+                  {/* Per-Employment Document Groups */}
+                  {employmentDocGroups.length > 0 && (
+                    <div className="space-y-4">
+                      {employmentDocGroups.map((group) => {
+                        const anyGroupSuccess = group.subDocs.some(sd => uploadStatus[sd.key] === 'success');
+                        const anyGroupError = group.subDocs.some(sd => uploadStatus[sd.key] === 'error');
+                        const anyGroupUploading = group.subDocs.some(sd => uploadStatus[sd.key] === 'uploading');
+                        return (
+                          <div key={group.index} className={`border-2 rounded-lg p-4 transition-colors ${
+                            anyGroupSuccess ? 'border-green-400 bg-green-50' :
+                            anyGroupError ? 'border-red-400 bg-red-50' :
+                            anyGroupUploading ? 'border-yellow-400 bg-yellow-50' :
+                            'border-gray-300'
+                          }`}>
+                            <Label className="text-gray-800 font-semibold text-base">
+                              {group.label} — Documents <span className="text-red-500">*</span>
+                            </Label>
+                            <p className="text-xs text-gray-500 mt-1 mb-3">Upload at least one: Relieving Letter, Offer Letter, or Pay Slip</p>
+                            <div className="space-y-3">
+                              {group.subDocs.map((sd) => {
+                                const status = uploadStatus[sd.key] || 'idle';
+                                const errorMsg = uploadErrors[sd.key];
+                                return (
+                                  <div key={sd.key}>
+                                    <Label htmlFor={`doc-${sd.key}`} className="text-gray-600 text-sm">
+                                      {sd.label}
+                                    </Label>
+                                    <input
+                                      type="file"
+                                      id={`doc-${sd.key}`}
+                                      accept=".pdf,.jpg,.jpeg,.png"
+                                      disabled={status === 'uploading'}
+                                      onChange={e => handleFileChange(sd.key, e.target.files?.[0] || null)}
+                                      className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-brand-green-50 file:text-brand-green hover:file:bg-brand-green-100 disabled:opacity-50"
+                                    />
+                                    {status === 'uploading' && (
+                                      <p className="text-xs text-yellow-700 font-medium mt-1 flex items-center gap-1">
+                                        <Loader2 className="w-3 h-3 animate-spin" /> Uploading...
+                                      </p>
+                                    )}
+                                    {status === 'success' && documents[sd.key] && (
+                                      <p className="text-xs text-green-700 font-medium mt-1 flex items-center gap-1">
+                                        <CheckCircle className="w-3 h-3" /> {documents[sd.key]!.name}
+                                      </p>
+                                    )}
+                                    {status === 'error' && errorMsg && (
+                                      <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
+                                        <AlertCircle className="w-3 h-3" /> {errorMsg}
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {!canSubmit && !anyUploading && (
+                    <p className="text-sm text-amber-600 text-center">Please upload all required documents before submitting.</p>
+                  )}
 
                   <div className="flex justify-between pt-6">
                     <Button type="button" onClick={handleBack} variant="outline" size="lg" className="border-brand-green text-brand-green hover:bg-brand-green-50">
                       <ChevronLeft className="mr-2 w-5 h-5" /> Previous
                     </Button>
-                    <Button type="submit" disabled={submitting} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">
+                    <Button type="submit" disabled={submitting || !canSubmit} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">
                       {submitting ? 'Submitting...' : 'Submit BGV Form'}
                     </Button>
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </form>
           </CardContent>
         </Card>
