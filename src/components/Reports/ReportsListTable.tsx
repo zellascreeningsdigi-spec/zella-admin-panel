@@ -7,12 +7,20 @@ interface ReportsListTableProps {
   reports: Report[];
   onViewReport: (report: Report) => void;
   onDeleteReport?: (reportId: string) => void;
+  currentPage?: number;
+  pageSize?: number;
+  totalCount?: number;
+  onPageChange?: (page: number) => void;
 }
 
 const ReportsListTable: React.FC<ReportsListTableProps> = ({
   reports,
   onViewReport,
-  onDeleteReport
+  onDeleteReport,
+  currentPage = 1,
+  pageSize = 10,
+  totalCount,
+  onPageChange,
 }) => {
   const formatDate = (date?: string) => {
     if (!date) return 'N/A';
@@ -34,7 +42,13 @@ const ReportsListTable: React.FC<ReportsListTableProps> = ({
     );
   }
 
+  const _total = totalCount ?? reports.length;
+  const _pageCount = Math.ceil(_total / pageSize);
+  const canPreviousPage = currentPage > 1;
+  const canNextPage = currentPage < _pageCount;
+
   return (
+    <div className="space-y-4">
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
@@ -133,6 +147,33 @@ const ReportsListTable: React.FC<ReportsListTableProps> = ({
           </tbody>
         </table>
       </div>
+    </div>
+    {_total > pageSize && (
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-500">
+          Showing {_total === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{' '}
+          {Math.min(currentPage * pageSize, _total)} of {_total} reports
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange?.(currentPage - 1)}
+            disabled={!canPreviousPage}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange?.(currentPage + 1)}
+            disabled={!canNextPage}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+    )}
     </div>
   );
 };

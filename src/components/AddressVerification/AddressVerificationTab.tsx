@@ -29,24 +29,28 @@ const AddressVerificationTab = () => {
     verificationStatus: '',
     search: ''
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 10;
 
   useEffect(() => {
     fetchVerifications();
     fetchStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
+  }, [filters, currentPage]);
 
   const fetchVerifications = async () => {
     try {
       setLoading(true);
       const response = await apiService.getAddressVerifications({
         ...filters,
-        page: 1,
-        limit: 100
+        page: currentPage,
+        limit: PAGE_SIZE
       });
 
       if (response.success && response.data) {
         setVerifications(response.data.verifications || []);
+        setTotalCount(response.data.pagination?.total ?? 0);
       }
     } catch (error) {
       console.error('Failed to fetch verifications:', error);
@@ -206,7 +210,7 @@ const AddressVerificationTab = () => {
       {/* Filters */}
       <AddressVerificationFilters
         filters={filters}
-        onFilterChange={setFilters}
+        onFilterChange={(newFilters) => { setCurrentPage(1); setFilters(newFilters); }}
       />
 
       {/* Table */}
@@ -216,6 +220,10 @@ const AddressVerificationTab = () => {
         onDelete={handleDelete}
         onSendLink={handleSendLink}
         loading={loading}
+        currentPage={currentPage}
+        pageSize={PAGE_SIZE}
+        totalCount={totalCount}
+        onPageChange={setCurrentPage}
       />
 
       {/* Dialogs */}

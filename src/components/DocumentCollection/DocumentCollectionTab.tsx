@@ -51,6 +51,9 @@ const DocumentCollectionTab = ({
     verificationStatus: '',
     search: ''
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 10;
 
   // On mount: restore Level 2 from navigation state
   useEffect(() => {
@@ -78,7 +81,7 @@ const DocumentCollectionTab = ({
       fetchStats();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCompany, filters]);
+  }, [selectedCompany, filters, currentPage]);
 
   const fetchCompanies = async () => {
     try {
@@ -103,12 +106,13 @@ const DocumentCollectionTab = ({
       const response = await apiService.getDocumentCollections({
         ...filters,
         customerId: selectedCompany.customerId,
-        page: 1,
-        limit: 100
+        page: currentPage,
+        limit: PAGE_SIZE
       });
 
       if (response.success && response.data) {
         setCollections(response.data.collections || []);
+        setTotalCount(response.data.pagination?.total ?? 0);
       }
     } catch (error) {
       console.error('Failed to fetch collections:', error);
@@ -135,6 +139,7 @@ const DocumentCollectionTab = ({
   const handleSelectCompany = (company: CompanySummary) => {
     setSelectedCompany({ customerId: company.customerId, companyName: company.companyName });
     setFilters({ status: '', verificationStatus: '', search: '' });
+    setCurrentPage(1);
   };
 
   const handleBackToCompanies = () => {
@@ -396,7 +401,7 @@ const DocumentCollectionTab = ({
 
       <DocumentCollectionFilters
         filters={filters}
-        onFilterChange={setFilters}
+        onFilterChange={(newFilters) => { setCurrentPage(1); setFilters(newFilters); }}
       />
 
       <DocumentCollectionTable
@@ -407,6 +412,10 @@ const DocumentCollectionTab = ({
         loading={loading}
         selectedCompanyId={selectedCompany.customerId}
         selectedCompanyName={selectedCompany.companyName}
+        currentPage={currentPage}
+        pageSize={PAGE_SIZE}
+        totalCount={totalCount}
+        onPageChange={setCurrentPage}
       />
 
       <AddDocumentCollectionDialog

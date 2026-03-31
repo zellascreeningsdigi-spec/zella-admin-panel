@@ -38,6 +38,9 @@ const CasesTab: React.FC<CasesTabProps> = ({ pageIndex }) => {
   const [isBulkUploading, setIsBulkUploading] = useState(false);
   const [isAddCaseOpen, setIsAddCaseOpen] = useState(false);
   const [editingCase, setEditingCase] = useState<Case | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 10;
 
   const fetchCases = async () => {
     try {
@@ -45,7 +48,7 @@ const CasesTab: React.FC<CasesTabProps> = ({ pageIndex }) => {
       setError(null);
 
       const [casesResponse, statsResponse] = await Promise.all([
-        apiService.getCases({ limit: 100 }),
+        apiService.getCases({ page: currentPage, limit: PAGE_SIZE }),
         apiService.getCaseStats()
       ]);
 
@@ -77,6 +80,7 @@ const CasesTab: React.FC<CasesTabProps> = ({ pageIndex }) => {
         }));
 
         setCases(transformedCases);
+        setTotalCount(casesResponse.data.pagination?.total ?? 0);
       }
 
       if (statsResponse.success && statsResponse.data) {
@@ -92,7 +96,8 @@ const CasesTab: React.FC<CasesTabProps> = ({ pageIndex }) => {
 
   useEffect(() => {
     fetchCases();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
 
   const handleAddCase = () => {
     setEditingCase(null);
@@ -228,7 +233,7 @@ const CasesTab: React.FC<CasesTabProps> = ({ pageIndex }) => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Cases</h1>
           <p className="text-gray-600 mt-1">
-            Manage verification cases and DigiLocker integrations ({cases.length} total)
+            Manage verification cases and DigiLocker integrations ({totalCount} total)
           </p>
         </div>
         <div className="flex space-x-3">
@@ -320,7 +325,7 @@ const CasesTab: React.FC<CasesTabProps> = ({ pageIndex }) => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <CasesTable cases={cases} onCaseUpdated={fetchCases} onEditCase={handleEditCase} onDeleteCase={handleDeleteCase} initialPageIndex={pageIndex} />
+          <CasesTable cases={cases} onCaseUpdated={fetchCases} onEditCase={handleEditCase} onDeleteCase={handleDeleteCase} initialPageIndex={pageIndex} currentPage={currentPage} pageSize={PAGE_SIZE} totalCount={totalCount} onPageChange={setCurrentPage} />
         </CardContent>
       </Card>
 

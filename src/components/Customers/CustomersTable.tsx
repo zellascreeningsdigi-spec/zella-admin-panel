@@ -15,7 +15,6 @@ import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
-  getPaginationRowModel,
   getSortedRowModel,
   SortingState,
   useReactTable,
@@ -34,9 +33,13 @@ interface CustomersTableProps {
   onViewCustomer?: (customer: Customer) => void;
   onEditCustomer?: (customer: Customer) => void;
   onDeleteCustomer?: (customerId: string | undefined) => void;
+  currentPage?: number;
+  pageSize?: number;
+  totalCount?: number;
+  onPageChange?: (page: number) => void;
 }
 
-const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustomer, onEditCustomer, onDeleteCustomer }) => {
+const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustomer, onEditCustomer, onDeleteCustomer, currentPage, pageSize, totalCount, onPageChange }) => {
   const { user } = useAuth();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -124,6 +127,10 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
     [onViewCustomer, onEditCustomer, onDeleteCustomer, user]
   );
 
+  const _pageSize = pageSize ?? 10;
+  const _currentPage = currentPage ?? 1;
+  const pageCount = totalCount != null ? Math.ceil(totalCount / _pageSize) : -1;
+
   const table = useReactTable({
     data: customers,
     columns,
@@ -133,16 +140,22 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: true,
+    pageCount,
     state: {
       sorting,
       columnFilters,
       globalFilter,
-    },
-    initialState: {
       pagination: {
-        pageSize: 10,
+        pageIndex: _currentPage - 1,
+        pageSize: _pageSize,
       },
+    },
+    onPaginationChange: (updater) => {
+      if (typeof updater === 'function' && onPageChange) {
+        const newState = updater({ pageIndex: _currentPage - 1, pageSize: _pageSize });
+        onPageChange(newState.pageIndex + 1);
+      }
     },
   });
 
@@ -220,8 +233,9 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
 
       <div className="flex items-center justify-between space-x-2 py-4">
         <div className="text-sm text-muted-foreground">
-          Page {table.getState().pagination.pageIndex + 1} of{' '}
-          {table.getPageCount()} ({table.getFilteredRowModel().rows.length} total customers)
+          Showing {(totalCount ?? customers.length) === 0 ? 0 : (_currentPage - 1) * _pageSize + 1} to{' '}
+          {Math.min(_currentPage * _pageSize, totalCount ?? customers.length)}{' '}
+          of {totalCount ?? customers.length} customers
         </div>
       </div>
     </div>

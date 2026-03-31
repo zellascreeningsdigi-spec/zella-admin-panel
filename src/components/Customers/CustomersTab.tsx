@@ -23,8 +23,11 @@ const CustomersTab: React.FC = () => {
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [viewingCustomer, setViewingCustomer] = useState<Customer | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 10;
 
-  const fetchCustomers = async (filterParams?: CustomerFilters) => {
+  const fetchCustomers = async (filterParams?: CustomerFilters, page?: number) => {
     try {
       // Only show full page loading on initial load
       if (initialLoad) {
@@ -33,7 +36,8 @@ const CustomersTab: React.FC = () => {
       setError(null);
 
       const response = await apiService.getCustomers({
-        limit: 100,
+        page: page ?? currentPage,
+        limit: PAGE_SIZE,
         search: filterParams?.search || undefined,
         dateFrom: filterParams?.dateFrom || undefined,
         dateTo: filterParams?.dateTo || undefined,
@@ -43,6 +47,7 @@ const CustomersTab: React.FC = () => {
 
       if (response.success && response.data) {
         setCustomers(response.data.customers);
+        setTotalCount(response.data.pagination?.total ?? 0);
       }
     } catch (err) {
       console.error('Error fetching customers:', err);
@@ -58,7 +63,7 @@ const CustomersTab: React.FC = () => {
   useEffect(() => {
     fetchCustomers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentPage]);
 
   const handleAddCustomer = () => {
     setEditingCustomer(null);
@@ -123,11 +128,13 @@ const CustomersTab: React.FC = () => {
   };
 
   const handleFilterChange = (newFilters: CustomerFilters) => {
-    fetchCustomers(newFilters);
+    setCurrentPage(1);
+    fetchCustomers(newFilters, 1);
   };
 
   const handleResetFilters = () => {
-    fetchCustomers();
+    setCurrentPage(1);
+    fetchCustomers(undefined, 1);
   };
 
   if (loading) {
@@ -224,7 +231,7 @@ const CustomersTab: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
           <p className="text-gray-600 mt-1">
-            Manage customer companies and their email contacts ({customers.length} total)
+            Manage customer companies and their email contacts ({totalCount} total)
           </p>
         </div>
         <div className="flex space-x-3">
@@ -249,7 +256,7 @@ const CustomersTab: React.FC = () => {
             <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{customers.length}</div>
+            <div className="text-2xl font-bold">{totalCount}</div>
           </CardContent>
         </Card>
         <Card>
@@ -293,6 +300,10 @@ const CustomersTab: React.FC = () => {
             onViewCustomer={handleViewCustomer}
             onEditCustomer={handleEditCustomer}
             onDeleteCustomer={handleDeleteCustomer}
+            currentPage={currentPage}
+            pageSize={PAGE_SIZE}
+            totalCount={totalCount}
+            onPageChange={setCurrentPage}
           />
         </CardContent>
       </Card>

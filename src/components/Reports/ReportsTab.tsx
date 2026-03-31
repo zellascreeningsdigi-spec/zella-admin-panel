@@ -25,10 +25,15 @@ const ReportsTab: React.FC = () => {
   const [isSendReportOpen, setIsSendReportOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [viewMode, setViewMode] = useState<'companies' | 'reports'>('companies');
+  const [customersPage, setCustomersPage] = useState(1);
+  const [customersTotal, setCustomersTotal] = useState(0);
+  const [reportsPage, setReportsPage] = useState(1);
+  const [reportsTotal, setReportsTotal] = useState(0);
+  const PAGE_SIZE = 10;
 
   const isCustomer = user?.role === 'customer';
 
-  const fetchCustomers = async (filterParams?: CustomerFilters) => {
+  const fetchCustomers = async (filterParams?: CustomerFilters, page?: number) => {
     try {
       if (initialLoad) {
         setLoading(true);
@@ -36,7 +41,8 @@ const ReportsTab: React.FC = () => {
       setError(null);
 
       const response = await apiService.getCustomers({
-        limit: 100,
+        page: page ?? customersPage,
+        limit: PAGE_SIZE,
         search: filterParams?.search || undefined,
         dateFrom: filterParams?.dateFrom || undefined,
         dateTo: filterParams?.dateTo || undefined,
@@ -46,6 +52,7 @@ const ReportsTab: React.FC = () => {
 
       if (response.success && response.data) {
         setCustomers(response.data.customers);
+        setCustomersTotal(response.data.pagination?.total ?? 0);
       }
     } catch (err) {
       console.error('Error fetching customers:', err);
@@ -66,12 +73,14 @@ const ReportsTab: React.FC = () => {
       setError(null);
 
       const response = await apiService.getReports({
-        limit: 100,
+        page: reportsPage,
+        limit: PAGE_SIZE,
         customerId: isCustomer ? user?.customerId : undefined,
       });
 
       if (response) {
         setReports(response.reports || []);
+        setReportsTotal(response.totalReports ?? 0);
       }
     } catch (err) {
       console.error('Error fetching reports:', err);
@@ -95,7 +104,7 @@ const ReportsTab: React.FC = () => {
       fetchReports();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [customersPage, reportsPage]);
 
   const handleRefresh = () => {
     if (viewMode === 'companies') {
@@ -106,11 +115,13 @@ const ReportsTab: React.FC = () => {
   };
 
   const handleFilterChange = (newFilters: CustomerFilters) => {
-    fetchCustomers(newFilters);
+    setCustomersPage(1);
+    fetchCustomers(newFilters, 1);
   };
 
   const handleResetFilters = () => {
-    fetchCustomers();
+    setCustomersPage(1);
+    fetchCustomers(undefined, 1);
   };
 
   const handleSendReport = (customer: Customer) => {
@@ -188,15 +199,15 @@ const ReportsTab: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
           <p className="text-gray-600 mt-1">
             {viewMode === 'companies'
-              ? `Send reports to companies (${customers.length} total companies)`
-              : `View reports (${reports.length} total reports)`}
+              ? `Send reports to companies (${customersTotal} total companies)`
+              : `View reports (${reportsTotal} total reports)`}
           </p>
         </div>
         <div className="flex space-x-3">
           {!isCustomer && (
             <div className="flex rounded-lg border border-gray-300 overflow-hidden">
               <button
-                onClick={() => setViewMode('companies')}
+                onClick={() => { setCustomersPage(1); setViewMode('companies'); }}
                 className={`px-4 py-2 text-sm font-medium transition-colors ${
                   viewMode === 'companies'
                     ? 'bg-purple-600 text-white'
@@ -207,7 +218,7 @@ const ReportsTab: React.FC = () => {
                 Send Reports
               </button>
               <button
-                onClick={() => setViewMode('reports')}
+                onClick={() => { setReportsPage(1); setViewMode('reports'); }}
                 className={`px-4 py-2 text-sm font-medium transition-colors ${
                   viewMode === 'reports'
                     ? 'bg-purple-600 text-white'
@@ -234,7 +245,7 @@ const ReportsTab: React.FC = () => {
                 <CardTitle className="text-sm font-medium">Total Companies</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{customers.length}</div>
+                <div className="text-2xl font-bold">{customersTotal}</div>
               </CardContent>
             </Card>
             <Card>
@@ -281,6 +292,10 @@ const ReportsTab: React.FC = () => {
                 customers={customers}
                 onSendReport={handleSendReport}
                 onShowDetails={handleShowDetails}
+                currentPage={customersPage}
+                pageSize={PAGE_SIZE}
+                totalCount={customersTotal}
+                onPageChange={setCustomersPage}
               />
             </CardContent>
           </Card>
@@ -295,7 +310,7 @@ const ReportsTab: React.FC = () => {
               <CardContent>
                 <div className="flex items-center">
                   <FileText className="h-8 w-8 text-purple-600 mr-2" />
-                  <div className="text-2xl font-bold">{reports.length}</div>
+                  <div className="text-2xl font-bold">{reportsTotal}</div>
                 </div>
               </CardContent>
             </Card>
@@ -361,6 +376,10 @@ const ReportsTab: React.FC = () => {
                     apiService.deleteReport(reportId).then(() => fetchReports());
                   }
                 } : undefined}
+                currentPage={reportsPage}
+                pageSize={PAGE_SIZE}
+                totalCount={reportsTotal}
+                onPageChange={setReportsPage}
               />
             </CardContent>
           </Card>

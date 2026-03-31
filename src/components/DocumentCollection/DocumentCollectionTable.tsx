@@ -5,7 +5,6 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   getFilteredRowModel,
-  getPaginationRowModel,
   flexRender,
   ColumnDef,
 } from '@tanstack/react-table';
@@ -30,6 +29,10 @@ interface DocumentCollectionTableProps {
   loading: boolean;
   selectedCompanyId?: string;
   selectedCompanyName?: string;
+  currentPage?: number;
+  pageSize?: number;
+  totalCount?: number;
+  onPageChange?: (page: number) => void;
 }
 
 const DocumentCollectionTable = ({
@@ -40,6 +43,10 @@ const DocumentCollectionTable = ({
   loading,
   selectedCompanyId,
   selectedCompanyName,
+  currentPage,
+  pageSize,
+  totalCount,
+  onPageChange,
 }: DocumentCollectionTableProps) => {
   const navigate = useNavigate();
 
@@ -267,15 +274,29 @@ SECURE | AUTHENTICATE`;
     [onEdit, onDelete, onSendLink, navigate, handleSendWhatsApp, handleDownloadDocx, selectedCompanyId, selectedCompanyName]
   );
 
+  const _pageSize = pageSize ?? 10;
+  const _currentPage = currentPage ?? 1;
+  const pageCount = totalCount != null ? Math.ceil(totalCount / _pageSize) : -1;
+
   const table = useReactTable({
     data: collections,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    initialState: {
-      pagination: { pageSize: 10 },
+    manualPagination: true,
+    pageCount,
+    state: {
+      pagination: {
+        pageIndex: _currentPage - 1,
+        pageSize: _pageSize,
+      },
+    },
+    onPaginationChange: (updater) => {
+      if (typeof updater === 'function' && onPageChange) {
+        const newState = updater({ pageIndex: _currentPage - 1, pageSize: _pageSize });
+        onPageChange(newState.pageIndex + 1);
+      }
     },
   });
 
@@ -329,12 +350,12 @@ SECURE | AUTHENTICATE`;
 
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-500">
-          Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
+          Showing {(totalCount ?? collections.length) === 0 ? 0 : (_currentPage - 1) * _pageSize + 1} to{' '}
           {Math.min(
-            (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-            collections.length
+            _currentPage * _pageSize,
+            totalCount ?? collections.length
           )}{' '}
-          of {collections.length} results
+          of {totalCount ?? collections.length} results
         </div>
         <div className="flex gap-2">
           <Button

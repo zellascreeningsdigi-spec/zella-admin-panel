@@ -8,9 +8,13 @@ interface CompaniesTableProps {
   customers: Customer[];
   onSendReport?: (customer: Customer) => void;
   onShowDetails?: (customer: Customer) => void;
+  currentPage?: number;
+  pageSize?: number;
+  totalCount?: number;
+  onPageChange?: (page: number) => void;
 }
 
-const CompaniesTable: React.FC<CompaniesTableProps> = ({ customers, onSendReport, onShowDetails }) => {
+const CompaniesTable: React.FC<CompaniesTableProps> = ({ customers, onSendReport, onShowDetails, currentPage = 1, pageSize = 10, totalCount, onPageChange }) => {
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -29,7 +33,13 @@ const CompaniesTable: React.FC<CompaniesTableProps> = ({ customers, onSendReport
     );
   }
 
+  const _total = totalCount ?? customers.length;
+  const _pageCount = Math.ceil(_total / pageSize);
+  const canPreviousPage = currentPage > 1;
+  const canNextPage = currentPage < _pageCount;
+
   return (
+    <div className="space-y-4">
     <div className="border rounded-lg overflow-hidden">
       <Table>
         <TableHeader>
@@ -105,6 +115,33 @@ const CompaniesTable: React.FC<CompaniesTableProps> = ({ customers, onSendReport
           ))}
         </TableBody>
       </Table>
+    </div>
+    {_total > pageSize && (
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-500">
+          Showing {_total === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{' '}
+          {Math.min(currentPage * pageSize, _total)} of {_total} companies
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange?.(currentPage - 1)}
+            disabled={!canPreviousPage}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange?.(currentPage + 1)}
+            disabled={!canNextPage}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+    )}
     </div>
   );
 };

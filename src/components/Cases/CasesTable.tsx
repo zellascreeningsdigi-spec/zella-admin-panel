@@ -17,7 +17,6 @@ import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
-  getPaginationRowModel,
   getSortedRowModel,
   SortingState,
   useReactTable,
@@ -39,9 +38,13 @@ interface CasesTableProps {
   onEditCase?: (caseData: Case) => void;
   onDeleteCase?: (caseData: string | undefined) => void;
   initialPageIndex?: number;
+  currentPage?: number;
+  pageSize?: number;
+  totalCount?: number;
+  onPageChange?: (page: number) => void;
 }
 
-const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCase, onDeleteCase, initialPageIndex }) => {
+const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCase, onDeleteCase, initialPageIndex, currentPage, pageSize, totalCount, onPageChange }) => {
   const navigate = useNavigate();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -329,6 +332,10 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
     [isProcessing, handleDigilockerAction, onEditCase, navigate, currentPageIndex]
   );
 
+  const _pageSize = pageSize ?? 10;
+  const _currentPage = currentPage ?? 1;
+  const _pageCount = totalCount != null ? Math.ceil(totalCount / _pageSize) : -1;
+
   const table = useReactTable({
     data: filteredCases,
     columns,
@@ -338,24 +345,27 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     autoResetPageIndex: false,
+    manualPagination: true,
+    pageCount: _pageCount,
     state: {
       sorting,
       columnFilters,
       globalFilter,
       pagination: {
-        pageIndex: currentPageIndex,
-        pageSize: 10,
+        pageIndex: _currentPage - 1,
+        pageSize: _pageSize,
       },
     },
     onPaginationChange: (updater) => {
       if (typeof updater === 'function') {
-        const newPagination = updater({ pageIndex: currentPageIndex, pageSize: 10 });
+        const newPagination = updater({ pageIndex: _currentPage - 1, pageSize: _pageSize });
         setCurrentPageIndex(newPagination.pageIndex);
+        if (onPageChange) {
+          onPageChange(newPagination.pageIndex + 1);
+        }
       }
     },
-    manualPagination: false,
   });
 
   return (
@@ -485,7 +495,7 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
               </span>
             )}
             <span className="text-xs text-gray-500">
-              ({filteredCases.length} of {cases.length} cases)
+              ({filteredCases.length} of {totalCount ?? cases.length} cases)
             </span>
           </div>
         )}
@@ -571,8 +581,9 @@ const CasesTable: React.FC<CasesTableProps> = ({ cases, onCaseUpdated, onEditCas
 
       <div className="flex items-center justify-between space-x-2 py-4">
         <div className="text-sm text-muted-foreground">
-          Page {table.getState().pagination.pageIndex + 1} of{' '}
-          {table.getPageCount()} ({table.getFilteredRowModel().rows.length} total cases)
+          Showing {(totalCount ?? cases.length) === 0 ? 0 : (_currentPage - 1) * _pageSize + 1} to{' '}
+          {Math.min(_currentPage * _pageSize, totalCount ?? cases.length)}{' '}
+          of {totalCount ?? cases.length} cases
         </div>
       </div>
 
