@@ -1042,6 +1042,16 @@ class ApiService {
       .then(res => res.json());
   }
 
+  async saveDocumentCollectionProgress(token: string, data: { formData: any }): Promise<ApiResponse<any>> {
+    return fetch(`${API_BASE_URL}/document-collections/public/${token}/save-progress`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    }).then(res => res.json());
+  }
+
   async submitDocumentCollection(token: string, data: any): Promise<ApiResponse<any>> {
     return fetch(`${API_BASE_URL}/document-collections/public/${token}/submit`, {
       method: 'POST',

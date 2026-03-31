@@ -76,6 +76,7 @@ const DocumentCollectionPage = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [caseData, setCaseData] = useState<any>(null);
@@ -369,7 +370,30 @@ const DocumentCollectionPage = () => {
     }
   };
 
-  const handleNext = () => {
+  const buildSubmissionData = () => {
+    const steps = formConfig?.steps;
+    const data: any = {
+      personalInfo: formData.personalInfo,
+      loa: formData.loa,
+    };
+    if (steps?.education !== false) data.education = formData.education;
+    if (steps?.employment !== false) data.employmentHistory = formData.employmentHistory;
+    if (steps?.references !== false) data.references = formData.references;
+    if (steps?.employment !== false && steps?.gapDetails !== false) data.gapDetails = formData.gapDetails;
+    return data;
+  };
+
+  const handleNext = async () => {
+    // Save progress to server before advancing
+    setSaving(true);
+    try {
+      await apiService.saveDocumentCollectionProgress(token!, { formData: buildSubmissionData() });
+    } catch (err) {
+      console.error('Auto-save error:', err);
+      // Don't block navigation — save is best-effort
+    } finally {
+      setSaving(false);
+    }
     setCurrentStep(prev => Math.min(prev + 1, enabledSteps.length));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -385,17 +409,7 @@ const DocumentCollectionPage = () => {
 
     try {
       // Documents are uploaded eagerly on file selection, so no batch upload needed here
-
-      // Build submission data — only include enabled sections
-      const steps = formConfig?.steps;
-      const submissionData: any = {
-        personalInfo: formData.personalInfo,
-        loa: formData.loa,
-      };
-      if (steps?.education !== false) submissionData.education = formData.education;
-      if (steps?.employment !== false) submissionData.employmentHistory = formData.employmentHistory;
-      if (steps?.references !== false) submissionData.references = formData.references;
-      if (steps?.employment !== false && steps?.gapDetails !== false) submissionData.gapDetails = formData.gapDetails;
+      const submissionData = buildSubmissionData();
 
       // Submit form data
       const submitResponse = await apiService.submitDocumentCollection(token!, { formData: submissionData });
@@ -561,8 +575,8 @@ const DocumentCollectionPage = () => {
                   </div>
 
                   <div className="flex justify-end pt-4">
-                    <Button type="button" onClick={handleNext} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">
-                      Next <ChevronRight className="ml-2 w-5 h-5" />
+                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">
+                      {saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}
                     </Button>
                   </div>
                 </div>
@@ -597,7 +611,7 @@ const DocumentCollectionPage = () => {
 
                   <div className="flex justify-between pt-4">
                     <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">Next <ChevronRight className="ml-2 w-5 h-5" /></Button>
+                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
                   </div>
                 </div>
               )}
@@ -673,7 +687,7 @@ const DocumentCollectionPage = () => {
 
                   <div className="flex justify-between pt-4">
                     <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">Next <ChevronRight className="ml-2 w-5 h-5" /></Button>
+                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
                   </div>
                 </div>
               )}
@@ -714,7 +728,7 @@ const DocumentCollectionPage = () => {
 
                   <div className="flex justify-between pt-4">
                     <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">Next <ChevronRight className="ml-2 w-5 h-5" /></Button>
+                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
                   </div>
                 </div>
               )}
@@ -751,7 +765,7 @@ const DocumentCollectionPage = () => {
 
                   <div className="flex justify-between pt-4">
                     <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">Next <ChevronRight className="ml-2 w-5 h-5" /></Button>
+                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
                   </div>
                 </div>
               )}
@@ -800,8 +814,8 @@ const DocumentCollectionPage = () => {
                   <div className="flex justify-between pt-4">
                     <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
                     <Button type="button" onClick={handleNext} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg"
-                      disabled={!formData.loa.authCheckbox1 || !formData.loa.authCheckbox2 || !formData.loa.authCheckbox3}>
-                      Next <ChevronRight className="ml-2 w-5 h-5" />
+                      disabled={saving || !formData.loa.authCheckbox1 || !formData.loa.authCheckbox2 || !formData.loa.authCheckbox3}>
+                      {saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}
                     </Button>
                   </div>
                   {(!formData.loa.authCheckbox1 || !formData.loa.authCheckbox2 || !formData.loa.authCheckbox3) && (
