@@ -67,8 +67,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
     try {
       setLoading(true);
-      
-      const response = await apiService.login(email, password);
+
+      // Fetch client public IP for customer IP whitelist validation
+      let clientIp: string | undefined;
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipRes.json();
+        clientIp = ipData.ip;
+      } catch {
+        // If IP fetch fails, proceed without it — backend will fall back to req.ip
+      }
+
+      const response = await apiService.login(email, password, clientIp);
 
       if (response.success && response.data) {
         const { token: authToken, user: userData } = response.data;

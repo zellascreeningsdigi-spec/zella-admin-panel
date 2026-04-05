@@ -288,7 +288,7 @@ const DocumentCollectionPage = () => {
   };
 
   const addEmployment = () => {
-    if (formData.employmentHistory.length < 3) {
+    if (formData.employmentHistory.length < 10) {
       setFormData(prev => ({ ...prev, employmentHistory: [...prev.employmentHistory, { ...emptyEmployment }] }));
     }
   };
@@ -624,7 +624,7 @@ const DocumentCollectionPage = () => {
                       <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
                       <h3 className="text-xl font-semibold">Employment History</h3>
                     </div>
-                    {formData.employmentHistory.length < 3 && (
+                    {formData.employmentHistory.length < 10 && (
                       <Button type="button" variant="outline" size="sm" onClick={addEmployment}>
                         <Plus className="w-4 h-4 mr-1" /> Add Employment
                       </Button>

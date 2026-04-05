@@ -19,6 +19,7 @@ interface CustomerFormData {
   companyName: string;
   emails: string[];
   documentsRequired: string;
+  allowedIpAddresses: string[];
 }
 
 const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
@@ -31,7 +32,8 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
   const [formData, setFormData] = useState<CustomerFormData>({
     companyName: '',
     emails: [''],
-    documentsRequired: ''
+    documentsRequired: '',
+    allowedIpAddresses: []
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,14 +45,16 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
       setFormData({
         companyName: editCustomer.companyName || '',
         emails: editCustomer.emails && editCustomer.emails.length > 0 ? [...editCustomer.emails] : [''],
-        documentsRequired: '' // Not editable in edit mode
+        documentsRequired: '', // Not editable in edit mode
+        allowedIpAddresses: editCustomer.allowedIpAddresses && editCustomer.allowedIpAddresses.length > 0 ? [...editCustomer.allowedIpAddresses] : []
       });
     } else if (!editCustomer && isOpen) {
       // Reset form for new customer
       setFormData({
         companyName: '',
         emails: [''],
-        documentsRequired: ''
+        documentsRequired: '',
+        allowedIpAddresses: []
       });
     }
     setErrors({});
@@ -105,6 +109,23 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
     }
   };
 
+  const handleIpChange = (index: number, value: string) => {
+    const newIps = [...formData.allowedIpAddresses];
+    newIps[index] = value;
+    setFormData(prev => ({ ...prev, allowedIpAddresses: newIps }));
+  };
+
+  const addIpField = () => {
+    setFormData(prev => ({ ...prev, allowedIpAddresses: [...prev.allowedIpAddresses, ''] }));
+  };
+
+  const removeIpField = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      allowedIpAddresses: prev.allowedIpAddresses.filter((_, i) => i !== index)
+    }));
+  };
+
   const validateForm = (): boolean => {
     const newErrors: { companyName?: string; emails?: string } = {};
 
@@ -142,9 +163,12 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
       // Filter out empty emails
       const validEmails = formData.emails.filter(email => email.trim() !== '');
 
+      const validIps = formData.allowedIpAddresses.filter(ip => ip.trim() !== '');
+
       const customerData: any = {
         companyName: formData.companyName,
-        emails: validEmails
+        emails: validEmails,
+        allowedIpAddresses: validIps
       };
 
       // Only include documentsRequired when creating a new customer
@@ -242,6 +266,42 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
               {errors.emails && (
                 <p className="text-sm text-red-500">{errors.emails}</p>
               )}
+            </div>
+
+            {/* Allowed IP Addresses (Optional) */}
+            <div className="space-y-2">
+              <Label>
+                Allowed IP Addresses <span className="text-xs text-gray-400">(Optional)</span>
+              </Label>
+              <p className="text-xs text-gray-500">
+                If set, customer users can only log in from these IP addresses. Leave empty to allow login from any IP.
+              </p>
+              {formData.allowedIpAddresses.map((ip, index) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <Input
+                    value={ip}
+                    onChange={(e) => handleIpChange(index, e.target.value)}
+                    placeholder="e.g. 192.168.1.100"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => removeIpField(index)}
+                    className="hover:bg-red-50 hover:border-red-200"
+                  >
+                    <X className="h-4 w-4 text-red-600" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addIpField}
+              >
+                Add IP Address
+              </Button>
             </div>
 
             {/* Documents Required - Only show when creating new customer */}

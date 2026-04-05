@@ -65,6 +65,7 @@ export interface Customer {
   id?: string;
   companyName: string;
   emails: string[];
+  allowedIpAddresses?: string[];
   documentsRequired?: string[];
   documents?: CustomerDocument[];
   bgvFormConfig?: BGVFormConfig;

@@ -235,11 +235,13 @@ class ApiService {
   }
 
   // Authentication methods
-  async login(email: string, password: string): Promise<ApiResponse<{
+  async login(email: string, password: string, ipAddress?: string): Promise<ApiResponse<{
     token: string;
     user: any;
   }>> {
-    return this.post('/auth/login', { email, password });
+    const payload: any = { email, password };
+    if (ipAddress) payload.ipAddress = ipAddress;
+    return this.post('/auth/login', payload);
   }
 
   async logout(): Promise<ApiResponse<any>> {
