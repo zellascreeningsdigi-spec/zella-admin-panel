@@ -37,7 +37,7 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ companyName?: string; emails?: string; documentsRequired?: string }>({});
+  const [errors, setErrors] = useState<Partial<Record<keyof CustomerFormData, string>>>({});
 
   // Populate form when editCustomer is provided
   useEffect(() => {
