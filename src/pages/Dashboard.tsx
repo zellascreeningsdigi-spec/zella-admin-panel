@@ -11,6 +11,7 @@ import ManageUsersTab from '@/components/Users/ManageUsersTab';
 import CompanyDetailsTab from '@/components/Reports/CompanyDetailsTab';
 import AddressVerificationTab from '@/components/AddressVerification/AddressVerificationTab';
 import DocumentCollectionTab from '@/components/DocumentCollection/DocumentCollectionTab';
+import AuditLogTab from '@/components/AuditLog/AuditLogTab';
 
 const Dashboard: React.FC = () => {
   const { user, loading } = useAuth();
@@ -68,6 +69,8 @@ const Dashboard: React.FC = () => {
         );
       case 'reports':
         return <ReportsTab />;
+      case 'audit-logs':
+        return user?.role === 'super-admin' ? <AuditLogTab /> : <DashboardOverview />;
       case 'manage-users':
         return <ManageUsersTab />;
       default:

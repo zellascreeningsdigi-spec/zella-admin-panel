@@ -267,6 +267,49 @@ class ApiService {
     return this.post('/auth/logout');
   }
 
+  async getDashboardActivity(limit = 10): Promise<ApiResponse<{
+    activity: Array<{
+      type: 'case' | 'address' | 'document' | 'report';
+      id: string;
+      name: string;
+      status: string;
+      time: string;
+    }>;
+  }>> {
+    return this.get(`/dashboard/activity?limit=${limit}`);
+  }
+
+  async getAuditLogs(params?: {
+    page?: number;
+    limit?: number;
+    action?: string;
+    userId?: string;
+    entityType?: string;
+    severity?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<ApiResponse<{
+    logs: any[];
+    pagination: {
+      currentPage: number;
+      totalPages: number;
+      totalLogs: number;
+      limit: number;
+    };
+  }>> {
+    const q = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') q.append(k, String(v));
+    });
+    const query = q.toString();
+    return this.get(`/admin/audit-logs${query ? `?${query}` : ''}`);
+  }
+
+  async getAuditLogStats(): Promise<ApiResponse<any>> {
+    return this.get('/admin/audit-logs/stats');
+  }
+
   async getCurrentUser(): Promise<ApiResponse<{ user: any }>> {
     return this.get('/auth/me');
   }

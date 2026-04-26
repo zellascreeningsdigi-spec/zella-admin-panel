@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, FileText, Home, Users, BarChart3, UserCog, MapPin, FileCheck } from 'lucide-react';
+import { LogOut, FileText, Home, Users, BarChart3, UserCog, MapPin, FileCheck, ShieldCheck } from 'lucide-react';
 import logo from "../../logo192.png";
 
 interface SidebarProps {
@@ -19,6 +19,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
     { id: 'address-verification', label: 'Address Verification', icon: MapPin, roles: ['super-admin', 'admin'] },
     { id: 'document-collection', label: 'Documents Collection', icon: FileCheck, roles: ['super-admin', 'admin'] },
     { id: 'reports', label: 'Reports', icon: BarChart3, roles: ['super-admin', 'admin', 'customer'] },
+    { id: 'audit-logs', label: 'Audit Logs', icon: ShieldCheck, roles: ['super-admin'] },
   ];
 
   // Filter menu items based on user role
