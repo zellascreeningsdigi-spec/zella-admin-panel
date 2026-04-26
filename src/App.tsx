@@ -10,12 +10,14 @@ import ReportViewPage from './pages/ReportViewPage';
 import DocumentCollectionPage from './pages/DocumentCollectionPage';
 import DocumentCollectionDetailPage from './pages/DocumentCollectionDetailPage';
 import DocumentCollectionDocumentsPage from './pages/DocumentCollectionDocumentsPage';
+import PasswordExpiryBanner from './components/PasswordExpiryBanner';
 
 function App() {
   return (
     <AuthProvider>
       <Router>
         <div className="App">
+          <PasswordExpiryBanner />
           <Routes>
             <Route path="/login" element={<Login />} />
 

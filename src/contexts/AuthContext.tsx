@@ -19,12 +19,17 @@ interface User {
   isActive: boolean;
   lastLogin?: string;
   createdAt?: string;
+  passwordChangedAt?: string;
+  passwordExpiresAt?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string; otpRequired?: boolean; email?: string }>;
+  verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; message?: string; passwordResetRequired?: boolean; resetToken?: string }>;
+  resendOtp: (email: string) => Promise<{ success: boolean; message?: string; retryInSec?: number }>;
+  forceResetPassword: (newPassword: string, resetToken: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   updateUser: (updatedUser: User) => void;
   loading: boolean;
@@ -64,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   }, []);
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; message?: string; otpRequired?: boolean; email?: string }> => {
     try {
       setLoading(true);
 
@@ -80,30 +85,105 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const response = await apiService.login(email, password, clientIp);
 
+      if (response.success && response.data?.otpRequired) {
+        return { success: true, otpRequired: true, email: response.data.email };
+      }
+
+      return {
+        success: false,
+        message: response.message || 'Login failed'
+      };
+    } catch (error) {
+      console.error('Login error:', error);
+      return {
+        success: false,
+        message: 'Network error. Please check your connection and try again.'
+      };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyOtp = async (email: string, otp: string): Promise<{ success: boolean; message?: string; passwordResetRequired?: boolean; resetToken?: string }> => {
+    try {
+      setLoading(true);
+      const response = await apiService.verifyLoginOtp(email, otp);
+
       if (response.success && response.data) {
+        const data = response.data;
+        if ('passwordResetRequired' in data && data.passwordResetRequired && data.resetToken) {
+          return {
+            success: true,
+            passwordResetRequired: true,
+            resetToken: data.resetToken,
+            message: response.message
+          };
+        }
+        if ('token' in data && data.token && data.user) {
+          setToken(data.token);
+          setUser(data.user);
+          localStorage.setItem('auth_token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          return { success: true };
+        }
+      }
+
+      return {
+        success: false,
+        message: response.message || 'OTP verification failed'
+      };
+    } catch (error) {
+      console.error('OTP verify error:', error);
+      return {
+        success: false,
+        message: 'Network error. Please try again.'
+      };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const forceResetPassword = async (newPassword: string, resetToken: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      setLoading(true);
+      const response = await apiService.forceResetPassword(newPassword, resetToken);
+      if (response.success && response.data?.token && response.data?.user) {
         const { token: authToken, user: userData } = response.data;
-        
-        // Store authentication data
         setToken(authToken);
         setUser(userData);
         localStorage.setItem('auth_token', authToken);
         localStorage.setItem('user', JSON.stringify(userData));
-        
         return { success: true };
-      } else {
-        return { 
-          success: false, 
-          message: response.message || 'Login failed' 
-        };
       }
-    } catch (error) {
-      console.error('Login error:', error);
-      return { 
-        success: false, 
-        message: 'Network error. Please check your connection and try again.' 
+      return {
+        success: false,
+        message: response.message || 'Could not reset password'
+      };
+    } catch (error: any) {
+      console.error('Force reset error:', error);
+      return {
+        success: false,
+        message: error?.message || 'Network error. Please try again.'
       };
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resendOtp = async (email: string): Promise<{ success: boolean; message?: string; retryInSec?: number }> => {
+    try {
+      const response = await apiService.resendLoginOtp(email);
+      if (response.success) {
+        return { success: true, message: response.message };
+      }
+      return {
+        success: false,
+        message: response.message || 'Could not resend OTP',
+        retryInSec: response.data?.retryInSec
+      };
+    } catch (error) {
+      console.error('OTP resend error:', error);
+      return { success: false, message: 'Network error. Please try again.' };
     }
   };
 
@@ -134,6 +214,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     token,
     login,
+    verifyOtp,
+    resendOtp,
+    forceResetPassword,
     logout,
     updateUser,
     loading,

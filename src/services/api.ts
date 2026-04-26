@@ -236,12 +236,31 @@ class ApiService {
 
   // Authentication methods
   async login(email: string, password: string, ipAddress?: string): Promise<ApiResponse<{
-    token: string;
-    user: any;
+    email: string;
+    otpRequired: true;
   }>> {
     const payload: any = { email, password };
     if (ipAddress) payload.ipAddress = ipAddress;
     return this.post('/auth/login', payload);
+  }
+
+  async verifyLoginOtp(email: string, otp: string): Promise<ApiResponse<
+    | { token: string; user: any }
+    | { passwordResetRequired: true; resetToken: string }
+  >> {
+    return this.post('/auth/login/verify-otp', { email, otp });
+  }
+
+  async resendLoginOtp(email: string): Promise<ApiResponse<{ retryInSec?: number }>> {
+    return this.post('/auth/login/resend-otp', { email });
+  }
+
+  async forceResetPassword(newPassword: string, resetToken: string): Promise<ApiResponse<{ token: string; user: any }>> {
+    return this.request('/auth/force-reset-password', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${resetToken}` },
+      body: JSON.stringify({ newPassword })
+    });
   }
 
   async logout(): Promise<ApiResponse<any>> {
