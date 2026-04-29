@@ -56,4 +56,12 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Prevent iOS Safari from auto-zooming when focusing form fields.
+     Any input/select/textarea below 16px triggers the zoom; bump on mobile only. */
+  @media (max-width: 640px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+  }
 }

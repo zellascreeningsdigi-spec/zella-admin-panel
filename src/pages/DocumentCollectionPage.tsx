@@ -486,35 +486,35 @@ const DocumentCollectionPage = () => {
     <div className="min-h-screen bg-gradient-to-br from-brand-green-50 to-white">
       {/* Header */}
       <div className="bg-white shadow-md border-b-4 border-brand-green">
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <img src="/logo.jpg" alt="Zella Screenings" className="h-16 object-contain" />
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-600 flex items-center justify-end gap-2">
-                <Mail className="w-4 h-4" /> start@zellascreenings.com
-              </p>
-              <p className="text-sm text-gray-600 flex items-center justify-end gap-2 mt-1">
-                <Phone className="w-4 h-4" /> +91 8178685006 / +91 9871967859
+        <div className="max-w-6xl mx-auto px-4 py-3 sm:py-6">
+          <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-2 sm:gap-4">
+            <img src="/logo.jpg" alt="Zella Screenings" className="h-10 sm:h-16 object-contain" />
+            <div className="flex flex-col sm:items-end items-center text-center sm:text-right">
+              <a href="mailto:start@zellascreenings.com" className="text-xs sm:text-sm text-gray-600 flex items-center gap-1.5 sm:gap-2 hover:text-brand-green">
+                <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="break-all">start@zellascreenings.com</span>
+              </a>
+              <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
+                <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span>+91 8178685006 / +91 9871967859</span>
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">BGV Form & Document Collection</h1>
-          <p className="text-gray-600">On behalf of <strong>{caseData?.companyName}</strong></p>
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        <div className="text-center mb-4 sm:mb-8">
+          <h1 className="text-xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">BGV Form &amp; Document Collection</h1>
+          <p className="text-sm sm:text-base text-gray-600">On behalf of <strong>{caseData?.companyName}</strong></p>
         </div>
 
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <Stepper steps={stepperSteps} currentStep={currentStep} />
         </div>
 
         <Card className="shadow-xl">
-          <CardContent className="pt-6">
+          <CardContent className="px-3 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-6">
             <form onSubmit={handleSubmit}>
 
               {/* ===== STEP: Personal Information ===== */}
@@ -575,7 +575,7 @@ const DocumentCollectionPage = () => {
                   </div>
 
                   <div className="flex justify-end pt-4">
-                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">
+                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg">
                       {saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}
                     </Button>
                   </div>
@@ -611,7 +611,7 @@ const DocumentCollectionPage = () => {
 
                   <div className="flex justify-between pt-4">
                     <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
+                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
                   </div>
                 </div>
               )}
@@ -687,7 +687,7 @@ const DocumentCollectionPage = () => {
 
                   <div className="flex justify-between pt-4">
                     <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
+                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
                   </div>
                 </div>
               )}
@@ -728,7 +728,7 @@ const DocumentCollectionPage = () => {
 
                   <div className="flex justify-between pt-4">
                     <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
+                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
                   </div>
                 </div>
               )}
@@ -765,7 +765,7 @@ const DocumentCollectionPage = () => {
 
                   <div className="flex justify-between pt-4">
                     <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
+                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
                   </div>
                 </div>
               )}
@@ -813,7 +813,7 @@ const DocumentCollectionPage = () => {
 
                   <div className="flex justify-between pt-4">
                     <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg"
+                    <Button type="button" onClick={handleNext} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg"
                       disabled={saving || !formData.loa.authCheckbox1 || !formData.loa.authCheckbox2 || !formData.loa.authCheckbox3}>
                       {saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}
                     </Button>
@@ -953,7 +953,7 @@ const DocumentCollectionPage = () => {
                     <Button type="button" onClick={handleBack} variant="outline" size="lg" className="border-brand-green text-brand-green hover:bg-brand-green-50">
                       <ChevronLeft className="mr-2 w-5 h-5" /> Previous
                     </Button>
-                    <Button type="submit" disabled={submitting || !canSubmit} className="bg-brand-green hover:bg-brand-green-600 text-white px-8" size="lg">
+                    <Button type="submit" disabled={submitting || !canSubmit} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg">
                       {submitting ? 'Submitting...' : 'Submit BGV Form'}
                     </Button>
                   </div>
@@ -965,10 +965,10 @@ const DocumentCollectionPage = () => {
         </Card>
 
         {/* Footer */}
-        <div className="text-center mt-8 text-sm text-gray-500 bg-white p-6 rounded-lg shadow">
+        <div className="text-center mt-6 sm:mt-8 text-sm text-gray-500 bg-white p-4 sm:p-6 rounded-lg shadow">
           <p className="font-medium text-gray-700 mb-2">Need Help?</p>
-          <p>Contact us at <a href="mailto:start@zellascreenings.com" className="text-brand-green hover:underline font-medium">start@zellascreenings.com</a></p>
-          <p className="mt-1">Phone: +91 8178685006 / +91 9871967859</p>
+          <p className="break-words">Contact us at <a href="mailto:start@zellascreenings.com" className="text-brand-green hover:underline font-medium">start@zellascreenings.com</a></p>
+          <p className="mt-1 break-words">Phone: <a href="tel:+918178685006" className="hover:text-brand-green">+91 8178685006</a> / <a href="tel:+919871967859" className="hover:text-brand-green">+91 9871967859</a></p>
           <p className="mt-4 text-xs text-gray-400">&copy; {new Date().getFullYear()} Zella Screenings. All rights reserved.</p>
         </div>
       </div>
