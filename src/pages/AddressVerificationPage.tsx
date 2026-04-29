@@ -78,6 +78,10 @@ const AddressVerificationPage = () => {
   useEffect(() => {
     if (token) {
       fetchVerificationData();
+      // Auto-attempt geolocation on mount. On iOS Safari / strict browsers
+      // this may silently fail without prompting; in that case the UI falls
+      // back to the 'idle' / error panels with a user-tap retry button.
+      captureGeolocation();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
