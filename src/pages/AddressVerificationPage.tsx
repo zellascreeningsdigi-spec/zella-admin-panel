@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle, ChevronRight, ChevronLeft, Mail, Phone } from 'lucide-react';
+import { CheckCircle, ChevronRight, ChevronLeft, Mail, Phone, MapPin, Loader2, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { Stepper, Step } from '@/components/ui/stepper';
 import { apiService } from '@/services/api';
 
@@ -31,7 +31,17 @@ const AddressVerificationPage = () => {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [caseData, setCaseData] = useState<CaseData | null>(null);
-  const [geolocationStatus, setGeolocationStatus] = useState<'not_requested' | 'requesting' | 'granted' | 'denied' | 'error'>('not_requested');
+  type GeoStatus =
+    | 'idle'
+    | 'requesting'
+    | 'granted'
+    | 'denied_soft'
+    | 'denied_hard'
+    | 'timeout'
+    | 'unavailable'
+    | 'insecure_context'
+    | 'unsupported';
+  const [geolocationStatus, setGeolocationStatus] = useState<GeoStatus>('idle');
 
   const [formData, setFormData] = useState({
     // Contact Information
@@ -68,7 +78,6 @@ const AddressVerificationPage = () => {
   useEffect(() => {
     if (token) {
       fetchVerificationData();
-      captureGeolocation();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
@@ -91,38 +100,77 @@ const AddressVerificationPage = () => {
     }
   };
 
+  const applyPosition = (position: GeolocationPosition) => {
+    setFormData(prev => ({
+      ...prev,
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+    }));
+    setGeolocationStatus('granted');
+  };
+
   const captureGeolocation = async () => {
-    if (!navigator.geolocation) {
-      setGeolocationStatus('error');
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      setGeolocationStatus('insecure_context');
       return;
+    }
+    if (!('geolocation' in navigator)) {
+      setGeolocationStatus('unsupported');
+      return;
+    }
+
+    if (navigator.permissions && typeof navigator.permissions.query === 'function') {
+      try {
+        const perm = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+        if (perm.state === 'denied') {
+          setGeolocationStatus('denied_hard');
+          return;
+        }
+      } catch {
+        // Older Safari may throw on geolocation permission query — fall through.
+      }
     }
 
     setGeolocationStatus('requesting');
 
-    try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          resolve,
-          reject,
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
+    const tryGet = (highAccuracy: boolean, timeout: number) =>
+      new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: highAccuracy,
+          timeout,
+          maximumAge: highAccuracy ? 0 : 60_000,
+        });
       });
 
-      setFormData(prev => ({
-        ...prev,
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      }));
-      setGeolocationStatus('granted');
-    } catch (geoError: any) {
-      console.error('Geolocation error:', geoError);
-
-      if (geoError.code === 1) {
-        setGeolocationStatus('denied'); // User denied permission
-      } else {
-        setGeolocationStatus('error'); // Other error
+    try {
+      const position = await tryGet(true, 25_000);
+      applyPosition(position);
+      return;
+    } catch (e1: any) {
+      console.warn('Geolocation phase 1 failed:', e1?.code, e1?.message);
+      if (e1?.code === 1) {
+        setGeolocationStatus('denied_soft');
+        return;
+      }
+      try {
+        const position = await tryGet(false, 15_000);
+        applyPosition(position);
+      } catch (e2: any) {
+        console.warn('Geolocation phase 2 failed:', e2?.code, e2?.message);
+        if (e2?.code === 1) setGeolocationStatus('denied_soft');
+        else if (e2?.code === 2) setGeolocationStatus('unavailable');
+        else if (e2?.code === 3) setGeolocationStatus('timeout');
+        else setGeolocationStatus('timeout');
       }
     }
+  };
+
+  const getMobileOS = (): 'ios' | 'android' | 'other' => {
+    if (typeof navigator === 'undefined') return 'other';
+    const ua = navigator.userAgent || '';
+    if (/iPad|iPhone|iPod/.test(ua)) return 'ios';
+    if (/Android/i.test(ua)) return 'android';
+    return 'other';
   };
 
   const handleInputChange = (field: string, value: string) => {
@@ -584,24 +632,46 @@ const AddressVerificationPage = () => {
                       </div>
                     )}
 
+                    {geolocationStatus === 'idle' && (
+                      <div className="bg-blue-50 p-6 rounded-lg border-2 border-blue-200">
+                        <div className="flex items-start gap-3">
+                          <MapPin className="w-6 h-6 text-blue-600 mt-0.5 shrink-0" />
+                          <div className="flex-1">
+                            <h4 className="text-blue-900 font-semibold mb-1">Share your location</h4>
+                            <p className="text-sm text-blue-800 mb-3">
+                              We need your current location to verify the address. Tap below — your browser will ask for permission.
+                            </p>
+                            <Button
+                              type="button"
+                              onClick={captureGeolocation}
+                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                              size="sm"
+                            >
+                              <MapPin className="w-4 h-4 mr-1.5" />
+                              Enable Location
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {geolocationStatus === 'requesting' && (
                       <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
-                        <p className="text-sm text-blue-800 font-medium">
-                          Requesting location permission...
+                        <p className="text-sm text-blue-800 font-medium flex items-center gap-2">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Waiting for location… If your phone asks for permission, tap <span className="font-bold">Allow</span>. This may take up to 30 seconds.
                         </p>
                       </div>
                     )}
 
-                    {(geolocationStatus === 'denied' || geolocationStatus === 'error') && (
+                    {geolocationStatus === 'denied_soft' && (
                       <div className="bg-yellow-50 p-6 rounded-lg border-2 border-yellow-300">
                         <div className="flex items-start gap-3">
-                          <div className="text-yellow-600 text-2xl">📍</div>
+                          <AlertTriangle className="w-6 h-6 text-yellow-600 mt-0.5 shrink-0" />
                           <div className="flex-1">
-                            <h4 className="text-yellow-900 font-semibold mb-2">Location Access Required</h4>
+                            <h4 className="text-yellow-900 font-semibold mb-1">Permission was dismissed</h4>
                             <p className="text-sm text-yellow-800 mb-3">
-                              {geolocationStatus === 'denied'
-                                ? 'You have denied location access. We need your location to verify your address for security purposes.'
-                                : 'Unable to access your location. Please ensure location services are enabled in your browser.'}
+                              We didn't get location permission. Tap <span className="font-bold">Try Again</span> and choose <span className="font-bold">Allow</span> when your browser asks.
                             </p>
                             <Button
                               type="button"
@@ -609,18 +679,130 @@ const AddressVerificationPage = () => {
                               className="bg-yellow-600 hover:bg-yellow-700 text-white"
                               size="sm"
                             >
-                              Enable Location Access
+                              Try Again
                             </Button>
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {geolocationStatus === 'not_requested' && (
-                      <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
-                        <p className="text-sm text-blue-800 font-medium">
-                          Waiting for location permission...
-                        </p>
+                    {geolocationStatus === 'denied_hard' && (
+                      <div className="bg-red-50 p-6 rounded-lg border-2 border-red-300">
+                        <div className="flex items-start gap-3">
+                          <ShieldAlert className="w-6 h-6 text-red-600 mt-0.5 shrink-0" />
+                          <div className="flex-1">
+                            <h4 className="text-red-900 font-semibold mb-1">Location is blocked for this site</h4>
+                            {getMobileOS() === 'ios' ? (
+                              <div className="text-sm text-red-800 mb-3 space-y-2">
+                                <p className="font-medium">To allow location on iPhone/iPad:</p>
+                                <ol className="list-decimal list-inside space-y-1">
+                                  <li>Open the <span className="font-semibold">Settings</span> app.</li>
+                                  <li>Go to <span className="font-semibold">Privacy &amp; Security</span> → <span className="font-semibold">Location Services</span> and make sure it's <span className="font-semibold">On</span>.</li>
+                                  <li>Scroll down, tap <span className="font-semibold">Safari Websites</span>, and choose <span className="font-semibold">Ask</span> or <span className="font-semibold">Allow</span>.</li>
+                                  <li>Return to this page and tap <span className="font-semibold">Try Again</span>.</li>
+                                </ol>
+                              </div>
+                            ) : getMobileOS() === 'android' ? (
+                              <div className="text-sm text-red-800 mb-3 space-y-2">
+                                <p className="font-medium">To allow location on Android Chrome:</p>
+                                <ol className="list-decimal list-inside space-y-1">
+                                  <li>Tap the <span className="font-semibold">lock icon</span> (or ⓘ) in the address bar.</li>
+                                  <li>Tap <span className="font-semibold">Permissions</span> and set <span className="font-semibold">Location</span> to <span className="font-semibold">Allow</span>.</li>
+                                  <li>Also ensure your phone's Location is on (Settings → Location).</li>
+                                  <li>Return here and tap <span className="font-semibold">Try Again</span>.</li>
+                                </ol>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-red-800 mb-3">
+                                Open your browser's site settings for this page and set Location to <span className="font-semibold">Allow</span>, then tap Try Again.
+                              </p>
+                            )}
+                            <Button
+                              type="button"
+                              onClick={captureGeolocation}
+                              className="bg-red-600 hover:bg-red-700 text-white"
+                              size="sm"
+                            >
+                              Try Again
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {geolocationStatus === 'timeout' && (
+                      <div className="bg-yellow-50 p-6 rounded-lg border-2 border-yellow-300">
+                        <div className="flex items-start gap-3">
+                          <AlertTriangle className="w-6 h-6 text-yellow-600 mt-0.5 shrink-0" />
+                          <div className="flex-1">
+                            <h4 className="text-yellow-900 font-semibold mb-1">Couldn't get a precise location</h4>
+                            <p className="text-sm text-yellow-800 mb-3">
+                              Your phone is taking too long to find a GPS signal. Step outside or near a window, then tap Try Again.
+                            </p>
+                            <Button
+                              type="button"
+                              onClick={captureGeolocation}
+                              className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                              size="sm"
+                            >
+                              Try Again
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {geolocationStatus === 'unavailable' && (
+                      <div className="bg-yellow-50 p-6 rounded-lg border-2 border-yellow-300">
+                        <div className="flex items-start gap-3">
+                          <AlertTriangle className="w-6 h-6 text-yellow-600 mt-0.5 shrink-0" />
+                          <div className="flex-1">
+                            <h4 className="text-yellow-900 font-semibold mb-1">Location services are off</h4>
+                            <p className="text-sm text-yellow-800 mb-3">
+                              {getMobileOS() === 'ios'
+                                ? 'Turn on Location Services in Settings → Privacy & Security → Location Services, then come back and tap Try Again.'
+                                : getMobileOS() === 'android'
+                                ? 'Turn on Location in your phone\'s settings (Settings → Location), then come back and tap Try Again.'
+                                : 'Turn on Location/GPS in your device\'s settings, then come back and tap Try Again.'}
+                            </p>
+                            <Button
+                              type="button"
+                              onClick={captureGeolocation}
+                              className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                              size="sm"
+                            >
+                              Try Again
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {geolocationStatus === 'insecure_context' && (
+                      <div className="bg-red-50 p-6 rounded-lg border-2 border-red-300">
+                        <div className="flex items-start gap-3">
+                          <ShieldAlert className="w-6 h-6 text-red-600 mt-0.5 shrink-0" />
+                          <div className="flex-1">
+                            <h4 className="text-red-900 font-semibold mb-1">Insecure connection</h4>
+                            <p className="text-sm text-red-800">
+                              This page must be opened over a secure (<span className="font-mono">https://</span>) link. Please check the link in your email and reopen it.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {geolocationStatus === 'unsupported' && (
+                      <div className="bg-red-50 p-6 rounded-lg border-2 border-red-300">
+                        <div className="flex items-start gap-3">
+                          <ShieldAlert className="w-6 h-6 text-red-600 mt-0.5 shrink-0" />
+                          <div className="flex-1">
+                            <h4 className="text-red-900 font-semibold mb-1">Browser doesn't support location</h4>
+                            <p className="text-sm text-red-800">
+                              Please open this link in Chrome (Android) or Safari (iOS).
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -639,7 +821,9 @@ const AddressVerificationPage = () => {
                   </div>
                   {!isStep1Valid && (
                     <p className="text-sm text-gray-500 text-right mt-2">
-                      Please complete all required fields and enable location access to proceed
+                      {geolocationStatus !== 'granted'
+                        ? 'Tap Enable Location above to capture your location, then complete the form to continue.'
+                        : 'Please complete all required fields to proceed.'}
                     </p>
                   )}
                 </div>
