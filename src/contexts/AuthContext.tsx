@@ -95,9 +95,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     } catch (error) {
       console.error('Login error:', error);
+      const isNetworkFailure = error instanceof TypeError;
       return {
         success: false,
-        message: 'Network error. Please check your connection and try again.'
+        message: isNetworkFailure
+          ? 'Network error. Please check your connection and try again.'
+          : (error instanceof Error ? error.message : 'Login failed')
       };
     } finally {
       setLoading(false);
@@ -134,9 +137,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     } catch (error) {
       console.error('OTP verify error:', error);
+      const isNetworkFailure = error instanceof TypeError;
       return {
         success: false,
-        message: 'Network error. Please try again.'
+        message: isNetworkFailure
+          ? 'Network error. Please check your connection and try again.'
+          : (error instanceof Error ? error.message : 'OTP verification failed')
       };
     } finally {
       setLoading(false);
@@ -183,7 +189,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     } catch (error) {
       console.error('OTP resend error:', error);
-      return { success: false, message: 'Network error. Please try again.' };
+      const isNetworkFailure = error instanceof TypeError;
+      return {
+        success: false,
+        message: isNetworkFailure
+          ? 'Network error. Please check your connection and try again.'
+          : (error instanceof Error ? error.message : 'Could not resend OTP')
+      };
     }
   };
 

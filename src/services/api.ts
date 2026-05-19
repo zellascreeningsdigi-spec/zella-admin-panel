@@ -67,18 +67,17 @@ class ApiService {
       const data = await response.json();
 
       if (!response.ok) {
-        // Handle unauthorized responses
-        if (response.status === 401) {
-          // Clear stored authentication data
+        const isAuthEndpoint = endpoint.startsWith('/auth/login');
+
+        if (response.status === 401 && !isAuthEndpoint) {
           localStorage.removeItem('auth_token');
           localStorage.removeItem('user');
 
-          // Redirect to login page
           if (window.location.pathname !== '/login') {
             window.location.href = '/login';
           }
 
-          throw new Error('Authentication required');
+          throw new Error(data.message || 'Authentication required');
         }
 
         throw new Error(data.message || `HTTP error! status: ${response.status}`);
