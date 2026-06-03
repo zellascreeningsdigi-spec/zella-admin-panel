@@ -11,6 +11,7 @@ import ManageUsersTab from '@/components/Users/ManageUsersTab';
 import CompanyDetailsTab from '@/components/Reports/CompanyDetailsTab';
 import AddressVerificationTab from '@/components/AddressVerification/AddressVerificationTab';
 import DocumentCollectionTab from '@/components/DocumentCollection/DocumentCollectionTab';
+import DocumentScannerTab from '@/components/DocumentScanner/DocumentScannerTab';
 import AuditLogTab from '@/components/AuditLog/AuditLogTab';
 
 const Dashboard: React.FC = () => {
@@ -67,6 +68,8 @@ const Dashboard: React.FC = () => {
             initialSelectedCompanyName={location.state?.selectedCompanyName}
           />
         );
+      case 'document-scanner':
+        return <DocumentScannerTab />;
       case 'reports':
         return <ReportsTab />;
       case 'audit-logs':

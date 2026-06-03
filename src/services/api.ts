@@ -1135,6 +1135,80 @@ class ApiService {
       body: formData,
     }).then(res => res.json());
   }
+
+  // ========== Document Scanner (OCR) API methods ==========
+
+  async scanDocuments(files: File[], docTypes: string[]): Promise<ApiResponse<{ jobId: string }>> {
+    const token = this.getAuthToken();
+    const formData = new FormData();
+    files.forEach((f) => formData.append('documents', f));
+    formData.append('docTypes', JSON.stringify(docTypes));
+
+    const response = await fetch(`${API_BASE_URL}/document-scanner/scan`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || `Scan submit failed (${response.status})`);
+    }
+    return data;
+  }
+
+  async getScanJob(jobId: string): Promise<ApiResponse<{
+    jobId: string;
+    status: 'queued' | 'running' | 'done' | 'failed';
+    progress: { total: number; done: number; failed: number; phase: string };
+    docs: Array<{ docType: string; originalName: string; mime: string; pageCount: number; error: string | null }>;
+    result?: { fields: Record<string, string | null>; provenance: Record<string, string | null>; warnings: string[] };
+    tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+    error?: string | null;
+    docUrls?: Array<{ docType: string; originalName: string; mime: string; url: string }>;
+  }>> {
+    return this.get(`/document-scanner/scan-jobs/${jobId}`);
+  }
+
+  async listScannerExcels(): Promise<ApiResponse<{ excels: Array<{ id: string; name: string; rowCount: number; createdAt: string; updatedAt: string }> }>> {
+    return this.get('/document-scanner/excels');
+  }
+
+  async createScannerExcel(name: string): Promise<ApiResponse<{ id: string; name: string; rowCount: number; createdAt: string }>> {
+    return this.post('/document-scanner/excels', { name });
+  }
+
+  async appendScannerRow(
+    excelId: string,
+    body: { fields: Record<string, string | null>; provenance: Record<string, string | null>; sourceJobId?: string }
+  ): Promise<ApiResponse<{ excel: { id: string; name: string; rowCount: number } }>> {
+    return this.post(`/document-scanner/excels/${excelId}/rows`, body);
+  }
+
+  async downloadScannerExcel(excelId: string, fallbackName?: string): Promise<void> {
+    const token = this.getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/document-scanner/excels/${excelId}/download`, {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      throw new Error('Failed to download Excel');
+    }
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let filename = fallbackName ? `${fallbackName}.xlsx` : 'candidates.xlsx';
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="(.+)"/);
+      if (match) filename = match[1];
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  }
 }
 
 export const apiService = new ApiService();
