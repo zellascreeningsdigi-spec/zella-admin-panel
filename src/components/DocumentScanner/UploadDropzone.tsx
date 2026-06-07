@@ -1,16 +1,18 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, FileText, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Upload, X, FileText, Image as ImageIcon, Loader2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DOC_TYPES } from './fields';
 
 interface PendingFile {
   file: File;
   docType: string;
+  /** 0-indexed; each file defaults to its own candidate. Admin can change via the dropdown. */
+  candidateIndex: number;
 }
 
 interface UploadDropzoneProps {
-  onSubmit: (files: File[], docTypes: string[]) => Promise<void>;
+  onSubmit: (files: File[], docTypes: string[], candidateIndices: number[]) => Promise<void>;
   submitting: boolean;
 }
 
@@ -21,9 +23,13 @@ const UploadDropzone: React.FC<UploadDropzoneProps> = ({ onSubmit, submitting })
   const onDrop = useCallback((accepted: File[]) => {
     setError(null);
     setPending(prev => {
-      const additions = accepted.map<PendingFile>(f => ({
+      // Each newly-dropped file gets its own candidate slot by default —
+      // matches the user rule: "if not grouped, treat each as a different candidate".
+      const nextIdx = prev.length === 0 ? 0 : Math.max(...prev.map(p => p.candidateIndex)) + 1;
+      const additions = accepted.map<PendingFile>((f, i) => ({
         file: f,
-        docType: guessDocType(f.name)
+        docType: guessDocType(f.name),
+        candidateIndex: nextIdx + i
       }));
       const merged = [...prev, ...additions];
       if (merged.length > 10) {
@@ -53,9 +59,35 @@ const UploadDropzone: React.FC<UploadDropzoneProps> = ({ onSubmit, submitting })
     setPending(prev => prev.map((p, i) => (i === idx ? { ...p, docType } : p)));
   };
 
+  const updateCandidate = (idx: number, candidateIndex: number) => {
+    setPending(prev => prev.map((p, i) => (i === idx ? { ...p, candidateIndex } : p)));
+  };
+
   const removeFile = (idx: number) => {
     setPending(prev => prev.filter((_, i) => i !== idx));
   };
+
+  // Renumber candidates densely (0, 1, 2 …) on submit so the backend doesn't
+  // see gaps if the admin removed files. Display still uses the raw values
+  // until submit so labels stay stable while editing.
+  const denseIndices = useMemo(() => {
+    const uniques = Array.from(new Set(pending.map(p => p.candidateIndex))).sort((a, b) => a - b);
+    const remap = new Map(uniques.map((v, i) => [v, i]));
+    return pending.map(p => remap.get(p.candidateIndex) ?? 0);
+  }, [pending]);
+
+  const candidateCount = useMemo(
+    () => new Set(pending.map(p => p.candidateIndex)).size,
+    [pending]
+  );
+
+  // Sorted set of currently-used candidate slots, plus one "new candidate" slot
+  // for the per-row dropdown to offer.
+  const candidateSlots = useMemo(() => {
+    const uniques = Array.from(new Set(pending.map(p => p.candidateIndex))).sort((a, b) => a - b);
+    const nextSlot = uniques.length === 0 ? 0 : uniques[uniques.length - 1] + 1;
+    return { existing: uniques, nextSlot };
+  }, [pending]);
 
   const handleSubmit = async () => {
     setError(null);
@@ -69,7 +101,11 @@ const UploadDropzone: React.FC<UploadDropzoneProps> = ({ onSubmit, submitting })
       return;
     }
     try {
-      await onSubmit(pending.map(p => p.file), pending.map(p => p.docType));
+      await onSubmit(
+        pending.map(p => p.file),
+        pending.map(p => p.docType),
+        denseIndices
+      );
       setPending([]);
     } catch (e: any) {
       setError(e?.message || 'Submit failed');
@@ -93,39 +129,65 @@ const UploadDropzone: React.FC<UploadDropzoneProps> = ({ onSubmit, submitting })
       </div>
 
       {pending.length > 0 && (
-        <div className="border rounded-lg divide-y">
-          {pending.map((p, idx) => {
-            const Icon = p.file.type.includes('pdf') ? FileText : ImageIcon;
-            return (
-              <div key={idx} className="flex items-center gap-3 p-3">
-                <Icon className="h-5 w-5 text-gray-500 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{p.file.name}</div>
-                  <div className="text-xs text-gray-500">{(p.file.size / 1024).toFixed(0)} KB</div>
+        <>
+          <div className="flex items-center justify-between text-xs text-gray-600 px-1">
+            <div className="flex items-center gap-2">
+              <Users className="h-3.5 w-3.5" />
+              {candidateCount} candidate{candidateCount === 1 ? '' : 's'} · {pending.length} file{pending.length === 1 ? '' : 's'}
+            </div>
+            <div className="text-gray-500">
+              Group files under the same candidate to scan them together.
+            </div>
+          </div>
+          <div className="border rounded-lg divide-y">
+            {pending.map((p, idx) => {
+              const Icon = p.file.type.includes('pdf') ? FileText : ImageIcon;
+              return (
+                <div key={idx} className="flex items-center gap-3 p-3">
+                  <Icon className="h-5 w-5 text-gray-500 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{p.file.name}</div>
+                    <div className="text-xs text-gray-500">{(p.file.size / 1024).toFixed(0)} KB</div>
+                  </div>
+                  <select
+                    value={p.candidateIndex}
+                    onChange={(e) => updateCandidate(idx, parseInt(e.target.value, 10))}
+                    className="text-sm border rounded px-2 py-1 bg-white"
+                    disabled={submitting}
+                    title="Candidate this file belongs to"
+                  >
+                    {candidateSlots.existing.map((slot) => (
+                      <option key={slot} value={slot}>Candidate {slot + 1}</option>
+                    ))}
+                    {/* "New" slot is only meaningful if it's different from the current selection */}
+                    {!candidateSlots.existing.includes(candidateSlots.nextSlot) && (
+                      <option value={candidateSlots.nextSlot}>+ New candidate</option>
+                    )}
+                  </select>
+                  <select
+                    value={p.docType}
+                    onChange={(e) => updateDocType(idx, e.target.value)}
+                    className="text-sm border rounded px-2 py-1 bg-white"
+                    disabled={submitting}
+                  >
+                    <option value="">Select type…</option>
+                    {DOC_TYPES.map(dt => (
+                      <option key={dt.value} value={dt.value}>{dt.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => removeFile(idx)}
+                    className="text-gray-400 hover:text-red-600 p-1"
+                    disabled={submitting}
+                    aria-label="Remove file"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
-                <select
-                  value={p.docType}
-                  onChange={(e) => updateDocType(idx, e.target.value)}
-                  className="text-sm border rounded px-2 py-1 bg-white"
-                  disabled={submitting}
-                >
-                  <option value="">Select type…</option>
-                  {DOC_TYPES.map(dt => (
-                    <option key={dt.value} value={dt.value}>{dt.label}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => removeFile(idx)}
-                  className="text-gray-400 hover:text-red-600 p-1"
-                  disabled={submitting}
-                  aria-label="Remove file"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {error && (
@@ -138,7 +200,7 @@ const UploadDropzone: React.FC<UploadDropzoneProps> = ({ onSubmit, submitting })
           disabled={submitting || pending.length === 0}
         >
           {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          Start Scan ({pending.length} {pending.length === 1 ? 'file' : 'files'})
+          Start Scan ({candidateCount} candidate{candidateCount === 1 ? '' : 's'})
         </Button>
       </div>
     </div>

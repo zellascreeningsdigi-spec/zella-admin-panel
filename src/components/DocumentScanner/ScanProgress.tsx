@@ -7,11 +7,22 @@ export interface ScanJobSnapshot {
   jobId: string;
   status: 'queued' | 'running' | 'done' | 'failed';
   progress: { total: number; done: number; failed: number; phase: string };
-  docs: Array<{ docType: string; originalName: string; mime: string; pageCount: number; error: string | null }>;
-  result?: { fields: Record<string, string | null>; provenance: Record<string, string | null>; warnings: string[] };
+  docs: Array<{ docType: string; originalName: string; mime: string; pageCount: number; candidateIndex?: number; error: string | null }>;
+  result?: {
+    fields: Record<string, string | null> | null;
+    provenance: Record<string, string | null> | null;
+    warnings: string[];
+    candidates?: Array<{
+      index: number;
+      fields: Record<string, string | null> | null;
+      provenance: Record<string, string | null> | null;
+      error: string | null;
+      tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+    }>;
+  };
   tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
   error?: string | null;
-  docUrls?: Array<{ docType: string; originalName: string; mime: string; url: string }>;
+  docUrls?: Array<{ docType: string; originalName: string; mime: string; url: string; candidateIndex?: number }>;
 }
 
 interface ScanProgressProps {

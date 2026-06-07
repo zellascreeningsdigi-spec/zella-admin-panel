@@ -5,12 +5,19 @@ import { Button } from '@/components/ui/button';
 import apiService from '@/services/api';
 import UploadDropzone from './UploadDropzone';
 import ScanProgress, { ScanJobSnapshot } from './ScanProgress';
-import ReviewForm from './ReviewForm';
+import ReviewForm, { ReviewedCandidate } from './ReviewForm';
 import ExcelChooser from './ExcelChooser';
 import ExcelLibrary from './ExcelLibrary';
-import { FieldKey } from './fields';
 
 type Stage = 'upload' | 'scanning' | 'review' | 'done';
+
+interface SavedSummary {
+  excelName: string;
+  rowCount: number;
+  appended: number;
+  attempted: number;
+  errors: number;
+}
 
 const DocumentScannerTab: React.FC = () => {
   const [stage, setStage] = useState<Stage>('upload');
@@ -20,17 +27,14 @@ const DocumentScannerTab: React.FC = () => {
   const [scanError, setScanError] = useState<string | null>(null);
   const [chooserOpen, setChooserOpen] = useState(false);
   const [committing, setCommitting] = useState(false);
-  const [savedSummary, setSavedSummary] = useState<{ excelName: string; rowCount: number } | null>(null);
-  const [pendingPayload, setPendingPayload] = useState<{
-    fields: Record<FieldKey, string | null>;
-    provenance: Record<FieldKey, string | null>;
-  } | null>(null);
+  const [savedSummary, setSavedSummary] = useState<SavedSummary | null>(null);
+  const [pendingCandidates, setPendingCandidates] = useState<ReviewedCandidate[] | null>(null);
 
-  const handleSubmit = async (files: File[], docTypes: string[]) => {
+  const handleSubmit = async (files: File[], docTypes: string[], candidateIndices: number[]) => {
     setSubmitting(true);
     setScanError(null);
     try {
-      const res = await apiService.scanDocuments(files, docTypes);
+      const res = await apiService.scanDocuments(files, docTypes, candidateIndices);
       if (!res.success || !res.data?.jobId) {
         throw new Error(res.message || 'Failed to start scan');
       }
@@ -52,27 +56,29 @@ const DocumentScannerTab: React.FC = () => {
     setJobId(null);
   }, []);
 
-  const handleReviewCommit = (
-    fields: Record<FieldKey, string | null>,
-    provenance: Record<FieldKey, string | null>
-  ) => {
-    setPendingPayload({ fields, provenance });
+  const handleReviewCommit = (candidates: ReviewedCandidate[]) => {
+    setPendingCandidates(candidates);
     setChooserOpen(true);
   };
 
   const handleExcelChosen = async (excelId: string, excelName: string) => {
-    if (!pendingPayload) return;
+    if (!pendingCandidates || pendingCandidates.length === 0) return;
     setCommitting(true);
     try {
-      const res = await apiService.appendScannerRow(excelId, {
-        fields: pendingPayload.fields,
-        provenance: pendingPayload.provenance,
+      const res = await apiService.appendScannerRowsBulk(excelId, {
+        candidates: pendingCandidates,
         sourceJobId: jobId || undefined
       });
       if (!res.success || !res.data) throw new Error(res.message || 'Save failed');
-      setSavedSummary({ excelName, rowCount: res.data.excel.rowCount });
+      setSavedSummary({
+        excelName,
+        rowCount: res.data.excel?.rowCount ?? 0,
+        appended: res.data.appended,
+        attempted: pendingCandidates.length,
+        errors: res.data.errors?.length ?? 0
+      });
       setStage('done');
-      setPendingPayload(null);
+      setPendingCandidates(null);
     } finally {
       setCommitting(false);
     }
@@ -84,7 +90,7 @@ const DocumentScannerTab: React.FC = () => {
     setCompletedJob(null);
     setSavedSummary(null);
     setScanError(null);
-    setPendingPayload(null);
+    setPendingCandidates(null);
   };
 
   return (
@@ -96,7 +102,7 @@ const DocumentScannerTab: React.FC = () => {
         <div>
           <h1 className="text-xl font-semibold text-gray-900">Document Scanner</h1>
           <p className="text-sm text-gray-500">
-            Upload a candidate's documents, let OpenAI extract the fields, review & save to an Excel.
+            Upload candidate documents, let OpenAI extract the fields, review all candidates, then save to an Excel in one go.
           </p>
         </div>
       </div>
@@ -135,12 +141,17 @@ const DocumentScannerTab: React.FC = () => {
             <div className="text-center py-12 space-y-4">
               <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto" />
               <div>
-                <h3 className="text-lg font-semibold">Row saved to “{savedSummary.excelName}”</h3>
+                <h3 className="text-lg font-semibold">
+                  Saved {savedSummary.appended} of {savedSummary.attempted} to “{savedSummary.excelName}”
+                </h3>
                 <p className="text-sm text-gray-500 mt-1">
                   The Excel now has {savedSummary.rowCount} {savedSummary.rowCount === 1 ? 'row' : 'rows'}.
+                  {savedSummary.errors > 0 && (
+                    <span className="text-red-600"> {savedSummary.errors} row(s) failed to write.</span>
+                  )}
                 </p>
               </div>
-              <Button onClick={resetForNext}>Scan another candidate</Button>
+              <Button onClick={resetForNext}>Scan more candidates</Button>
             </div>
           )}
         </TabsContent>

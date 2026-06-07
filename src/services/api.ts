@@ -1145,11 +1145,18 @@ class ApiService {
 
   // ========== Document Scanner (OCR) API methods ==========
 
-  async scanDocuments(files: File[], docTypes: string[]): Promise<ApiResponse<{ jobId: string }>> {
+  async scanDocuments(
+    files: File[],
+    docTypes: string[],
+    candidateIndices?: number[]
+  ): Promise<ApiResponse<{ jobId: string }>> {
     const token = this.getAuthToken();
     const formData = new FormData();
     files.forEach((f) => formData.append('documents', f));
     formData.append('docTypes', JSON.stringify(docTypes));
+    if (candidateIndices && candidateIndices.length === files.length) {
+      formData.append('candidateIndices', JSON.stringify(candidateIndices));
+    }
 
     const response = await fetch(`${API_BASE_URL}/document-scanner/scan`, {
       method: 'POST',
@@ -1167,11 +1174,22 @@ class ApiService {
     jobId: string;
     status: 'queued' | 'running' | 'done' | 'failed';
     progress: { total: number; done: number; failed: number; phase: string };
-    docs: Array<{ docType: string; originalName: string; mime: string; pageCount: number; error: string | null }>;
-    result?: { fields: Record<string, string | null>; provenance: Record<string, string | null>; warnings: string[] };
+    docs: Array<{ docType: string; originalName: string; mime: string; pageCount: number; candidateIndex?: number; error: string | null }>;
+    result?: {
+      fields: Record<string, string | null> | null;
+      provenance: Record<string, string | null> | null;
+      warnings: string[];
+      candidates?: Array<{
+        index: number;
+        fields: Record<string, string | null> | null;
+        provenance: Record<string, string | null> | null;
+        error: string | null;
+        tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+      }>;
+    };
     tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
     error?: string | null;
-    docUrls?: Array<{ docType: string; originalName: string; mime: string; url: string }>;
+    docUrls?: Array<{ docType: string; originalName: string; mime: string; url: string; candidateIndex?: number }>;
   }>> {
     return this.get(`/document-scanner/scan-jobs/${jobId}`);
   }
@@ -1189,6 +1207,24 @@ class ApiService {
     body: { fields: Record<string, string | null>; provenance: Record<string, string | null>; sourceJobId?: string }
   ): Promise<ApiResponse<{ excel: { id: string; name: string; rowCount: number } }>> {
     return this.post(`/document-scanner/excels/${excelId}/rows`, body);
+  }
+
+  async appendScannerRowsBulk(
+    excelId: string,
+    body: {
+      candidates: Array<{
+        fields: Record<string, string | null>;
+        provenance: Record<string, string | null>;
+        sourceCandidateIndex?: number;
+      }>;
+      sourceJobId?: string;
+    }
+  ): Promise<ApiResponse<{
+    appended: number;
+    errors: Array<{ index: number | null; error: string }>;
+    excel: { id: string; name: string; rowCount: number } | null;
+  }>> {
+    return this.post(`/document-scanner/excels/${excelId}/rows-bulk`, body);
   }
 
   async deleteScannerExcel(excelId: string): Promise<ApiResponse<{ id: string; rowsDeleted: number }>> {
