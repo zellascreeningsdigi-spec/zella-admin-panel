@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Download, FileSpreadsheet, Loader2, RefreshCw } from 'lucide-react';
+import { Download, FileSpreadsheet, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import apiService from '@/services/api';
 
 interface ExcelSummary {
@@ -16,6 +17,8 @@ const ExcelLibrary: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ExcelSummary | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchList = async () => {
     setLoading(true);
@@ -40,6 +43,22 @@ const ExcelLibrary: React.FC = () => {
       setError(err?.message || 'Download failed');
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeletingId(pendingDelete.id);
+    setError(null);
+    try {
+      const res = await apiService.deleteScannerExcel(pendingDelete.id);
+      if (!res.success) throw new Error(res.message || 'Delete failed');
+      setExcels(prev => prev.filter(e => e.id !== pendingDelete.id));
+    } catch (err: any) {
+      setError(err?.message || 'Delete failed');
+    } finally {
+      setDeletingId(null);
+      setPendingDelete(null);
     }
   };
 
@@ -80,17 +99,44 @@ const ExcelLibrary: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => handleDownload(e)}
-                disabled={downloadingId === e.id}
+                disabled={downloadingId === e.id || deletingId === e.id}
               >
                 {downloadingId === e.id
                   ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   : <Download className="h-4 w-4 mr-2" />}
                 Download
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPendingDelete(e)}
+                disabled={deletingId === e.id || downloadingId === e.id}
+                className="hover:bg-red-50 hover:border-red-200"
+                title="Delete Excel"
+              >
+                {deletingId === e.id
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Trash2 className="h-4 w-4 text-red-600" />}
+              </Button>
             </div>
           ))}
         </div>
       )}
+
+      <ConfirmationDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
+        onConfirm={confirmDelete}
+        title="Delete Excel"
+        description={
+          pendingDelete
+            ? `Delete "${pendingDelete.name}"? This removes the file and its ${pendingDelete.rowCount} committed row${pendingDelete.rowCount === 1 ? '' : 's'}. This cannot be undone.`
+            : ''
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        destructive={true}
+      />
     </div>
   );
 };

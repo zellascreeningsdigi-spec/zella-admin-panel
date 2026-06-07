@@ -1191,6 +1191,10 @@ class ApiService {
     return this.post(`/document-scanner/excels/${excelId}/rows`, body);
   }
 
+  async deleteScannerExcel(excelId: string): Promise<ApiResponse<{ id: string; rowsDeleted: number }>> {
+    return this.delete(`/document-scanner/excels/${excelId}`);
+  }
+
   async downloadScannerExcel(excelId: string, fallbackName?: string): Promise<void> {
     const token = this.getAuthToken();
     const response = await fetch(`${API_BASE_URL}/document-scanner/excels/${excelId}/download`, {
