@@ -1,7 +1,9 @@
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/contexts/AuthContext';
 import { apiService } from '@/services/api';
 import { Customer } from '@/types/customer';
 import { X } from 'lucide-react';
@@ -20,6 +22,7 @@ interface CustomerFormData {
   emails: string[];
   documentsRequired: string;
   allowedIpAddresses: string[];
+  sendPasswordExpiryReminders: boolean;
 }
 
 const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
@@ -29,11 +32,15 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
   editCustomer,
   onCustomerUpdated
 }) => {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super-admin';
+
   const [formData, setFormData] = useState<CustomerFormData>({
     companyName: '',
     emails: [''],
     documentsRequired: '',
-    allowedIpAddresses: []
+    allowedIpAddresses: [],
+    sendPasswordExpiryReminders: false
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,7 +53,8 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
         companyName: editCustomer.companyName || '',
         emails: editCustomer.emails && editCustomer.emails.length > 0 ? [...editCustomer.emails] : [''],
         documentsRequired: '', // Not editable in edit mode
-        allowedIpAddresses: editCustomer.allowedIpAddresses && editCustomer.allowedIpAddresses.length > 0 ? [...editCustomer.allowedIpAddresses] : []
+        allowedIpAddresses: editCustomer.allowedIpAddresses && editCustomer.allowedIpAddresses.length > 0 ? [...editCustomer.allowedIpAddresses] : [],
+        sendPasswordExpiryReminders: editCustomer.sendPasswordExpiryReminders ?? false
       });
     } else if (!editCustomer && isOpen) {
       // Reset form for new customer
@@ -54,7 +62,8 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
         companyName: '',
         emails: [''],
         documentsRequired: '',
-        allowedIpAddresses: []
+        allowedIpAddresses: [],
+        sendPasswordExpiryReminders: false
       });
     }
     setErrors({});
@@ -143,6 +152,11 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
       const invalidEmails = validEmails.filter(email => !emailRegex.test(email));
       if (invalidEmails.length > 0) {
         newErrors.emails = 'All emails must be valid';
+      } else if (
+        validEmails.some(e => e.trim().toLowerCase() === 'ashish@zellascreenings.com')
+      ) {
+        // Mirrors the backend guard — keep the user from typing the reserved owner email.
+        newErrors.emails = 'ashish@zellascreenings.com is a reserved internal account and cannot be added as a company email.';
       }
     }
 
@@ -170,6 +184,12 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
         emails: validEmails,
         allowedIpAddresses: validIps
       };
+
+      // Only super-admin can change this — backend re-enforces.
+      // Skip sending the field for non-super-admin so we don't trigger a 403.
+      if (isSuperAdmin) {
+        customerData.sendPasswordExpiryReminders = formData.sendPasswordExpiryReminders;
+      }
 
       // Only include documentsRequired when creating a new customer
       if (!editCustomer) {
@@ -324,6 +344,37 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
                 )}
               </div>
             )}
+
+            {/* Password expiry reminders — super-admin only */}
+            <div className="space-y-2 pt-2 border-t">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="sendPasswordExpiryReminders"
+                  checked={formData.sendPasswordExpiryReminders}
+                  onCheckedChange={(checked) =>
+                    setFormData(prev => ({ ...prev, sendPasswordExpiryReminders: checked === true }))
+                  }
+                  disabled={!isSuperAdmin}
+                  className="mt-1"
+                />
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="sendPasswordExpiryReminders"
+                    className={!isSuperAdmin ? 'text-gray-400 cursor-not-allowed' : ''}
+                  >
+                    Send password expiry reminders to this company's users
+                    {!isSuperAdmin && (
+                      <span className="ml-2 text-[10px] uppercase tracking-wide bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                        Super-admin only
+                      </span>
+                    )}
+                  </Label>
+                  <p className="text-xs text-gray-500">
+                    When enabled, this company's users receive email reminders 7 days and 1 day before their password expires. Off by default.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           <DialogFooter>

@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -16,6 +17,7 @@ import {
   getCoreRowModel,
   getFilteredRowModel,
   getSortedRowModel,
+  RowSelectionState,
   SortingState,
   useReactTable,
 } from '@tanstack/react-table';
@@ -26,7 +28,7 @@ import {
   Eye,
   Trash2
 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 interface CustomersTableProps {
   customers: Customer[];
@@ -37,16 +39,52 @@ interface CustomersTableProps {
   pageSize?: number;
   totalCount?: number;
   onPageChange?: (page: number) => void;
+  enableSelection?: boolean;
+  onSelectionChange?: (selectedCustomers: Customer[]) => void;
 }
 
-const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustomer, onEditCustomer, onDeleteCustomer, currentPage, pageSize, totalCount, onPageChange }) => {
+const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustomer, onEditCustomer, onDeleteCustomer, currentPage, pageSize, totalCount, onPageChange, enableSelection, onSelectionChange }) => {
   const { user } = useAuth();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+
+  // Reset selection whenever the underlying customer list changes
+  // (e.g. when the user paginates or applies a new filter), so we don't
+  // ship stale rowIds to the parent.
+  useEffect(() => {
+    setRowSelection({});
+  }, [customers]);
 
   const columns = useMemo<ColumnDef<Customer>[]>(
     () => [
+      ...(enableSelection ? [{
+        id: 'select',
+        header: ({ table }: any) => (
+          <Checkbox
+            checked={
+              table.getIsAllPageRowsSelected()
+                ? true
+                : table.getIsSomePageRowsSelected()
+                  ? 'indeterminate'
+                  : false
+            }
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Select all"
+          />
+        ),
+        cell: ({ row }: any) => (
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label="Select row"
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+      } as ColumnDef<Customer>] : []),
       {
         accessorKey: 'companyName',
         header: 'Company Name',
@@ -124,7 +162,7 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
         },
       },
     ],
-    [onViewCustomer, onEditCustomer, onDeleteCustomer, user]
+    [onViewCustomer, onEditCustomer, onDeleteCustomer, user, enableSelection]
   );
 
   const _pageSize = pageSize ?? 10;
@@ -137,6 +175,9 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
+    onRowSelectionChange: setRowSelection,
+    enableRowSelection: !!enableSelection,
+    getRowId: (row) => row._id || row.id || '',
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -146,6 +187,7 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
       sorting,
       columnFilters,
       globalFilter,
+      rowSelection,
       pagination: {
         pageIndex: _currentPage - 1,
         pageSize: _pageSize,
@@ -158,6 +200,15 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
       }
     },
   });
+
+  // Notify parent when selection changes (always — covers clear-on-toggle paths too)
+  useEffect(() => {
+    if (!enableSelection || !onSelectionChange) return;
+    const selected = table.getSelectedRowModel().rows.map(r => r.original);
+    onSelectionChange(selected);
+    // table identity is stable across renders for the same configuration
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowSelection, customers, enableSelection]);
 
   return (
     <div className="space-y-4">

@@ -4,7 +4,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiService } from '@/services/api';
 import { Customer } from '@/types/customer';
-import { Plus, RefreshCw, Upload } from 'lucide-react';
+import { BellOff, BellRing, Plus, RefreshCw, Upload, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import AddCustomerDialog from './AddCustomerDialog';
 import BulkUploadCustomersDialog from './BulkUploadCustomersDialog';
@@ -83,6 +83,13 @@ const CustomersTab: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
 
+  // Bulk-selection state (super-admin only — used for the bulk
+  // password-expiry-reminder on/off action)
+  const [selectedCustomers, setSelectedCustomers] = useState<Customer[]>([]);
+  const [bulkConfirm, setBulkConfirm] = useState<{ open: boolean; enable: boolean }>({ open: false, enable: false });
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const isSuperAdmin = user?.role === 'super-admin';
+
   const handleDeleteCustomer = (customerId: string | undefined) => {
     if (!customerId) return;
     setCustomerToDelete(customerId);
@@ -135,6 +142,39 @@ const CustomersTab: React.FC = () => {
   const handleResetFilters = () => {
     setCurrentPage(1);
     fetchCustomers(undefined, 1);
+  };
+
+  const openBulkConfirm = (enable: boolean) => {
+    if (selectedCustomers.length === 0) return;
+    setBulkConfirm({ open: true, enable });
+  };
+
+  const confirmBulkToggle = async () => {
+    const ids = selectedCustomers
+      .map(c => c._id)
+      .filter((id): id is string => !!id);
+    if (ids.length === 0) {
+      setBulkConfirm({ open: false, enable: false });
+      return;
+    }
+    setBulkSubmitting(true);
+    try {
+      const res = await apiService.bulkSetCustomerPasswordReminders(ids, bulkConfirm.enable);
+      if (res.success) {
+        const modified = res.data?.modified ?? ids.length;
+        alert(`Password expiry reminders ${bulkConfirm.enable ? 'enabled' : 'disabled'} for ${modified} company${modified === 1 ? '' : 'ies'}.`);
+        setSelectedCustomers([]);
+        fetchCustomers();
+      } else {
+        throw new Error(res.message || 'Bulk update failed');
+      }
+    } catch (err) {
+      console.error('Bulk toggle error:', err);
+      alert(`Bulk update failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setBulkSubmitting(false);
+      setBulkConfirm({ open: false, enable: false });
+    }
   };
 
   if (loading) {
@@ -295,6 +335,46 @@ const CustomersTab: React.FC = () => {
             onFilterChange={handleFilterChange}
             onReset={handleResetFilters}
           />
+
+          {/* Bulk action toolbar — visible only when super-admin has selected ≥1 row */}
+          {isSuperAdmin && selectedCustomers.length > 0 && (
+            <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-md px-4 py-2">
+              <div className="flex items-center gap-2 text-sm text-blue-900">
+                <span className="font-medium">{selectedCustomers.length}</span>
+                <span>company{selectedCustomers.length === 1 ? '' : 'ies'} selected</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openBulkConfirm(true)}
+                  disabled={bulkSubmitting}
+                >
+                  <BellRing className="h-4 w-4 mr-2" />
+                  Turn reminders ON
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openBulkConfirm(false)}
+                  disabled={bulkSubmitting}
+                >
+                  <BellOff className="h-4 w-4 mr-2" />
+                  Turn reminders OFF
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedCustomers([])}
+                  disabled={bulkSubmitting}
+                  title="Clear selection"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
           <CustomersTable
             customers={customers}
             onViewCustomer={handleViewCustomer}
@@ -304,6 +384,8 @@ const CustomersTab: React.FC = () => {
             pageSize={PAGE_SIZE}
             totalCount={totalCount}
             onPageChange={setCurrentPage}
+            enableSelection={isSuperAdmin}
+            onSelectionChange={setSelectedCustomers}
           />
         </CardContent>
       </Card>
@@ -334,6 +416,22 @@ const CustomersTab: React.FC = () => {
         confirmText="Delete"
         cancelText="Cancel"
         destructive={true}
+      />
+
+      {/* Bulk password-reminder Confirmation Dialog */}
+      <ConfirmationDialog
+        open={bulkConfirm.open}
+        onOpenChange={(open) => setBulkConfirm(prev => ({ ...prev, open }))}
+        onConfirm={confirmBulkToggle}
+        title={bulkConfirm.enable ? 'Enable password reminders' : 'Disable password reminders'}
+        description={
+          bulkConfirm.enable
+            ? `Users of the ${selectedCustomers.length} selected company${selectedCustomers.length === 1 ? '' : 'ies'} will start receiving password expiry reminder emails (7 days and 1 day before expiry).`
+            : `Users of the ${selectedCustomers.length} selected company${selectedCustomers.length === 1 ? '' : 'ies'} will stop receiving password expiry reminder emails.`
+        }
+        confirmText={bulkConfirm.enable ? 'Turn ON' : 'Turn OFF'}
+        cancelText="Cancel"
+        destructive={!bulkConfirm.enable}
       />
     </div>
   );

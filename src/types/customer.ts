@@ -69,6 +69,7 @@ export interface Customer {
   documentsRequired?: string[];
   documents?: CustomerDocument[];
   bgvFormConfig?: BGVFormConfig;
+  sendPasswordExpiryReminders?: boolean;
   createdAt?: string;
   updatedAt?: string;
   lastReportSent?: string;

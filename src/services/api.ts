@@ -384,6 +384,13 @@ class ApiService {
     return this.delete(`/customers/${customerId}`);
   }
 
+  async bulkSetCustomerPasswordReminders(
+    customerIds: string[],
+    enabled: boolean
+  ): Promise<ApiResponse<{ matched: number; modified: number }>> {
+    return this.post('/customers/bulk-password-reminders', { customerIds, enabled });
+  }
+
   // Customer Documents API
   async getCustomerDocuments(customerId: string): Promise<ApiResponse<{
     documents: any[];
