@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Save, ExternalLink, ChevronDown, ChevronRight, AlertTriangle, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Save, ExternalLink, ChevronDown, ChevronRight, AlertTriangle, Eye, EyeOff, Trash2, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FIELD_GROUPS, FieldKey, ALL_FIELD_KEYS, docTypeLabel } from './fields';
@@ -244,28 +244,42 @@ const ReviewForm: React.FC<ReviewFormProps> = ({ job, onCommit, committing }) =>
                     {cardDocs.length === 0 && (
                       <div className="text-xs text-gray-500">No previews available.</div>
                     )}
-                    {cardDocs.map((d, i) => (
-                      <a
-                        key={i}
-                        href={d.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block border rounded p-2 hover:bg-gray-50"
-                      >
-                        {d.mime.startsWith('image/') ? (
-                          <img src={d.url} alt={d.originalName} className="w-full h-24 object-cover rounded" />
-                        ) : (
-                          <div className="h-24 flex items-center justify-center bg-gray-100 rounded text-xs text-gray-500">
-                            PDF preview
+                    {cardDocs.map((d, i) => {
+                      const lowQuality = d.quality && d.quality.warnings && d.quality.warnings.length > 0;
+                      return (
+                        <a
+                          key={i}
+                          href={d.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block border rounded p-2 hover:bg-gray-50"
+                        >
+                          {d.mime.startsWith('image/') ? (
+                            <img src={d.url} alt={d.originalName} className="w-full h-24 object-cover rounded" />
+                          ) : (
+                            <div className="h-24 flex items-center justify-center bg-gray-100 rounded text-xs text-gray-500">
+                              PDF preview
+                            </div>
+                          )}
+                          <div className="mt-1 flex items-center justify-between text-xs">
+                            <span className="truncate text-gray-700">{d.originalName}</span>
+                            <ExternalLink className="h-3 w-3 text-gray-400 flex-shrink-0" />
                           </div>
-                        )}
-                        <div className="mt-1 flex items-center justify-between text-xs">
-                          <span className="truncate text-gray-700">{d.originalName}</span>
-                          <ExternalLink className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                        </div>
-                        <div className="text-[10px] text-gray-500">{docTypeLabel(d.docType)}</div>
-                      </a>
-                    ))}
+                          <div className="flex items-center justify-between text-[10px] text-gray-500">
+                            <span>{docTypeLabel(d.docType)}</span>
+                            {lowQuality && (
+                              <span
+                                className="inline-flex items-center gap-1 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded px-1.5 py-0.5"
+                                title={`Quality ${d.quality!.score}/100 — ${d.quality!.warnings.join(', ')}`}
+                              >
+                                <ShieldAlert className="h-3 w-3" />
+                                low quality
+                              </span>
+                            )}
+                          </div>
+                        </a>
+                      );
+                    })}
                   </aside>
                 </div>
               )}

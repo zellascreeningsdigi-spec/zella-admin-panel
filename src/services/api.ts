@@ -1174,7 +1174,7 @@ class ApiService {
     jobId: string;
     status: 'queued' | 'running' | 'done' | 'failed';
     progress: { total: number; done: number; failed: number; phase: string };
-    docs: Array<{ docType: string; originalName: string; mime: string; pageCount: number; candidateIndex?: number; error: string | null }>;
+    docs: Array<{ docType: string; originalName: string; mime: string; pageCount: number; candidateIndex?: number; quality?: { score: number; warnings: string[] } | null; error: string | null }>;
     result?: {
       fields: Record<string, string | null> | null;
       provenance: Record<string, string | null> | null;
@@ -1189,7 +1189,7 @@ class ApiService {
     };
     tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
     error?: string | null;
-    docUrls?: Array<{ docType: string; originalName: string; mime: string; url: string; candidateIndex?: number }>;
+    docUrls?: Array<{ docType: string; originalName: string; mime: string; url: string; candidateIndex?: number; quality?: { score: number; warnings: string[] } | null }>;
   }>> {
     return this.get(`/document-scanner/scan-jobs/${jobId}`);
   }
