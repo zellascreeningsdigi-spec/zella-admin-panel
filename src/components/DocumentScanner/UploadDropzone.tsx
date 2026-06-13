@@ -11,17 +11,14 @@ interface PendingFile {
   candidateIndex: number;
 }
 
-type Provider = 'openai' | 'hybrid';
-
 interface UploadDropzoneProps {
-  onSubmit: (files: File[], docTypes: string[], candidateIndices: number[], provider: Provider) => Promise<void>;
+  onSubmit: (files: File[], docTypes: string[], candidateIndices: number[]) => Promise<void>;
   submitting: boolean;
 }
 
 const UploadDropzone: React.FC<UploadDropzoneProps> = ({ onSubmit, submitting }) => {
   const [pending, setPending] = useState<PendingFile[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [provider, setProvider] = useState<Provider>('hybrid');
 
   const onDrop = useCallback((accepted: File[]) => {
     setError(null);
@@ -107,8 +104,7 @@ const UploadDropzone: React.FC<UploadDropzoneProps> = ({ onSubmit, submitting })
       await onSubmit(
         pending.map(p => p.file),
         pending.map(p => p.docType),
-        denseIndices,
-        provider
+        denseIndices
       );
       setPending([]);
     } catch (e: any) {
@@ -118,41 +114,6 @@ const UploadDropzone: React.FC<UploadDropzoneProps> = ({ onSubmit, submitting })
 
   return (
     <div className="space-y-4">
-      <div className="bg-white border rounded-lg p-3 space-y-2">
-        <div className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Extraction provider</div>
-        <label className="flex items-start gap-3 cursor-pointer p-2 rounded hover:bg-gray-50">
-          <input
-            type="radio"
-            name="provider"
-            value="hybrid"
-            checked={provider === 'hybrid'}
-            onChange={() => setProvider('hybrid')}
-            disabled={submitting}
-            className="mt-0.5"
-          />
-          <div className="text-sm">
-            <span className="font-medium">Hybrid — Google OCR + OpenAI structuring</span>
-            <span className="ml-2 text-xs bg-green-50 text-green-700 border border-green-200 rounded px-1.5 py-0.5">Recommended</span>
-            <div className="text-xs text-gray-500 mt-0.5">~$2 per 1,000 documents · best accuracy on noisy scans</div>
-          </div>
-        </label>
-        <label className="flex items-start gap-3 cursor-pointer p-2 rounded hover:bg-gray-50">
-          <input
-            type="radio"
-            name="provider"
-            value="openai"
-            checked={provider === 'openai'}
-            onChange={() => setProvider('openai')}
-            disabled={submitting}
-            className="mt-0.5"
-          />
-          <div className="text-sm">
-            <span className="font-medium">OpenAI Vision (legacy)</span>
-            <div className="text-xs text-gray-500 mt-0.5">~$23 per 1,000 documents · uses the image-OCR path directly</div>
-          </div>
-        </label>
-      </div>
-
       <div
         {...getRootProps()}
         className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${

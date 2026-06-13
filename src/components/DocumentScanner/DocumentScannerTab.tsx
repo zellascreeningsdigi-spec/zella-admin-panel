@@ -33,13 +33,12 @@ const DocumentScannerTab: React.FC = () => {
   const handleSubmit = async (
     files: File[],
     docTypes: string[],
-    candidateIndices: number[],
-    provider: 'openai' | 'hybrid'
+    candidateIndices: number[]
   ) => {
     setSubmitting(true);
     setScanError(null);
     try {
-      const res = await apiService.scanDocuments(files, docTypes, candidateIndices, provider);
+      const res = await apiService.scanDocuments(files, docTypes, candidateIndices);
       if (!res.success || !res.data?.jobId) {
         throw new Error(res.message || 'Failed to start scan');
       }

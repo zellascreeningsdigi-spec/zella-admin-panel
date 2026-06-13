@@ -180,11 +180,6 @@ const ReviewForm: React.FC<ReviewFormProps> = ({ job, onCommit, committing }) =>
           {visible.length !== committable.length && (
             <span className="text-gray-500"> · {committable.length} will be saved</span>
           )}
-          {job.provider && (
-            <span className="ml-2 text-[10px] uppercase tracking-wide bg-gray-100 text-gray-700 border border-gray-200 rounded px-1.5 py-0.5">
-              via {job.provider === 'hybrid' ? 'Google OCR + OpenAI' : 'OpenAI Vision'}
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={expandAll} disabled={committing}>

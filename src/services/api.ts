@@ -1148,8 +1148,7 @@ class ApiService {
   async scanDocuments(
     files: File[],
     docTypes: string[],
-    candidateIndices?: number[],
-    provider?: 'openai' | 'hybrid'
+    candidateIndices?: number[]
   ): Promise<ApiResponse<{ jobId: string }>> {
     const token = this.getAuthToken();
     const formData = new FormData();
@@ -1158,7 +1157,6 @@ class ApiService {
     if (candidateIndices && candidateIndices.length === files.length) {
       formData.append('candidateIndices', JSON.stringify(candidateIndices));
     }
-    if (provider) formData.append('provider', provider);
 
     const response = await fetch(`${API_BASE_URL}/document-scanner/scan`, {
       method: 'POST',
@@ -1190,7 +1188,6 @@ class ApiService {
         tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
       }>;
     };
-    provider?: 'openai' | 'hybrid';
     tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
     error?: string | null;
     docUrls?: Array<{ docType: string; originalName: string; mime: string; url: string; candidateIndex?: number; quality?: { score: number; warnings: string[] } | null }>;

@@ -21,7 +21,6 @@ export interface ScanJobSnapshot {
       tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
     }>;
   };
-  provider?: 'openai' | 'hybrid';
   tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
   error?: string | null;
   docUrls?: Array<{ docType: string; originalName: string; mime: string; url: string; candidateIndex?: number; quality?: { score: number; warnings: string[] } | null }>;
@@ -95,7 +94,7 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ jobId, onComplete, onFailed
   const phaseLabel = {
     queued: 'Queued',
     preparing: 'Preparing images',
-    extracting: 'Calling OpenAI Vision',
+    extracting: 'Extracting via Google OCR + OpenAI',
     done: 'Done',
     failed: 'Failed'
   }[job.progress?.phase || job.status] || job.status;
