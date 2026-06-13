@@ -16,10 +16,12 @@ export interface ScanJobSnapshot {
       index: number;
       fields: Record<string, string | null> | null;
       provenance: Record<string, string | null> | null;
+      confidence?: Record<string, 'high' | 'low'>;
       error: string | null;
       tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
     }>;
   };
+  provider?: 'openai' | 'hybrid';
   tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
   error?: string | null;
   docUrls?: Array<{ docType: string; originalName: string; mime: string; url: string; candidateIndex?: number; quality?: { score: number; warnings: string[] } | null }>;

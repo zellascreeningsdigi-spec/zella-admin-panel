@@ -1148,7 +1148,8 @@ class ApiService {
   async scanDocuments(
     files: File[],
     docTypes: string[],
-    candidateIndices?: number[]
+    candidateIndices?: number[],
+    provider?: 'openai' | 'hybrid'
   ): Promise<ApiResponse<{ jobId: string }>> {
     const token = this.getAuthToken();
     const formData = new FormData();
@@ -1157,6 +1158,7 @@ class ApiService {
     if (candidateIndices && candidateIndices.length === files.length) {
       formData.append('candidateIndices', JSON.stringify(candidateIndices));
     }
+    if (provider) formData.append('provider', provider);
 
     const response = await fetch(`${API_BASE_URL}/document-scanner/scan`, {
       method: 'POST',
@@ -1183,15 +1185,21 @@ class ApiService {
         index: number;
         fields: Record<string, string | null> | null;
         provenance: Record<string, string | null> | null;
+        confidence?: Record<string, 'high' | 'low'>;
         error: string | null;
         tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
       }>;
     };
+    provider?: 'openai' | 'hybrid';
     tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number };
     error?: string | null;
     docUrls?: Array<{ docType: string; originalName: string; mime: string; url: string; candidateIndex?: number; quality?: { score: number; warnings: string[] } | null }>;
   }>> {
     return this.get(`/document-scanner/scan-jobs/${jobId}`);
+  }
+
+  async getScannerExcelHeaders(): Promise<ApiResponse<{ headers: string[]; fieldKeyToColumn: Record<string, number> }>> {
+    return this.get('/document-scanner/excel-headers');
   }
 
   async listScannerExcels(): Promise<ApiResponse<{ excels: Array<{ id: string; name: string; rowCount: number; createdAt: string; updatedAt: string }> }>> {
