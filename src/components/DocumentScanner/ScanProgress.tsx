@@ -93,7 +93,7 @@ const ScanProgress: React.FC<ScanProgressProps> = ({ jobId, onComplete, onFailed
   const pct = Math.round((completed / total) * 100);
   const phaseLabel = {
     queued: 'Queued',
-    preparing: 'Preparing images',
+    preparing: 'Downloading documents',
     extracting: 'Extracting via Google OCR + OpenAI',
     done: 'Done',
     failed: 'Failed'
