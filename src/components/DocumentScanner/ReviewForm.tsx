@@ -6,7 +6,6 @@ import {
   FIELD_GROUPS,
   EMPLOYMENT_FIELDS,
   EMPLOYMENT_FIELD_KEYS,
-  FieldKey,
   FlatFieldKey,
   EmploymentFieldKey,
   ALL_FIELD_KEYS,

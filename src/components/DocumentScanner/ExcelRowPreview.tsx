@@ -1,6 +1,6 @@
 import React from 'react';
 import { FileSpreadsheet } from 'lucide-react';
-import { FieldKey, FlatFieldKey, EmploymentFieldKey, EMPLOYMENT_FIELD_KEYS } from './fields';
+import { FlatFieldKey, EmploymentFieldKey, EMPLOYMENT_FIELD_KEYS } from './fields';
 
 export interface PreviewEmployment {
   fields: Record<EmploymentFieldKey, string>;
