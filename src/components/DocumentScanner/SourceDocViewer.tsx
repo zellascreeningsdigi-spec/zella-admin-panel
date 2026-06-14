@@ -14,9 +14,12 @@ interface DocUrl {
 
 interface SourceDocViewerProps {
   docs: DocUrl[];
-  /** Optional height class — defaults to a fixed pixel height that fits next to the
-   *  field-groups accordion comfortably. The parent grid controls the width. */
+  /** Optional height class — overrides the default. Ignored when `sticky` is true. */
   heightClassName?: string;
+  /** When true, the viewer becomes position:sticky pinned near the top of the
+   *  viewport and uses viewport-relative height. As the field accordion on
+   *  the left scrolls, the document on the right stays visible. */
+  sticky?: boolean;
 }
 
 /**
@@ -24,12 +27,18 @@ interface SourceDocViewerProps {
  * with prev/next chevrons to cycle. Images render via <img>, PDFs via <iframe>
  * (browser's native PDF viewer). The URL is a pre-signed S3 URL good for ~1h.
  */
-const SourceDocViewer: React.FC<SourceDocViewerProps> = ({ docs, heightClassName = 'h-[640px]' }) => {
+const SourceDocViewer: React.FC<SourceDocViewerProps> = ({ docs, heightClassName = 'h-[640px]', sticky = false }) => {
   const [index, setIndex] = useState(0);
+
+  // When sticky, pin to viewport height minus a small offset for the page
+  // header. When not sticky, use the caller-supplied height class.
+  const effectiveSizing = sticky
+    ? 'sticky top-4 h-[calc(100vh-6rem)]'
+    : heightClassName;
 
   if (docs.length === 0) {
     return (
-      <div className={`flex items-center justify-center bg-gray-50 border rounded-lg ${heightClassName}`}>
+      <div className={`flex items-center justify-center bg-gray-50 border rounded-lg ${effectiveSizing}`}>
         <div className="text-sm text-gray-500">No source documents available for this candidate.</div>
       </div>
     );
@@ -44,7 +53,7 @@ const SourceDocViewer: React.FC<SourceDocViewerProps> = ({ docs, heightClassName
   const goNext = () => setIndex((i) => (i + 1) % docs.length);
 
   return (
-    <div className={`flex flex-col border rounded-lg bg-white overflow-hidden ${heightClassName}`}>
+    <div className={`flex flex-col border rounded-lg bg-white overflow-hidden ${effectiveSizing}`}>
       <header className="flex items-center gap-2 px-3 py-2 border-b bg-gray-50">
         <Button
           variant="outline"

@@ -1,18 +1,37 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Save, ExternalLink, ChevronDown, ChevronRight, AlertTriangle, Eye, EyeOff, Trash2, ShieldAlert, Columns2, X } from 'lucide-react';
+import { Save, ExternalLink, ChevronDown, ChevronRight, AlertTriangle, Eye, EyeOff, Trash2, ShieldAlert, Columns2, X, Plus, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FIELD_GROUPS, FieldKey, ALL_FIELD_KEYS, docTypeLabel } from './fields';
+import {
+  FIELD_GROUPS,
+  EMPLOYMENT_FIELDS,
+  EMPLOYMENT_FIELD_KEYS,
+  FieldKey,
+  FlatFieldKey,
+  EmploymentFieldKey,
+  ALL_FIELD_KEYS,
+  docTypeLabel
+} from './fields';
 import type { ScanJobSnapshot } from './ScanProgress';
 import SourceDocViewer from './SourceDocViewer';
 import ExcelRowPreview from './ExcelRowPreview';
 import apiService from '@/services/api';
 
-interface CandidateState {
-  index: number;
-  fields: Record<FieldKey, string>;
+interface EmploymentState {
+  fields: Record<EmploymentFieldKey, string>;
   provenance: Record<string, string | null>;
   confidence: Record<string, 'high' | 'low'>;
+  expanded: boolean;
+  deleted: boolean;
+}
+
+interface CandidateState {
+  index: number;
+  fields: Record<FlatFieldKey, string>;
+  provenance: Record<string, string | null>;
+  confidence: Record<string, 'high' | 'low'>;
+  /** Per-job employment entries — repeats in fields.employments[] on the backend. */
+  employments: EmploymentState[];
   error: string | null;
   expanded: boolean;
   skipped: boolean;
@@ -24,9 +43,19 @@ interface CandidateState {
 }
 
 export interface ReviewedCandidate {
-  fields: Record<FieldKey, string | null>;
-  provenance: Record<FieldKey, string | null>;
+  fields: Record<string, string | null> & {
+    employments?: Array<Record<string, string | null>>;
+  };
+  provenance: Record<string, string | null> & {
+    employments?: Array<Record<string, string | null>>;
+  };
   sourceCandidateIndex: number;
+}
+
+function emptyEmploymentFields(): Record<EmploymentFieldKey, string> {
+  const out: Record<EmploymentFieldKey, string> = {} as any;
+  for (const k of EMPLOYMENT_FIELD_KEYS) out[k] = '';
+  return out;
 }
 
 interface ReviewFormProps {
@@ -47,16 +76,70 @@ function buildInitialState(job: ScanJobSnapshot): CandidateState[] {
         : []);
 
   return sourceCandidates.map((c: any, i: number) => {
-    const fields: Record<FieldKey, string> = {} as any;
-    const f = (c.fields || {}) as Record<string, string | null>;
+    const fields: Record<FlatFieldKey, string> = {} as any;
+    const f = (c.fields || {}) as Record<string, any>;
     for (const k of ALL_FIELD_KEYS) {
-      fields[k] = (f[k] ?? '') as string;
+      fields[k as FlatFieldKey] = (f[k] ?? '') as string;
     }
+
+    // Build the per-employment state from the backend's fields.employments[].
+    // Two back-compat paths:
+    //   1. Modern shape: f.employments is an array → one EmploymentState per entry.
+    //   2. Legacy shape (pre multi-employment): individual employment keys
+    //      live flat on `f` (company_name, designation, ...). If ANY of them
+    //      is non-empty, synthesise one EmploymentState. If all empty, no
+    //      employment entries.
+    const employments: EmploymentState[] = [];
+    const provenance = (c.provenance || {}) as Record<string, any>;
+    const confidence = (c.confidence || {}) as Record<string, any>;
+    const employmentsProvenance: any[] = Array.isArray(provenance.employments) ? provenance.employments : [];
+    const employmentsConfidence: any[] = Array.isArray(confidence.employments) ? confidence.employments : [];
+
+    if (Array.isArray(f.employments) && f.employments.length > 0) {
+      f.employments.forEach((entry: any, eIdx: number) => {
+        const eFields: Record<EmploymentFieldKey, string> = emptyEmploymentFields();
+        for (const k of EMPLOYMENT_FIELD_KEYS) {
+          eFields[k] = (entry?.[k] ?? '') as string;
+        }
+        employments.push({
+          fields: eFields,
+          provenance: (employmentsProvenance[eIdx] || {}) as Record<string, string | null>,
+          confidence: (employmentsConfidence[eIdx] || {}) as Record<string, 'high' | 'low'>,
+          expanded: eIdx === 0,
+          deleted: false
+        });
+      });
+    } else {
+      // Legacy back-compat: look for the 11 employment keys at the top level.
+      const legacyHasAny = EMPLOYMENT_FIELD_KEYS.some(k => {
+        const v = f[k];
+        return v !== null && v !== undefined && String(v).trim() !== '';
+      });
+      if (legacyHasAny) {
+        const eFields: Record<EmploymentFieldKey, string> = emptyEmploymentFields();
+        const eProv: Record<string, string | null> = {};
+        const eConf: Record<string, 'high' | 'low'> = {};
+        for (const k of EMPLOYMENT_FIELD_KEYS) {
+          eFields[k] = (f[k] ?? '') as string;
+          if (provenance[k]) eProv[k] = provenance[k];
+          if (confidence[k] === 'low' || confidence[k] === 'high') eConf[k] = confidence[k];
+        }
+        employments.push({
+          fields: eFields,
+          provenance: eProv,
+          confidence: eConf,
+          expanded: true,
+          deleted: false
+        });
+      }
+    }
+
     return {
       index: c.index ?? i,
       fields,
-      provenance: (c.provenance || {}) as Record<string, string | null>,
-      confidence: (c.confidence || {}) as Record<string, 'high' | 'low'>,
+      provenance: provenance as Record<string, string | null>,
+      confidence: confidence as Record<string, 'high' | 'low'>,
+      employments,
       error: c.error || null,
       // Expand the first non-errored candidate by default.
       expanded: i === 0,
@@ -83,15 +166,22 @@ const CONFIDENCE_HINT: Record<string, string> = {
   date_of_exit: 'Could not parse as a date.'
 };
 
-function countFilled(fields: Record<FieldKey, string>): number {
+function countFilled(c: CandidateState): number {
   let n = 0;
   for (const k of ALL_FIELD_KEYS) {
-    if ((fields[k] || '').trim() !== '') n++;
+    if ((c.fields[k as FlatFieldKey] || '').trim() !== '') n++;
+  }
+  // Count any non-empty employment field across non-deleted entries.
+  for (const e of c.employments) {
+    if (e.deleted) continue;
+    for (const k of EMPLOYMENT_FIELD_KEYS) {
+      if ((e.fields[k] || '').trim() !== '') n++;
+    }
   }
   return n;
 }
 
-function candidateDisplayName(fields: Record<FieldKey, string>, index: number): string {
+function candidateDisplayName(fields: Record<FlatFieldKey, string>, index: number): string {
   const name = fields['name'];
   return name && name.trim() ? name.trim() : `Candidate ${index + 1}`;
 }
@@ -129,10 +219,67 @@ const ReviewForm: React.FC<ReviewFormProps> = ({ job, onCommit, committing }) =>
   const visible = candidates.filter(c => !c.deleted);
   const committable = visible.filter(c => !c.skipped && !c.error);
 
-  const updateField = (cIdx: number, k: FieldKey, v: string) => {
+  // One candidate with N employments → N rows in the Excel. Used for the
+  // save-button label so the count is truthful.
+  const committableRowCount = committable.reduce((n, c) => {
+    const liveEmps = c.employments.filter(e => !e.deleted);
+    return n + Math.max(liveEmps.length, 1);
+  }, 0);
+
+  const updateField = (cIdx: number, k: FlatFieldKey, v: string) => {
     setCandidates(prev => prev.map((c, i) =>
       i === cIdx ? { ...c, fields: { ...c.fields, [k]: v } } : c
     ));
+  };
+
+  const updateEmploymentField = (cIdx: number, eIdx: number, k: EmploymentFieldKey, v: string) => {
+    setCandidates(prev => prev.map((c, i) => {
+      if (i !== cIdx) return c;
+      return {
+        ...c,
+        employments: c.employments.map((e, ei) =>
+          ei === eIdx ? { ...e, fields: { ...e.fields, [k]: v } } : e
+        )
+      };
+    }));
+  };
+
+  const toggleEmploymentExpanded = (cIdx: number, eIdx: number) => {
+    setCandidates(prev => prev.map((c, i) => {
+      if (i !== cIdx) return c;
+      return {
+        ...c,
+        employments: c.employments.map((e, ei) =>
+          ei === eIdx ? { ...e, expanded: !e.expanded } : e
+        )
+      };
+    }));
+  };
+
+  const deleteEmployment = (cIdx: number, eIdx: number) => {
+    setCandidates(prev => prev.map((c, i) => {
+      if (i !== cIdx) return c;
+      return {
+        ...c,
+        employments: c.employments.map((e, ei) =>
+          ei === eIdx ? { ...e, deleted: true } : e
+        )
+      };
+    }));
+  };
+
+  const addEmployment = (cIdx: number) => {
+    setCandidates(prev => prev.map((c, i) => {
+      if (i !== cIdx) return c;
+      const nextEntry: EmploymentState = {
+        fields: emptyEmploymentFields(),
+        provenance: {},
+        confidence: {},
+        expanded: true,
+        deleted: false
+      };
+      return { ...c, employments: [...c.employments, nextEntry] };
+    }));
   };
 
   const toggleExpanded = (cIdx: number) => {
@@ -160,13 +307,30 @@ const ReviewForm: React.FC<ReviewFormProps> = ({ job, onCommit, committing }) =>
   const handleSubmit = () => {
     if (committable.length === 0) return;
     const payload: ReviewedCandidate[] = committable.map(c => {
-      const fields: Record<FieldKey, string | null> = {} as any;
-      const prov: Record<FieldKey, string | null> = {} as any;
+      const fields: Record<string, any> = {};
+      const prov: Record<string, any> = {};
       for (const k of ALL_FIELD_KEYS) {
-        const trimmed = (c.fields[k] || '').trim();
+        const trimmed = (c.fields[k as FlatFieldKey] || '').trim();
         fields[k] = trimmed === '' ? null : trimmed;
         prov[k] = (c.provenance[k] as any) ?? null;
       }
+      // Employments array — drop deleted entries; trim each field.
+      const liveEmployments = c.employments.filter(e => !e.deleted);
+      fields.employments = liveEmployments.map(e => {
+        const entry: Record<string, string | null> = {};
+        for (const k of EMPLOYMENT_FIELD_KEYS) {
+          const trimmed = (e.fields[k] || '').trim();
+          entry[k] = trimmed === '' ? null : trimmed;
+        }
+        return entry;
+      });
+      prov.employments = liveEmployments.map(e => {
+        const entry: Record<string, string | null> = {};
+        for (const k of EMPLOYMENT_FIELD_KEYS) {
+          entry[k] = (e.provenance[k] as any) ?? null;
+        }
+        return entry;
+      });
       return { fields, provenance: prov, sourceCandidateIndex: c.index };
     });
     onCommit(payload);
@@ -195,8 +359,9 @@ const ReviewForm: React.FC<ReviewFormProps> = ({ job, onCommit, committing }) =>
         {candidates.map((c, cIdx) => {
           if (c.deleted) return null;
           const cardDocs = docUrls.filter(d => (d.candidateIndex ?? 0) === c.index);
-          const filledCount = countFilled(c.fields);
+          const filledCount = countFilled(c);
           const name = candidateDisplayName(c.fields, c.index);
+          const liveEmployments = c.employments.filter(e => !e.deleted);
           return (
             <section
               key={c.index}
@@ -270,52 +435,171 @@ const ReviewForm: React.FC<ReviewFormProps> = ({ job, onCommit, committing }) =>
                         OpenAI extraction failed for this candidate. The source docs are still available below. You can remove this card or rescan from scratch.
                       </div>
                     ) : (
-                      FIELD_GROUPS.map(group => (
-                        <div key={group.title} className="space-y-2">
-                          <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{group.title}</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
-                            {group.fields.map(f => {
-                              const src = c.provenance[f.key] as string | null | undefined;
-                              const conf = c.confidence?.[f.key];
-                              const lowConfidence = conf === 'low';
-                              return (
-                                <div key={f.key} className="space-y-1">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <label className="text-xs font-medium text-gray-700">{f.label}</label>
-                                    <div className="flex items-center gap-1">
-                                      {lowConfidence && (
-                                        <span
-                                          className="text-[10px] uppercase tracking-wide bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.5 rounded cursor-help"
-                                          title={CONFIDENCE_HINT[f.key] || 'Validation flagged this field — please verify.'}
-                                        >
-                                          ! check
-                                        </span>
-                                      )}
-                                      {src && (
-                                        <span className="text-[10px] uppercase tracking-wide bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
-                                          from: {docTypeLabel(src)}
-                                        </span>
-                                      )}
+                      <>
+                        {FIELD_GROUPS.map(group => (
+                          <div key={group.title} className="space-y-2">
+                            <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{group.title}</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+                              {group.fields.map(f => {
+                                const fk = f.key as FlatFieldKey;
+                                const src = c.provenance[fk] as string | null | undefined;
+                                const conf = c.confidence?.[fk];
+                                const lowConfidence = conf === 'low';
+                                return (
+                                  <div key={fk} className="space-y-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <label className="text-xs font-medium text-gray-700">{f.label}</label>
+                                      <div className="flex items-center gap-1">
+                                        {lowConfidence && (
+                                          <span
+                                            className="text-[10px] uppercase tracking-wide bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.5 rounded cursor-help"
+                                            title={CONFIDENCE_HINT[fk] || 'Validation flagged this field — please verify.'}
+                                          >
+                                            ! check
+                                          </span>
+                                        )}
+                                        {src && (
+                                          <span className="text-[10px] uppercase tracking-wide bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                                            from: {docTypeLabel(src)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <Input
+                                      value={c.fields[fk] || ''}
+                                      onChange={(e) => updateField(cIdx, fk, e.target.value)}
+                                      placeholder="—"
+                                      disabled={committing || c.skipped}
+                                      className={lowConfidence ? 'border-red-300 focus-visible:ring-red-300' : undefined}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Employment History — one repeating sub-card per job. */}
+                        <div className="space-y-2 pt-2 border-t">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Briefcase className="h-4 w-4 text-gray-600" />
+                              <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                                Employment History
+                              </h4>
+                              <span className="text-[10px] bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">
+                                {liveEmployments.length} {liveEmployments.length === 1 ? 'job' : 'jobs'}
+                              </span>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => addEmployment(cIdx)}
+                              disabled={committing || c.skipped}
+                            >
+                              <Plus className="h-3.5 w-3.5 mr-1" /> Add employment
+                            </Button>
+                          </div>
+
+                          {liveEmployments.length === 0 && (
+                            <div className="text-xs text-gray-500 italic border border-dashed rounded p-3 text-center">
+                              No employment history extracted. Click "Add employment" if the candidate has work history not picked up from the source documents.
+                            </div>
+                          )}
+
+                          {c.employments.map((emp, eIdx) => {
+                            if (emp.deleted) return null;
+                            const liveIdx = c.employments
+                              .slice(0, eIdx)
+                              .filter(e => !e.deleted).length; // visible 0-based index
+                            const empName = emp.fields.company_name?.trim() || `Employment ${liveIdx + 1}`;
+                            return (
+                              <div
+                                key={eIdx}
+                                className="border rounded-md bg-gray-50/50"
+                              >
+                                <div className="flex items-center gap-2 px-3 py-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="p-1 h-6 w-6"
+                                    onClick={() => toggleEmploymentExpanded(cIdx, eIdx)}
+                                    aria-label={emp.expanded ? 'Collapse' : 'Expand'}
+                                  >
+                                    {emp.expanded
+                                      ? <ChevronDown className="h-3.5 w-3.5" />
+                                      : <ChevronRight className="h-3.5 w-3.5" />}
+                                  </Button>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-semibold text-gray-900 truncate">
+                                      {empName}
+                                      <span className="ml-2 text-[10px] font-normal text-gray-500">
+                                        #{liveIdx + 1}
+                                      </span>
+                                    </div>
+                                    <div className="text-[11px] text-gray-500 truncate">
+                                      {emp.fields.designation || 'Designation —'} · {emp.fields.employment_period || 'Period —'}
                                     </div>
                                   </div>
-                                  <Input
-                                    value={c.fields[f.key] || ''}
-                                    onChange={(e) => updateField(cIdx, f.key, e.target.value)}
-                                    placeholder="—"
-                                    disabled={committing || c.skipped}
-                                    className={lowConfidence ? 'border-red-300 focus-visible:ring-red-300' : undefined}
-                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => deleteEmployment(cIdx, eIdx)}
+                                    disabled={committing}
+                                    title="Remove this employment entry"
+                                    className="h-7 w-7 p-0 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                                  </Button>
                                 </div>
-                              );
-                            })}
-                          </div>
+                                {emp.expanded && (
+                                  <div className="border-t bg-white p-3 grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+                                    {EMPLOYMENT_FIELDS.map(f => {
+                                      const src = emp.provenance[f.key] as string | null | undefined;
+                                      const conf = emp.confidence?.[f.key];
+                                      const lowConfidence = conf === 'low';
+                                      return (
+                                        <div key={f.key} className="space-y-1">
+                                          <div className="flex items-center justify-between gap-2">
+                                            <label className="text-xs font-medium text-gray-700">{f.label}</label>
+                                            <div className="flex items-center gap-1">
+                                              {lowConfidence && (
+                                                <span
+                                                  className="text-[10px] uppercase tracking-wide bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.5 rounded cursor-help"
+                                                  title={CONFIDENCE_HINT[f.key] || 'Validation flagged this field — please verify.'}
+                                                >
+                                                  ! check
+                                                </span>
+                                              )}
+                                              {src && (
+                                                <span className="text-[10px] uppercase tracking-wide bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                                                  from: {docTypeLabel(src)}
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <Input
+                                            value={emp.fields[f.key] || ''}
+                                            onChange={(e) => updateEmploymentField(cIdx, eIdx, f.key, e.target.value)}
+                                            placeholder="—"
+                                            disabled={committing || c.skipped}
+                                            className={lowConfidence ? 'border-red-300 focus-visible:ring-red-300' : undefined}
+                                          />
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))
+                      </>
                     )}
                   </div>
 
                   {c.compareOpen ? (
-                    <SourceDocViewer docs={cardDocs} />
+                    <SourceDocViewer docs={cardDocs} sticky />
                   ) : (
                     <aside className="space-y-2">
                       <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Source documents</h4>
@@ -368,7 +652,13 @@ const ReviewForm: React.FC<ReviewFormProps> = ({ job, onCommit, committing }) =>
       </div>
 
       <ExcelRowPreview
-        candidates={committable.map(c => ({ index: c.index, fields: c.fields }))}
+        candidates={committable.map(c => ({
+          index: c.index,
+          fields: c.fields,
+          employments: c.employments
+            .filter(e => !e.deleted)
+            .map(e => ({ fields: e.fields }))
+        }))}
         headers={excelHeaders}
         fieldKeyToColumn={fieldKeyToColumn}
       />
@@ -378,8 +668,8 @@ const ReviewForm: React.FC<ReviewFormProps> = ({ job, onCommit, committing }) =>
         <Button onClick={handleSubmit} disabled={committing || committable.length === 0}>
           <Save className="h-4 w-4 mr-2" />
           {committing
-            ? `Saving ${committable.length}…`
-            : `Save ${committable.length} to Excel`}
+            ? `Saving ${committableRowCount} row${committableRowCount === 1 ? '' : 's'}…`
+            : `Save ${committableRowCount} row${committableRowCount === 1 ? '' : 's'} to Excel`}
         </Button>
       </div>
     </div>
