@@ -21,6 +21,8 @@ export interface AddressVerification {
   verificationLink?: string;
   verificationToken?: string;
   verificationData?: VerificationData;
+  vendor?: { _id: string; name: string; email?: string; type?: string } | string | null;
+  vendorWork?: VendorWork;
   expiresAt?: string;
   formSubmitDate?: string;
   submittedBy?: string;
@@ -35,6 +37,39 @@ export interface DocumentUpload {
   s3Key: string;
   s3Url: string;
   uploadedAt: string;
+}
+
+export interface VendorCheckRow {
+  key: string;
+  label: string;
+  profileValue?: string;
+  entityStatus?: 'verified' | 'disputed' | 'na';
+  disputeReason?: string;
+}
+
+export interface VendorPhoto {
+  _id?: string;
+  docName?: string;
+  s3Key?: string;
+  s3Url?: string;
+  latitude?: number;
+  longitude?: number;
+  gpsAddress?: string;
+  uploadedAt?: string;
+}
+
+export interface VendorWork {
+  assignedMember?: { _id: string; name: string; email?: string } | string | null;
+  status?: 'not_started' | 'in_progress' | 'verified' | 'disputed';
+  checks?: VendorCheckRow[];
+  verifierComment?: string;
+  verifierName?: string;
+  verifierContact?: string;
+  verifiedBy?: string;
+  photos?: VendorPhoto[];
+  documents?: DocumentUpload[];
+  submittedAt?: string;
+  submittedBy?: string;
 }
 
 export interface VerificationData {

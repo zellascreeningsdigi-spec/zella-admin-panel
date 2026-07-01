@@ -31,6 +31,9 @@ interface AddressVerificationTableProps {
   pageSize?: number;
   totalCount?: number;
   onPageChange?: (page: number) => void;
+  // When true, only the "View Details" action is shown (used by the vendor
+  // read-only portal). Edit / delete / send-link / report actions are hidden.
+  readOnly?: boolean;
 }
 
 const AddressVerificationTable = ({
@@ -43,6 +46,7 @@ const AddressVerificationTable = ({
   pageSize,
   totalCount,
   onPageChange,
+  readOnly = false,
 }: AddressVerificationTableProps) => {
   const navigate = useNavigate();
 
@@ -209,6 +213,37 @@ SECURE | AUTHENTICATE`;
         },
       },
       {
+        id: 'handledBy',
+        header: 'Handled By',
+        cell: ({ row }) => {
+          const vendor = row.original.vendor;
+          const vendorName = vendor && typeof vendor === 'object' ? vendor.name : null;
+          const member = row.original.vendorWork?.assignedMember;
+          const memberName = member && typeof member === 'object' ? member.name : null;
+          const vwStatus = row.original.vendorWork?.status;
+          if (!vendorName) return <span className="text-gray-400 text-sm">—</span>;
+          return (
+            <div className="text-sm">
+              <div className="font-medium">{vendorName}</div>
+              {memberName && <div className="text-gray-500">{memberName}</div>}
+              {vwStatus && vwStatus !== 'not_started' && (
+                <span
+                  className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                    vwStatus === 'verified'
+                      ? 'bg-green-100 text-green-800'
+                      : vwStatus === 'disputed'
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-blue-100 text-blue-800'
+                  }`}
+                >
+                  {vwStatus === 'in_progress' ? 'In Progress' : vwStatus}
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
         id: 'actions',
         header: 'Actions',
         cell: ({ row }) => (
@@ -222,69 +257,73 @@ SECURE | AUTHENTICATE`;
             >
               <Eye className="w-4 h-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onEdit(row.original)}
-              title="Edit"
-            >
-              <Edit className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onSendLink(row.original)}
-              title="Send Verification Link"
-              disabled={row.original.verificationStatus === 'completed'}
-            >
-              <Send className="w-4 h-4" />
-            </Button>
-            {row.original.verificationLink && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleSendWhatsApp(row.original)}
-                title="Send via WhatsApp"
-                className="text-green-600 hover:text-green-700 hover:bg-green-50"
-              >
-                <MessageCircle className="w-4 h-4" />
-              </Button>
-            )}
-            {row.original.status === 'verified' && row.original.verificationStatus === 'completed' && (
+            {!readOnly && (
               <>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleViewReport(row.original)}
-                  title="View Report (HTML)"
-                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                  onClick={() => onEdit(row.original)}
+                  title="Edit"
                 >
-                  <FileText className="w-4 h-4" />
+                  <Edit className="w-4 h-4" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleDownloadReport(row.original)}
-                  title="Download Report (PDF)"
-                  className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                  onClick={() => onSendLink(row.original)}
+                  title="Send Verification Link"
+                  disabled={row.original.verificationStatus === 'completed'}
                 >
-                  <Download className="w-4 h-4" />
+                  <Send className="w-4 h-4" />
+                </Button>
+                {row.original.verificationLink && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSendWhatsApp(row.original)}
+                    title="Send via WhatsApp"
+                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                  </Button>
+                )}
+                {row.original.status === 'verified' && row.original.verificationStatus === 'completed' && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleViewReport(row.original)}
+                      title="View Report (HTML)"
+                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                    >
+                      <FileText className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDownloadReport(row.original)}
+                      title="Download Report (PDF)"
+                      className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                    >
+                      <Download className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => row.original._id && onDelete(row.original._id)}
+                  title="Delete"
+                >
+                  <Trash2 className="w-4 h-4 text-red-500" />
                 </Button>
               </>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => row.original._id && onDelete(row.original._id)}
-              title="Delete"
-            >
-              <Trash2 className="w-4 h-4 text-red-500" />
-            </Button>
           </div>
         ),
       },
     ],
-    [onEdit, onDelete, onSendLink, navigate, handleSendWhatsApp, handleViewReport, handleDownloadReport]
+    [onEdit, onDelete, onSendLink, navigate, handleSendWhatsApp, handleViewReport, handleDownloadReport, readOnly]
   );
 
   const _pageSize = pageSize ?? 10;

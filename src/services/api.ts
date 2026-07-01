@@ -391,6 +391,132 @@ class ApiService {
     return this.post('/customers/bulk-password-reminders', { customerIds, enabled });
   }
 
+  // Vendors API methods (super-admin only)
+  async getVendors(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    isActive?: boolean;
+  }): Promise<ApiResponse<{
+    vendors: any[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+  }>> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.isActive !== undefined) queryParams.append('isActive', String(params.isActive));
+
+    const endpoint = queryParams.toString() ? `/vendors?${queryParams}` : '/vendors';
+    return this.get(endpoint);
+  }
+
+  async getVendorById(vendorId: string): Promise<ApiResponse<{ vendor: any }>> {
+    return this.get(`/vendors/${vendorId}`);
+  }
+
+  async createVendor(vendorData: any): Promise<ApiResponse<{ vendor: any; userProvisioned: boolean }>> {
+    return this.post('/vendors', vendorData);
+  }
+
+  async updateVendor(vendorId: string, vendorData: any): Promise<ApiResponse<{ vendor: any }>> {
+    return this.put(`/vendors/${vendorId}`, vendorData);
+  }
+
+  async deleteVendor(vendorId: string): Promise<ApiResponse<{ vendor: any }>> {
+    return this.delete(`/vendors/${vendorId}`);
+  }
+
+  // ── Vendor portal (vendor / vendor-member) ──────────────────────────────
+  async getMyVendor(): Promise<ApiResponse<{ vendor: any; role: string }>> {
+    return this.get('/vendors/me');
+  }
+
+  async getVendorMembers(): Promise<ApiResponse<{ members: any[] }>> {
+    return this.get('/vendors/me/members');
+  }
+
+  async addVendorMember(payload: { name: string; email: string }): Promise<ApiResponse<{ member: any }>> {
+    return this.post('/vendors/me/members', payload);
+  }
+
+  async deleteVendorMember(userId: string): Promise<ApiResponse<{}>> {
+    return this.delete(`/vendors/me/members/${userId}`);
+  }
+
+  async assignCaseMember(verificationId: string, memberId: string): Promise<ApiResponse<{ assignedMember: any }>> {
+    return this.put(`/address-verifications/${verificationId}/assign-member`, { memberId });
+  }
+
+  async saveVendorWork(verificationId: string, payload: any): Promise<ApiResponse<{ vendorWork: any }>> {
+    return this.put(`/address-verifications/${verificationId}/vendor-work`, payload);
+  }
+
+  async uploadVendorPhoto(
+    verificationId: string,
+    file: File,
+    coords: { latitude?: number; longitude?: number }
+  ): Promise<ApiResponse<{ photo: any }>> {
+    const token = this.getAuthToken();
+    const formData = new FormData();
+    formData.append('photo', file);
+    if (coords.latitude !== undefined) formData.append('latitude', String(coords.latitude));
+    if (coords.longitude !== undefined) formData.append('longitude', String(coords.longitude));
+
+    const response = await fetch(`${API_BASE_URL}/address-verifications/${verificationId}/vendor-photo`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+        if (window.location.pathname !== '/login') window.location.href = '/login';
+        throw new Error('Authentication required');
+      }
+      throw new Error(data.message || `HTTP error! status: ${response.status}`);
+    }
+    return data;
+  }
+
+  async uploadVendorDocument(verificationId: string, file: File): Promise<ApiResponse<{ document: any }>> {
+    const token = this.getAuthToken();
+    const formData = new FormData();
+    formData.append('document', file);
+
+    const response = await fetch(`${API_BASE_URL}/address-verifications/${verificationId}/vendor-document`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+        if (window.location.pathname !== '/login') window.location.href = '/login';
+        throw new Error('Authentication required');
+      }
+      throw new Error(data.message || `HTTP error! status: ${response.status}`);
+    }
+    return data;
+  }
+
+  async deleteVendorPhoto(verificationId: string, photoId: string): Promise<ApiResponse<{}>> {
+    return this.delete(`/address-verifications/${verificationId}/vendor-photo/${photoId}`);
+  }
+
+  async deleteVendorDocument(verificationId: string, docId: string): Promise<ApiResponse<{}>> {
+    return this.delete(`/address-verifications/${verificationId}/vendor-document/${docId}`);
+  }
+
   // Customer Documents API
   async getCustomerDocuments(customerId: string): Promise<ApiResponse<{
     documents: any[];
@@ -703,6 +829,14 @@ class ApiService {
     status?: string;
     verificationStatus?: string;
     search?: string;
+    vendor?: string;
+    vendorWorkStatus?: string;
+    assignedMember?: string;
+    companyName?: string;
+    city?: string;
+    state?: string;
+    dateFrom?: string;
+    dateTo?: string;
   }): Promise<ApiResponse<{
     verifications: any[];
     pagination: {
@@ -718,9 +852,41 @@ class ApiService {
     if (params?.status) queryParams.append('status', params.status);
     if (params?.verificationStatus) queryParams.append('verificationStatus', params.verificationStatus);
     if (params?.search) queryParams.append('search', params.search);
+    if (params?.vendor) queryParams.append('vendor', params.vendor);
+    if (params?.vendorWorkStatus) queryParams.append('vendorWorkStatus', params.vendorWorkStatus);
+    if (params?.assignedMember) queryParams.append('assignedMember', params.assignedMember);
+    if (params?.companyName) queryParams.append('companyName', params.companyName);
+    if (params?.city) queryParams.append('city', params.city);
+    if (params?.state) queryParams.append('state', params.state);
+    if (params?.dateFrom) queryParams.append('dateFrom', params.dateFrom);
+    if (params?.dateTo) queryParams.append('dateTo', params.dateTo);
 
     const queryString = queryParams.toString();
     return this.get(`/address-verifications${queryString ? `?${queryString}` : ''}`);
+  }
+
+  // Vendor analytics (super-admin + admin)
+  async getVendorAnalytics(params?: {
+    vendorId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    companyName?: string;
+    city?: string;
+    state?: string;
+  }): Promise<ApiResponse<{ perVendor: any[]; totals: any }>> {
+    const q = new URLSearchParams();
+    if (params?.vendorId) q.append('vendorId', params.vendorId);
+    if (params?.dateFrom) q.append('dateFrom', params.dateFrom);
+    if (params?.dateTo) q.append('dateTo', params.dateTo);
+    if (params?.companyName) q.append('companyName', params.companyName);
+    if (params?.city) q.append('city', params.city);
+    if (params?.state) q.append('state', params.state);
+    const qs = q.toString();
+    return this.get(`/vendors/analytics${qs ? `?${qs}` : ''}`);
+  }
+
+  async getVendorMemberAnalytics(vendorId: string): Promise<ApiResponse<{ members: any[] }>> {
+    return this.get(`/vendors/${vendorId}/analytics/members`);
   }
 
   async getAddressVerificationStats(): Promise<ApiResponse<{

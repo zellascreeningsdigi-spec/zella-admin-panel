@@ -7,7 +7,7 @@ import { AddressVerification, AddressVerificationStats } from '@/types/addressVe
 import AddressVerificationTable from './AddressVerificationTable';
 import AddAddressVerificationDialog from './AddAddressVerificationDialog';
 import BulkUploadDialog from './BulkUploadDialog';
-import AddressVerificationFilters from './AddressVerificationFilters';
+import AddressVerificationFilters, { AVFilters } from './AddressVerificationFilters';
 
 const AddressVerificationTab = () => {
   const [verifications, setVerifications] = useState<AddressVerification[]>([]);
@@ -24,10 +24,17 @@ const AddressVerificationTab = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [editingVerification, setEditingVerification] = useState<AddressVerification | null>(null);
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<AVFilters>({
     status: '',
     verificationStatus: '',
-    search: ''
+    search: '',
+    vendor: '',
+    vendorWorkStatus: '',
+    companyName: '',
+    city: '',
+    state: '',
+    dateFrom: '',
+    dateTo: '',
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);

@@ -6,6 +6,7 @@ import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-d
 import DocumentPage from './pages/DocumentPage';
 import AddressVerificationPage from './pages/AddressVerificationPage';
 import VerificationDetailPage from './pages/VerificationDetailPage';
+import VendorCaseDetailPage from './pages/VendorCaseDetailPage';
 import ReportViewPage from './pages/ReportViewPage';
 import DocumentCollectionPage from './pages/DocumentCollectionPage';
 import DocumentCollectionDetailPage from './pages/DocumentCollectionDetailPage';
@@ -32,6 +33,8 @@ function App() {
             <Route path="/address-verifications/:id/report" element={<ReportViewPage />} />
 
             <Route path="/address-verifications/:id" element={<VerificationDetailPage />} />
+
+            <Route path="/vendor/cases/:id" element={<VendorCaseDetailPage />} />
 
             <Route path="/verification/documents/:token" element={<DocumentCollectionPage />} />
 

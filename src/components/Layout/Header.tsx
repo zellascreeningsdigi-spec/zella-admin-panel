@@ -1,10 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { ChevronDown, Key, LogOut, User } from 'lucide-react';
+import { ChevronDown, Key, LogOut, User, Menu } from 'lucide-react';
 import ResetPasswordDialog from '@/components/ResetPasswordDialog';
 import UpdateProfileDialog from '@/components/UpdateProfileDialog';
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
@@ -40,15 +44,22 @@ const Header: React.FC = () => {
 
   return (
     <>
-      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
-        <div className="flex items-center">
-          <h2 className="text-lg font-semibold text-gray-900">
+      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onMenuClick}
+            className="md:hidden p-2 -ml-2 text-gray-600 hover:text-gray-900 focus:outline-none"
+            aria-label="Open menu"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900">
             DataHub Dashboard
           </h2>
         </div>
 
         <div className="flex items-center space-x-4">
-          <div className="text-sm">
+          <div className="text-sm hidden sm:block">
             <span className="text-gray-500">Welcome back,</span>
             <span className="font-medium text-gray-900 ml-1">{user?.email}</span>
           </div>

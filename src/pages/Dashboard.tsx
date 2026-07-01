@@ -13,12 +13,17 @@ import AddressVerificationTab from '@/components/AddressVerification/AddressVeri
 import DocumentCollectionTab from '@/components/DocumentCollection/DocumentCollectionTab';
 import DocumentScannerTab from '@/components/DocumentScanner/DocumentScannerTab';
 import AuditLogTab from '@/components/AuditLog/AuditLogTab';
+import VendorsTab from '@/components/Vendors/VendorsTab';
+import VendorCasesTab from '@/components/Vendors/VendorCasesTab';
+import VendorTeamTab from '@/components/Vendors/VendorTeamTab';
+import VendorAnalyticsTab from '@/components/Vendors/VendorAnalyticsTab';
 
 const Dashboard: React.FC = () => {
   const { user, loading } = useAuth();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [casesPageIndex, setCasesPageIndex] = useState<number | undefined>(undefined);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (location.state?.activeTab) {
@@ -26,6 +31,9 @@ const Dashboard: React.FC = () => {
     } else if (user?.role === 'customer') {
       // Customer users should default to the customers tab
       setActiveTab('datahub');
+    } else if (user?.role === 'vendor' || user?.role === 'vendor-member') {
+      // Vendor users land on their "My Cases" view
+      setActiveTab('my-cases');
     }
 
     // Update cases page index from navigation state
@@ -74,6 +82,18 @@ const Dashboard: React.FC = () => {
         return <ReportsTab />;
       case 'audit-logs':
         return user?.role === 'super-admin' ? <AuditLogTab /> : <DashboardOverview />;
+      case 'vendors':
+        return user?.role === 'super-admin' ? <VendorsTab /> : <DashboardOverview />;
+      case 'vendor-analytics':
+        return (user?.role === 'super-admin' || user?.role === 'admin')
+          ? <VendorAnalyticsTab />
+          : <DashboardOverview />;
+      case 'my-cases':
+        return (user?.role === 'vendor' || user?.role === 'vendor-member')
+          ? <VendorCasesTab />
+          : <DashboardOverview />;
+      case 'team':
+        return user?.role === 'vendor' ? <VendorTeamTab /> : <DashboardOverview />;
       case 'manage-users':
         return <ManageUsersTab />;
       default:
@@ -83,9 +103,14 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
       <div className="flex-1 flex flex-col min-w-0">
-        <Header />
+        <Header onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 p-6 overflow-auto">
           {renderContent()}
         </main>

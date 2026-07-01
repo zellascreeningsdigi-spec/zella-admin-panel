@@ -31,7 +31,21 @@ interface FormData {
   landmark: string;
   addressType: 'current' | 'permanent' | 'office';
   verificationMethod: 'self' | 'physical' | 'document';
+  vendor: string;
 }
+
+interface VendorOption {
+  _id: string;
+  name: string;
+  email: string;
+}
+
+// An AddressVerification.vendor may be a populated object or an id string.
+const extractVendorId = (vendor: any): string => {
+  if (!vendor) return '';
+  if (typeof vendor === 'string') return vendor;
+  return vendor._id || '';
+};
 
 interface FormErrors {
   [key: string]: string;
@@ -61,10 +75,31 @@ const AddAddressVerificationDialog = ({
     landmark: '',
     addressType: 'current',
     verificationMethod: 'self',
+    vendor: '',
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [vendors, setVendors] = useState<VendorOption[]>([]);
+
+  // Load the active vendor list once the dialog opens.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await apiService.getVendors({ isActive: true, limit: 200 });
+        if (!cancelled && response.success && response.data) {
+          setVendors(response.data.vendors || []);
+        }
+      } catch (error) {
+        console.error('Failed to load vendors:', error);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (editVerification && open) {
@@ -88,6 +123,7 @@ const AddAddressVerificationDialog = ({
         landmark: editVerification.landmark || '',
         addressType: editVerification.addressType || 'current',
         verificationMethod: editVerification.verificationMethod || 'self',
+        vendor: extractVendorId((editVerification as any).vendor),
       });
     } else if (!editVerification && open) {
       setFormData({
@@ -108,6 +144,7 @@ const AddAddressVerificationDialog = ({
         landmark: '',
         addressType: 'current',
         verificationMethod: 'self',
+        vendor: '',
       });
       setErrors({});
     }
@@ -155,6 +192,8 @@ const AddAddressVerificationDialog = ({
     try {
       const submitData = {
         ...formData,
+        // Send null (not '') so the backend clears an existing assignment.
+        vendor: formData.vendor || null,
         formSubmitDate: new Date(formData.date).toISOString(),
       };
 
@@ -438,6 +477,27 @@ const AddAddressVerificationDialog = ({
                 <option value="document">Document Verification</option>
               </select>
             </div>
+          </div>
+
+          {/* Assign Vendor (optional) */}
+          <div>
+            <Label htmlFor="vendor">Assign Vendor (optional)</Label>
+            <select
+              id="vendor"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={formData.vendor}
+              onChange={(e) => handleInputChange('vendor', e.target.value)}
+            >
+              <option value="">— No vendor —</option>
+              {vendors.map((v) => (
+                <option key={v._id} value={v._id}>
+                  {v.name} ({v.email})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              If selected, the vendor is emailed and can view this case in their portal.
+            </p>
           </div>
 
           {/* Actions */}

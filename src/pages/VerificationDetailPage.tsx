@@ -921,6 +921,139 @@ SECURE | AUTHENTICATE`;
               </>
             )}
 
+            {/* Vendor Handling — shown when a vendor is assigned to this case */}
+            {verification.vendor && typeof verification.vendor === 'object' && (
+              <Card>
+                <CardHeader className="bg-indigo-50 border-b border-indigo-200">
+                  <CardTitle className="flex items-center gap-2 text-gray-900">
+                    <User className="w-5 h-5 text-indigo-600" />
+                    Vendor Handling
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    <div><span className="text-gray-500">Vendor:</span> <span className="font-medium">{verification.vendor.name}</span></div>
+                    {verification.vendor.type && (
+                      <div><span className="text-gray-500">Type:</span> <span className="capitalize">{verification.vendor.type}</span></div>
+                    )}
+                    <div>
+                      <span className="text-gray-500">Assigned Member:</span>{' '}
+                      {verification.vendorWork?.assignedMember && typeof verification.vendorWork.assignedMember === 'object'
+                        ? verification.vendorWork.assignedMember.name
+                        : '—'}
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Vendor Status:</span>{' '}
+                      <span className="font-medium capitalize">
+                        {(verification.vendorWork?.status || 'not_started').replace('_', ' ')}
+                      </span>
+                    </div>
+                    {verification.vendorWork?.submittedAt && (
+                      <div className="md:col-span-2">
+                        <span className="text-gray-500">Submitted At:</span>{' '}
+                        {new Date(verification.vendorWork.submittedAt).toLocaleString('en-IN')}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Filled Address Check table (read-only) */}
+                  {verification.vendorWork?.checks && verification.vendorWork.checks.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border text-sm">
+                        <thead>
+                          <tr className="bg-gray-100 text-left">
+                            <th className="p-2 border">Details</th>
+                            <th className="p-2 border">Profile Provided</th>
+                            <th className="p-2 border">Entity Provided</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {verification.vendorWork.checks.map((c) => (
+                            <tr key={c.key}>
+                              <td className="p-2 border font-medium bg-gray-50">{c.label}</td>
+                              <td className="p-2 border">{c.profileValue || '-'}</td>
+                              <td className="p-2 border">
+                                {c.entityStatus === 'verified' && <span className="text-green-700 font-medium">Verified</span>}
+                                {c.entityStatus === 'disputed' && (
+                                  <span className="text-red-700 font-medium">
+                                    Disputed{c.disputeReason ? ` — ${c.disputeReason}` : ''}
+                                  </span>
+                                )}
+                                {(!c.entityStatus || c.entityStatus === 'na') && <span className="text-gray-400">—</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Verifier details */}
+                  {(verification.vendorWork?.verifierComment || verification.vendorWork?.verifierName || verification.vendorWork?.verifiedBy) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                      {verification.vendorWork?.verifierComment && (
+                        <div className="md:col-span-2"><span className="text-gray-500">Verifier's Comment:</span> {verification.vendorWork.verifierComment}</div>
+                      )}
+                      {verification.vendorWork?.verifierName && (
+                        <div><span className="text-gray-500">Verifier's Name:</span> {verification.vendorWork.verifierName}</div>
+                      )}
+                      {verification.vendorWork?.verifierContact && (
+                        <div><span className="text-gray-500">Verifier's Contact:</span> {verification.vendorWork.verifierContact}</div>
+                      )}
+                      {verification.vendorWork?.verifiedBy && (
+                        <div><span className="text-gray-500">Verified By:</span> {verification.vendorWork.verifiedBy}</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Geo-stamped photos */}
+                  {verification.vendorWork?.photos && verification.vendorWork.photos.length > 0 && (
+                    <div>
+                      <div className="text-sm font-medium text-gray-700 mb-2">Field Photos</div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {verification.vendorWork.photos.map((p, idx) => (
+                          <div key={p._id || idx} className="border rounded-md overflow-hidden">
+                            <a href={p.s3Url} target="_blank" rel="noreferrer">
+                              <img src={p.s3Url} alt={p.docName || 'field photo'} className="w-full h-28 object-cover" />
+                            </a>
+                            <div className="p-2 text-xs">
+                              {p.latitude !== undefined && p.latitude !== null ? (
+                                <a
+                                  className="text-blue-600 flex items-center"
+                                  href={`https://maps.google.com/?q=${p.latitude},${p.longitude}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <MapPin className="w-3 h-3 mr-1" />
+                                  {Number(p.latitude).toFixed(4)}, {Number(p.longitude).toFixed(4)}
+                                </a>
+                              ) : (
+                                <span className="text-gray-400">No GPS</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Vendor documents */}
+                  {verification.vendorWork?.documents && verification.vendorWork.documents.length > 0 && (
+                    <div>
+                      <div className="text-sm font-medium text-gray-700 mb-2">Vendor Documents</div>
+                      <ul className="space-y-1 text-sm">
+                        {verification.vendorWork.documents.map((d, idx) => (
+                          <li key={idx}>
+                            <a href={d.s3Url} target="_blank" rel="noreferrer" className="text-blue-600">{d.docName}</a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Document Gallery - Always visible (independent of submission status) */}
             <Card>
               <CardHeader className="bg-orange-50 border-b border-orange-200">

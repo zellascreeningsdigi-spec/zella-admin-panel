@@ -1,15 +1,17 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, FileText, Home, Users, BarChart3, UserCog, MapPin, FileCheck, ShieldCheck, ScanLine } from 'lucide-react';
+import { LogOut, FileText, Home, Users, BarChart3, UserCog, MapPin, FileCheck, ShieldCheck, ScanLine, Store, ClipboardList, UsersRound } from 'lucide-react';
 import logo from "../../logo192.png";
 
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  open?: boolean;
+  onClose?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, open = false, onClose }) => {
   const { logout, user } = useAuth();
 
   const allMenuItems = [
@@ -20,7 +22,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
     { id: 'document-collection', label: 'Documents Collection', icon: FileCheck, roles: ['super-admin', 'admin'] },
     { id: 'document-scanner', label: 'Document Scanner', icon: ScanLine, roles: ['super-admin', 'admin'] },
     { id: 'reports', label: 'Reports', icon: BarChart3, roles: ['super-admin', 'admin', 'customer'] },
+    { id: 'vendors', label: 'Vendors', icon: Store, roles: ['super-admin'] },
+    { id: 'vendor-analytics', label: 'Vendor Analytics', icon: BarChart3, roles: ['super-admin', 'admin'] },
     { id: 'audit-logs', label: 'Audit Logs', icon: ShieldCheck, roles: ['super-admin'] },
+    { id: 'my-cases', label: 'My Cases', icon: ClipboardList, roles: ['vendor', 'vendor-member'] },
+    { id: 'team', label: 'Team', icon: UsersRound, roles: ['vendor'] },
   ];
 
   // Filter menu items based on user role
@@ -31,8 +37,28 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   // Show Manage Users only for ashish@zellascreenings.com
   const canManageUsers = user?.email === 'ashish@zellascreenings.com';
 
+  const handleNavClick = (tab: string) => {
+    onTabChange(tab);
+    onClose?.();
+  };
+
   return (
-    <div className="h-screen w-[300px] min-w-[300px] flex-shrink-0 bg-gray-900 text-white flex flex-col">
+    <>
+      {/* Mobile backdrop */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+
+      <div
+        className={`fixed inset-y-0 left-0 z-50 w-[280px] transform transition-transform duration-200 ease-in-out
+          md:static md:translate-x-0 md:w-[300px] md:min-w-[300px] md:flex-shrink-0
+          h-screen bg-gray-900 text-white flex flex-col
+          ${open ? 'translate-x-0' : '-translate-x-full'}`}
+      >
       <div className="flex items-center p-5 space-x-3">
         <div className="flex-shrink-0">
           <img src={logo} width={50} height={50} alt="Zella Screenings Logo"></img>
@@ -50,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
             return (
               <li key={item.id}>
                 <button
-                  onClick={() => onTabChange(item.id)}
+                  onClick={() => handleNavClick(item.id)}
                   className={`w-full flex items-center px-4 py-3 rounded-lg transition-colors ${
                     activeTab === item.id
                       ? 'bg-blue-600 text-white'
@@ -68,7 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
           {canManageUsers && (
             <li>
               <button
-                onClick={() => onTabChange('manage-users')}
+                onClick={() => handleNavClick('manage-users')}
                 className={`w-full flex items-center px-4 py-3 rounded-lg transition-colors ${
                   activeTab === 'manage-users'
                     ? 'bg-blue-600 text-white'
@@ -93,7 +119,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
           Sign Out
         </Button>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
