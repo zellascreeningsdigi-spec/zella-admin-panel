@@ -46,7 +46,7 @@ const ReportViewPage: React.FC = () => {
   };
 
   const handleBack = () => {
-    navigate('/dashboard', { state: { activeTab: 'address-verification' } });
+    navigate('/dashboard', { state: { activeTab: 'digital-address-verification' } });
   };
 
   if (loading) {

@@ -44,6 +44,8 @@ const VerificationDetailPage = () => {
   const navigate = useNavigate();
   const [verification, setVerification] = useState<AddressVerification | null>(null);
   const [loading, setLoading] = useState(true);
+  // Route "Back" to the tab the case belongs to (vendor-assigned vs digital).
+  const backTab = () => (verification?.vendor ? 'vendor-address-verification' : 'digital-address-verification');
   const [updating, setUpdating] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
@@ -112,7 +114,7 @@ const VerificationDetailPage = () => {
     } catch (error) {
       console.error('Failed to fetch verification:', error);
       alert('Failed to load verification details');
-      navigate('/dashboard', { state: { activeTab: 'address-verification' } });
+      navigate('/dashboard', { state: { activeTab: backTab() } });
     } finally {
       setLoading(false);
     }
@@ -249,7 +251,7 @@ const VerificationDetailPage = () => {
       if (response.success) {
         alert('Verification updated successfully');
         if (shouldRedirect) {
-          navigate('/dashboard', { state: { activeTab: 'address-verification' } });
+          navigate('/dashboard', { state: { activeTab: backTab() } });
         } else {
           fetchVerification();
         }
@@ -440,7 +442,7 @@ SECURE | AUTHENTICATE`;
         <div className="text-center">
           <AlertCircle className="w-16 h-16 mx-auto mb-4 text-gray-400" />
           <p className="text-xl text-gray-600">Verification not found</p>
-          <Button onClick={() => navigate('/dashboard', { state: { activeTab: 'address-verification' } })} className="mt-4">
+          <Button onClick={() => navigate('/dashboard', { state: { activeTab: backTab() } })} className="mt-4">
             Back to Address Verification
           </Button>
         </div>
@@ -457,7 +459,7 @@ SECURE | AUTHENTICATE`;
             <div className="flex items-center gap-4">
               <Button
                 variant="ghost"
-                onClick={() => navigate('/dashboard', { state: { activeTab: 'address-verification' } })}
+                onClick={() => navigate('/dashboard', { state: { activeTab: backTab() } })}
                 className="flex items-center gap-2"
               >
                 <ArrowLeft className="w-5 h-5" />

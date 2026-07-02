@@ -13,6 +13,8 @@ export interface Vendor {
   _id: string;
   name: string;
   email: string;
+  companyName?: string;
+  phone?: string;
   description?: string;
   gstin?: string;
   addressVerificationPrice: number;
@@ -64,8 +66,9 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate }: VendorsTablePr
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Company</TableHead>
               <TableHead>Type</TableHead>
-              <TableHead>Email</TableHead>
+              <TableHead>Contact</TableHead>
               <TableHead>GSTIN</TableHead>
               <TableHead>Price / Case (₹)</TableHead>
               <TableHead>Status</TableHead>
@@ -83,8 +86,12 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate }: VendorsTablePr
                     </div>
                   )}
                 </TableCell>
+                <TableCell>{vendor.companyName || '-'}</TableCell>
                 <TableCell className="capitalize">{vendor.type || 'independent'}</TableCell>
-                <TableCell>{vendor.email}</TableCell>
+                <TableCell>
+                  <div className="text-sm">{vendor.email}</div>
+                  {vendor.phone && <div className="text-xs text-gray-500">{vendor.phone}</div>}
+                </TableCell>
                 <TableCell className="font-mono text-sm">{vendor.gstin || '-'}</TableCell>
                 <TableCell>{vendor.addressVerificationPrice}</TableCell>
                 <TableCell>{statusBadge(vendor.isActive)}</TableCell>
@@ -124,8 +131,10 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate }: VendorsTablePr
               </div>
               {statusBadge(vendor.isActive)}
             </div>
+            <div className="text-sm"><span className="text-gray-500">Company:</span> {vendor.companyName || '-'}</div>
             <div className="text-sm"><span className="text-gray-500">Type:</span> <span className="capitalize">{vendor.type || 'independent'}</span></div>
             <div className="text-sm break-all"><span className="text-gray-500">Email:</span> {vendor.email}</div>
+            {vendor.phone && <div className="text-sm"><span className="text-gray-500">Phone:</span> {vendor.phone}</div>}
             <div className="text-sm"><span className="text-gray-500">GSTIN:</span> {vendor.gstin || '-'}</div>
             <div className="text-sm"><span className="text-gray-500">Price / Case (₹):</span> {vendor.addressVerificationPrice}</div>
             <div className="flex gap-2 pt-1">

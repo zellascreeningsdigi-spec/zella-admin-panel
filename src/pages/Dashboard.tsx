@@ -67,8 +67,10 @@ const Dashboard: React.FC = () => {
         return <CasesTab pageIndex={casesPageIndex} />;
       case 'datahub':
         return <CustomersTab />;
-      case 'address-verification':
-        return <AddressVerificationTab />;
+      case 'digital-address-verification':
+        return <AddressVerificationTab mode="digital" />;
+      case 'vendor-address-verification':
+        return <AddressVerificationTab mode="vendor" />;
       case 'document-collection':
         return (
           <DocumentCollectionTab

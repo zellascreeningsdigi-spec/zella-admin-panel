@@ -837,6 +837,7 @@ class ApiService {
     state?: string;
     dateFrom?: string;
     dateTo?: string;
+    hasVendor?: 'true' | 'false';
   }): Promise<ApiResponse<{
     verifications: any[];
     pagination: {
@@ -860,9 +861,14 @@ class ApiService {
     if (params?.state) queryParams.append('state', params.state);
     if (params?.dateFrom) queryParams.append('dateFrom', params.dateFrom);
     if (params?.dateTo) queryParams.append('dateTo', params.dateTo);
+    if (params?.hasVendor) queryParams.append('hasVendor', params.hasVendor);
 
     const queryString = queryParams.toString();
     return this.get(`/address-verifications${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async bulkAssignVendor(ids: string[], vendor: string, price: number): Promise<ApiResponse<{ updated: number; failed: number }>> {
+    return this.post('/address-verifications/bulk-assign', { ids, vendor, price });
   }
 
   // Vendor analytics (super-admin + admin)

@@ -11,6 +11,7 @@ interface AddAddressVerificationDialogProps {
   onClose: () => void;
   onSuccess: () => void;
   editVerification?: AddressVerification | null;
+  mode?: 'digital' | 'vendor';
 }
 
 interface FormData {
@@ -32,12 +33,14 @@ interface FormData {
   addressType: 'current' | 'permanent' | 'office';
   verificationMethod: 'self' | 'physical' | 'document';
   vendor: string;
+  vendorWorkPrice: string;
 }
 
 interface VendorOption {
   _id: string;
   name: string;
   email: string;
+  addressVerificationPrice?: number;
 }
 
 // An AddressVerification.vendor may be a populated object or an id string.
@@ -56,7 +59,9 @@ const AddAddressVerificationDialog = ({
   onClose,
   onSuccess,
   editVerification,
+  mode = 'digital',
 }: AddAddressVerificationDialogProps) => {
+  const isVendorMode = mode === 'vendor';
   const [formData, setFormData] = useState<FormData>({
     code: '',
     applicantNo: '',
@@ -76,6 +81,7 @@ const AddAddressVerificationDialog = ({
     addressType: 'current',
     verificationMethod: 'self',
     vendor: '',
+    vendorWorkPrice: '',
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -124,6 +130,10 @@ const AddAddressVerificationDialog = ({
         addressType: editVerification.addressType || 'current',
         verificationMethod: editVerification.verificationMethod || 'self',
         vendor: extractVendorId((editVerification as any).vendor),
+        vendorWorkPrice:
+          (editVerification as any).vendorWork?.price != null
+            ? String((editVerification as any).vendorWork.price)
+            : '',
       });
     } else if (!editVerification && open) {
       setFormData({
@@ -145,6 +155,7 @@ const AddAddressVerificationDialog = ({
         addressType: 'current',
         verificationMethod: 'self',
         vendor: '',
+        vendorWorkPrice: '',
       });
       setErrors({});
     }
@@ -178,6 +189,17 @@ const AddAddressVerificationDialog = ({
       newErrors.pin = 'PIN code must be 6 digits';
     }
 
+    // Vendor tab: vendor + price are mandatory (frontend-only).
+    if (isVendorMode) {
+      if (!formData.vendor) newErrors.vendor = 'Vendor is required';
+      if (formData.vendorWorkPrice === '') {
+        newErrors.vendorWorkPrice = 'Price is required';
+      } else {
+        const p = Number(formData.vendorWorkPrice);
+        if (Number.isNaN(p) || p < 0) newErrors.vendorWorkPrice = 'Price must be a number ≥ 0';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -190,12 +212,20 @@ const AddAddressVerificationDialog = ({
     setIsSubmitting(true);
 
     try {
-      const submitData = {
-        ...formData,
-        // Send null (not '') so the backend clears an existing assignment.
-        vendor: formData.vendor || null,
+      const { vendor, vendorWorkPrice, ...rest } = formData;
+      const submitData: any = {
+        ...rest,
         formSubmitDate: new Date(formData.date).toISOString(),
       };
+      if (isVendorMode) {
+        // Vendor tab: attach vendor + per-case price.
+        submitData.vendor = vendor || null;
+        submitData.vendorWorkPrice = vendorWorkPrice === '' ? null : Number(vendorWorkPrice);
+      } else if (editVerification) {
+        // Digital tab editing: preserve whatever vendor state exists, don't force it.
+        submitData.vendor = vendor || null;
+      }
+      // Digital create: omit vendor entirely (stays unassigned → Digital tab).
 
       let response;
       if (editVerification?._id) {
@@ -479,26 +509,60 @@ const AddAddressVerificationDialog = ({
             </div>
           </div>
 
-          {/* Assign Vendor (optional) */}
-          <div>
-            <Label htmlFor="vendor">Assign Vendor (optional)</Label>
-            <select
-              id="vendor"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={formData.vendor}
-              onChange={(e) => handleInputChange('vendor', e.target.value)}
-            >
-              <option value="">— No vendor —</option>
-              {vendors.map((v) => (
-                <option key={v._id} value={v._id}>
-                  {v.name} ({v.email})
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-400 mt-1">
-              If selected, the vendor is emailed and can view this case in their portal.
-            </p>
-          </div>
+          {/* Assign Vendor + price — Vendor tab only */}
+          {isVendorMode && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="vendor">
+                  Assign Vendor <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  id="vendor"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={formData.vendor}
+                  onChange={(e) => {
+                    const vid = e.target.value;
+                    const v = vendors.find((x) => x._id === vid);
+                    setFormData((prev) => ({
+                      ...prev,
+                      vendor: vid,
+                      // Pre-fill price from the vendor's default when empty.
+                      vendorWorkPrice:
+                        prev.vendorWorkPrice === '' && v?.addressVerificationPrice != null
+                          ? String(v.addressVerificationPrice)
+                          : prev.vendorWorkPrice,
+                    }));
+                    if (errors.vendor) setErrors((p) => ({ ...p, vendor: '' }));
+                  }}
+                >
+                  <option value="">— Select vendor —</option>
+                  {vendors.map((v) => (
+                    <option key={v._id} value={v._id}>
+                      {v.name} ({v.email})
+                    </option>
+                  ))}
+                </select>
+                {errors.vendor && <p className="text-sm text-red-500 mt-1">{errors.vendor}</p>}
+              </div>
+              <div>
+                <Label htmlFor="vendorWorkPrice">
+                  Price per case (₹) <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="vendorWorkPrice"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={formData.vendorWorkPrice}
+                  onChange={(e) => handleInputChange('vendorWorkPrice', e.target.value)}
+                  placeholder="e.g., 250"
+                />
+                {errors.vendorWorkPrice && (
+                  <p className="text-sm text-red-500 mt-1">{errors.vendorWorkPrice}</p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex justify-end gap-2 pt-4">

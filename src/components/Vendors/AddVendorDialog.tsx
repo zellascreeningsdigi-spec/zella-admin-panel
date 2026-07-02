@@ -9,6 +9,8 @@ interface Vendor {
   _id?: string;
   name?: string;
   email?: string;
+  companyName?: string;
+  phone?: string;
   description?: string;
   gstin?: string;
   addressVerificationPrice?: number;
@@ -26,6 +28,8 @@ interface AddVendorDialogProps {
 interface FormData {
   name: string;
   email: string;
+  companyName: string;
+  phone: string;
   description: string;
   gstin: string;
   addressVerificationPrice: string;
@@ -39,6 +43,8 @@ interface FormErrors {
 const emptyForm: FormData = {
   name: '',
   email: '',
+  companyName: '',
+  phone: '',
   description: '',
   gstin: '',
   addressVerificationPrice: '',
@@ -55,6 +61,8 @@ const AddVendorDialog = ({ open, onClose, onSuccess, editVendor }: AddVendorDial
       setFormData({
         name: editVendor.name || '',
         email: editVendor.email || '',
+        companyName: editVendor.companyName || '',
+        phone: editVendor.phone || '',
         description: editVendor.description || '',
         gstin: editVendor.gstin || '',
         addressVerificationPrice:
@@ -82,6 +90,9 @@ const AddVendorDialog = ({ open, onClose, onSuccess, editVendor }: AddVendorDial
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       next.email = 'Invalid email format';
     }
+    if (formData.phone.trim() && !/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) {
+      next.phone = 'Phone must be 10 digits';
+    }
     if (formData.addressVerificationPrice === '') {
       next.addressVerificationPrice = 'Price is required';
     } else {
@@ -103,6 +114,8 @@ const AddVendorDialog = ({ open, onClose, onSuccess, editVendor }: AddVendorDial
       const payload = {
         name: formData.name.trim(),
         email: formData.email.trim(),
+        companyName: formData.companyName.trim(),
+        phone: formData.phone.trim(),
         description: formData.description.trim(),
         gstin: formData.gstin.trim(),
         addressVerificationPrice: Number(formData.addressVerificationPrice),
@@ -188,6 +201,29 @@ const AddVendorDialog = ({ open, onClose, onSuccess, editVendor }: AddVendorDial
               </p>
             )}
             {errors.email && <p className="text-sm text-red-500 mt-1">{errors.email}</p>}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="vendor-company">Company Name</Label>
+              <Input
+                id="vendor-company"
+                value={formData.companyName}
+                onChange={(e) => handleChange('companyName', e.target.value)}
+                placeholder="e.g., ABC Pvt Ltd"
+              />
+            </div>
+            <div>
+              <Label htmlFor="vendor-phone">Phone Number</Label>
+              <Input
+                id="vendor-phone"
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => handleChange('phone', e.target.value)}
+                placeholder="10-digit mobile"
+              />
+              {errors.phone && <p className="text-sm text-red-500 mt-1">{errors.phone}</p>}
+            </div>
           </div>
 
           <div>

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiService } from '@/services/api';
-import { VendorCheck, buildVendorChecks } from '@/lib/vendorCheckRows';
+import { VendorCheck, buildVendorChecks, AUTO_DATE_ROW_KEY, todayDisplay } from '@/lib/vendorCheckRows';
 
 type GeoStatus =
   | 'idle' | 'requesting' | 'granted' | 'denied_soft' | 'denied_hard'
@@ -28,6 +28,11 @@ const VendorCaseDetailPage = () => {
 
   const [geoStatus, setGeoStatus] = useState<GeoStatus>('idle');
   const [coords, setCoords] = useState<{ latitude?: number; longitude?: number }>({});
+  // Locally-tracked photos so uploads append without a full page refetch
+  // (keeps scroll position). Seeded from the fetched case.
+  const [photos, setPhotos] = useState<any[]>([]);
+  // Staged capture awaiting the user's confirmation (preview before upload).
+  const [pendingPhoto, setPendingPhoto] = useState<{ file: File; url: string } | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
 
@@ -89,17 +94,24 @@ const VendorCaseDetailPage = () => {
         setVerification(v);
         const vw = v.vendorWork || {};
         setChecks(
-          Array.isArray(vw.checks) && vw.checks.length > 0
+          (Array.isArray(vw.checks) && vw.checks.length > 0
             ? vw.checks.map((c: any) => ({
                 key: c.key, label: c.label, profileValue: c.profileValue || '',
                 entityStatus: c.entityStatus || 'na', disputeReason: c.disputeReason || '',
               }))
             : buildVendorChecks(v)
+          ).map((c: VendorCheck) =>
+            // Date of Verification is always auto (today) and never disputed.
+            c.key === AUTO_DATE_ROW_KEY
+              ? { ...c, profileValue: c.profileValue || todayDisplay(), entityStatus: 'na', disputeReason: '' }
+              : c
+          )
         );
         setVerifierComment(vw.verifierComment || '');
         setVerifierName(vw.verifierName || '');
         setVerifierContact(vw.verifierContact || '');
         setVerifiedBy(vw.verifiedBy || '');
+        setPhotos(Array.isArray(vw.photos) ? vw.photos : []);
       } else {
         alert('Case not found or access denied');
         navigate('/dashboard');
@@ -139,14 +151,34 @@ const VendorCaseDetailPage = () => {
     setChecks((prev) => prev.map((c) => (c.key === key ? { ...c, profileValue } : c)));
   };
 
-  const handlePhotoSelected = async (file: File | null) => {
-    if (!file || !id) return;
+  // Stage a captured photo for preview (do NOT upload yet).
+  const handlePhotoSelected = (file: File | null) => {
+    if (photoInputRef.current) photoInputRef.current.value = '';
+    if (!file) return;
+    setPendingPhoto((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return { file, url: URL.createObjectURL(file) };
+    });
+  };
+
+  const cancelPendingPhoto = () => {
+    setPendingPhoto((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+  };
+
+  // Confirm the previewed photo → upload → append to local state (no refetch,
+  // so the page doesn't jump back to the top).
+  const confirmPendingPhoto = async () => {
+    if (!pendingPhoto || !id) return;
     setUploading(true);
     try {
-      const res = await apiService.uploadVendorPhoto(id, file, coords);
-      if (res.success) {
-        await fetchVerification();
-        // Refresh location for the next photo.
+      const res = await apiService.uploadVendorPhoto(id, pendingPhoto.file, coords);
+      if (res.success && res.data?.photo) {
+        setPhotos((prev) => [...prev, res.data!.photo]);
+        cancelPendingPhoto();
+        // Refresh location for the next photo (background).
         captureGeolocation();
       } else {
         alert(res.message || 'Upload failed');
@@ -155,7 +187,6 @@ const VendorCaseDetailPage = () => {
       alert(error.message || 'Failed to upload photo');
     } finally {
       setUploading(false);
-      if (photoInputRef.current) photoInputRef.current.value = '';
     }
   };
 
@@ -178,7 +209,8 @@ const VendorCaseDetailPage = () => {
     if (!id || !window.confirm('Delete this photo?')) return;
     try {
       await apiService.deleteVendorPhoto(id, photoId);
-      fetchVerification();
+      // Update local state (no refetch → keep scroll position).
+      setPhotos((prev) => prev.filter((p) => p._id !== photoId));
     } catch (error: any) {
       alert(error.message || 'Failed to delete photo');
     }
@@ -253,7 +285,6 @@ const VendorCaseDetailPage = () => {
   }
   if (!verification) return null;
 
-  const photos = verification.vendorWork?.photos || [];
   const documents = verification.vendorWork?.documents || [];
 
   return (
@@ -308,111 +339,135 @@ const VendorCaseDetailPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {checks.map((c) => (
+                {checks.map((c) => {
+                  const isAutoDate = c.key === AUTO_DATE_ROW_KEY;
+                  return (
                   <tr key={c.key} className="align-top">
                     <td className="p-2 border font-medium bg-gray-50">{c.label}</td>
                     <td className="p-2 border">
-                      <Input
-                        value={c.profileValue}
-                        onChange={(e) => setRowProfile(c.key, e.target.value)}
-                        disabled={readOnly}
-                        className="h-9"
-                      />
-                    </td>
-                    <td className="p-2 border">
-                      <div className="flex gap-1 mb-1">
-                        <button
-                          type="button"
-                          disabled={readOnly}
-                          onClick={() => setRowStatus(c.key, 'verified')}
-                          className={`px-3 py-1.5 rounded text-xs font-medium border ${
-                            c.entityStatus === 'verified'
-                              ? 'bg-green-600 text-white border-green-600'
-                              : 'bg-white text-gray-600 border-gray-300'
-                          }`}
-                        >
-                          Verified
-                        </button>
-                        <button
-                          type="button"
-                          disabled={readOnly}
-                          onClick={() => setRowStatus(c.key, 'disputed')}
-                          className={`px-3 py-1.5 rounded text-xs font-medium border ${
-                            c.entityStatus === 'disputed'
-                              ? 'bg-red-600 text-white border-red-600'
-                              : 'bg-white text-gray-600 border-gray-300'
-                          }`}
-                        >
-                          Disputed
-                        </button>
-                      </div>
-                      {c.entityStatus === 'disputed' && (
+                      {isAutoDate ? (
+                        <span className="text-gray-700">{c.profileValue}</span>
+                      ) : (
                         <Input
-                          value={c.disputeReason}
-                          onChange={(e) => setRowReason(c.key, e.target.value)}
+                          value={c.profileValue}
+                          onChange={(e) => setRowProfile(c.key, e.target.value)}
                           disabled={readOnly}
-                          placeholder="Dispute reason (required)"
                           className="h-9"
                         />
                       )}
                     </td>
+                    <td className="p-2 border">
+                      {isAutoDate ? (
+                        <span className="text-gray-400 text-xs">Auto-recorded</span>
+                      ) : (
+                        <>
+                          <div className="flex gap-1 mb-1">
+                            <button
+                              type="button"
+                              disabled={readOnly}
+                              onClick={() => setRowStatus(c.key, 'verified')}
+                              className={`px-3 py-1.5 rounded text-xs font-medium border ${
+                                c.entityStatus === 'verified'
+                                  ? 'bg-green-600 text-white border-green-600'
+                                  : 'bg-white text-gray-600 border-gray-300'
+                              }`}
+                            >
+                              Verified
+                            </button>
+                            <button
+                              type="button"
+                              disabled={readOnly}
+                              onClick={() => setRowStatus(c.key, 'disputed')}
+                              className={`px-3 py-1.5 rounded text-xs font-medium border ${
+                                c.entityStatus === 'disputed'
+                                  ? 'bg-red-600 text-white border-red-600'
+                                  : 'bg-white text-gray-600 border-gray-300'
+                              }`}
+                            >
+                              Disputed
+                            </button>
+                          </div>
+                          {c.entityStatus === 'disputed' && (
+                            <Input
+                              value={c.disputeReason}
+                              onChange={(e) => setRowReason(c.key, e.target.value)}
+                              disabled={readOnly}
+                              placeholder="Dispute reason (required)"
+                              className="h-9"
+                            />
+                          )}
+                        </>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           {/* Mobile: stacked cards, one per check row */}
           <div className="sm:hidden space-y-3">
-            {checks.map((c) => (
+            {checks.map((c) => {
+              const isAutoDate = c.key === AUTO_DATE_ROW_KEY;
+              return (
               <div key={c.key} className="border rounded-md p-3 space-y-2">
                 <div className="font-medium text-sm">{c.label}</div>
-                <div>
-                  <label className="text-xs text-gray-500">Profile Provided</label>
-                  <Input
-                    value={c.profileValue}
-                    onChange={(e) => setRowProfile(c.key, e.target.value)}
-                    disabled={readOnly}
-                    className="h-10 mt-1"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={readOnly}
-                    onClick={() => setRowStatus(c.key, 'verified')}
-                    className={`flex-1 px-3 py-2 rounded text-sm font-medium border ${
-                      c.entityStatus === 'verified'
-                        ? 'bg-green-600 text-white border-green-600'
-                        : 'bg-white text-gray-600 border-gray-300'
-                    }`}
-                  >
-                    Verified
-                  </button>
-                  <button
-                    type="button"
-                    disabled={readOnly}
-                    onClick={() => setRowStatus(c.key, 'disputed')}
-                    className={`flex-1 px-3 py-2 rounded text-sm font-medium border ${
-                      c.entityStatus === 'disputed'
-                        ? 'bg-red-600 text-white border-red-600'
-                        : 'bg-white text-gray-600 border-gray-300'
-                    }`}
-                  >
-                    Disputed
-                  </button>
-                </div>
-                {c.entityStatus === 'disputed' && (
-                  <Input
-                    value={c.disputeReason}
-                    onChange={(e) => setRowReason(c.key, e.target.value)}
-                    disabled={readOnly}
-                    placeholder="Dispute reason (required)"
-                    className="h-10"
-                  />
+                {isAutoDate ? (
+                  <div className="text-sm text-gray-700">
+                    {c.profileValue} <span className="text-gray-400 text-xs">(auto-recorded)</span>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-xs text-gray-500">Profile Provided</label>
+                      <Input
+                        value={c.profileValue}
+                        onChange={(e) => setRowProfile(c.key, e.target.value)}
+                        disabled={readOnly}
+                        className="h-10 mt-1"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={readOnly}
+                        onClick={() => setRowStatus(c.key, 'verified')}
+                        className={`flex-1 px-3 py-2 rounded text-sm font-medium border ${
+                          c.entityStatus === 'verified'
+                            ? 'bg-green-600 text-white border-green-600'
+                            : 'bg-white text-gray-600 border-gray-300'
+                        }`}
+                      >
+                        Verified
+                      </button>
+                      <button
+                        type="button"
+                        disabled={readOnly}
+                        onClick={() => setRowStatus(c.key, 'disputed')}
+                        className={`flex-1 px-3 py-2 rounded text-sm font-medium border ${
+                          c.entityStatus === 'disputed'
+                            ? 'bg-red-600 text-white border-red-600'
+                            : 'bg-white text-gray-600 border-gray-300'
+                        }`}
+                      >
+                        Disputed
+                      </button>
+                    </div>
+                    {c.entityStatus === 'disputed' && (
+                      <Input
+                        value={c.disputeReason}
+                        onChange={(e) => setRowReason(c.key, e.target.value)}
+                        disabled={readOnly}
+                        placeholder="Dispute reason (required)"
+                        className="h-10"
+                      />
+                    )}
+                  </>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Verifier fields */}
@@ -468,7 +523,7 @@ const VendorCaseDetailPage = () => {
           )}
 
           {!readOnly && (
-            <div className="flex gap-2 mb-4">
+            <div className="mb-4">
               <input
                 ref={photoInputRef}
                 type="file"
@@ -477,9 +532,36 @@ const VendorCaseDetailPage = () => {
                 className="hidden"
                 onChange={(e) => handlePhotoSelected(e.target.files?.[0] || null)}
               />
-              <Button type="button" variant="outline" disabled={uploading} onClick={() => photoInputRef.current?.click()}>
-                <Camera className="w-4 h-4 mr-2" /> {uploading ? 'Uploading…' : 'Take / Add Photo'}
-              </Button>
+
+              {pendingPhoto ? (
+                /* Preview before upload */
+                <div className="border rounded-md p-3 bg-gray-50">
+                  <p className="text-sm font-medium mb-2">Preview</p>
+                  <img src={pendingPhoto.url} alt="preview" className="w-full max-h-72 object-contain rounded-md bg-white" />
+                  <div className="text-xs text-gray-500 mt-2 flex items-center">
+                    {coords.latitude !== undefined ? (
+                      <><MapPin className="w-3 h-3 mr-1" />Location will be attached: {coords.latitude.toFixed(5)}, {coords.longitude!.toFixed(5)}</>
+                    ) : (
+                      <span className="text-amber-600">No GPS yet — will save without location.</span>
+                    )}
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <Button type="button" className="flex-1 bg-green-600 hover:bg-green-700" disabled={uploading} onClick={confirmPendingPhoto}>
+                      <CheckCircle className="w-4 h-4 mr-2" /> {uploading ? 'Uploading…' : 'Use Photo'}
+                    </Button>
+                    <Button type="button" variant="outline" className="flex-1" disabled={uploading} onClick={() => { cancelPendingPhoto(); photoInputRef.current?.click(); }}>
+                      <Camera className="w-4 h-4 mr-2" /> Retake
+                    </Button>
+                    <Button type="button" variant="outline" disabled={uploading} onClick={cancelPendingPhoto}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button type="button" variant="outline" disabled={uploading} onClick={() => photoInputRef.current?.click()}>
+                  <Camera className="w-4 h-4 mr-2" /> Take / Add Photo
+                </Button>
+              )}
             </div>
           )}
 
@@ -492,7 +574,10 @@ const VendorCaseDetailPage = () => {
                   <a href={p.s3Url} target="_blank" rel="noreferrer">
                     <img src={p.s3Url} alt={p.docName} className="w-full h-32 object-cover" />
                   </a>
-                  <div className="p-2 text-xs text-gray-600">
+                  <div className="p-2 text-xs text-gray-600 space-y-1">
+                    {p.gpsAddress && p.gpsAddress !== `${p.latitude}, ${p.longitude}` && (
+                      <div className="text-gray-700">{p.gpsAddress}</div>
+                    )}
                     {p.latitude !== undefined && p.latitude !== null ? (
                       <a
                         className="text-blue-600 flex items-center"
@@ -507,7 +592,7 @@ const VendorCaseDetailPage = () => {
                       <span className="text-gray-400">No GPS</span>
                     )}
                     {!readOnly && (
-                      <button onClick={() => deletePhoto(p._id)} className="text-red-500 mt-1 flex items-center">
+                      <button onClick={() => deletePhoto(p._id)} className="text-red-500 flex items-center">
                         <Trash2 className="w-3 h-3 mr-1" /> Delete
                       </button>
                     )}

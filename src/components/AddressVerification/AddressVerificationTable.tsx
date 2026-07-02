@@ -34,6 +34,11 @@ interface AddressVerificationTableProps {
   // When true, only the "View Details" action is shown (used by the vendor
   // read-only portal). Edit / delete / send-link / report actions are hidden.
   readOnly?: boolean;
+  // Row-selection for bulk actions (Vendor tab). Controlled via a Set of ids.
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleSelectAll?: (ids: string[], checked: boolean) => void;
 }
 
 const AddressVerificationTable = ({
@@ -47,6 +52,10 @@ const AddressVerificationTable = ({
   totalCount,
   onPageChange,
   readOnly = false,
+  selectable = false,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
 }: AddressVerificationTableProps) => {
   const navigate = useNavigate();
 
@@ -116,8 +125,33 @@ SECURE | AUTHENTICATE`;
     }
   }, []);
 
+  const pageIds = verifications.map((v) => v._id).filter(Boolean) as string[];
+  const allSelectedOnPage = selectable && pageIds.length > 0 && pageIds.every((id) => selectedIds?.has(id));
+
   const columns = useMemo<ColumnDef<AddressVerification>[]>(
     () => [
+      ...(selectable
+        ? [{
+            id: 'select',
+            header: () => (
+              <input
+                type="checkbox"
+                aria-label="Select all on page"
+                checked={allSelectedOnPage}
+                onChange={(e) => onToggleSelectAll?.(pageIds, e.target.checked)}
+              />
+            ),
+            cell: ({ row }: { row: any }) => (
+              <input
+                type="checkbox"
+                aria-label="Select row"
+                checked={!!(row.original._id && selectedIds?.has(row.original._id))}
+                onChange={() => row.original._id && onToggleSelect?.(row.original._id)}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ),
+          } as ColumnDef<AddressVerification>]
+        : []),
       {
         accessorKey: 'formSubmitDate',
         header: 'Date',
@@ -221,11 +255,13 @@ SECURE | AUTHENTICATE`;
           const member = row.original.vendorWork?.assignedMember;
           const memberName = member && typeof member === 'object' ? member.name : null;
           const vwStatus = row.original.vendorWork?.status;
+          const vwPrice = row.original.vendorWork?.price;
           if (!vendorName) return <span className="text-gray-400 text-sm">—</span>;
           return (
             <div className="text-sm">
               <div className="font-medium">{vendorName}</div>
               {memberName && <div className="text-gray-500">{memberName}</div>}
+              {vwPrice != null && <div className="text-gray-500">₹{vwPrice}</div>}
               {vwStatus && vwStatus !== 'not_started' && (
                 <span
                   className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -323,7 +359,8 @@ SECURE | AUTHENTICATE`;
         ),
       },
     ],
-    [onEdit, onDelete, onSendLink, navigate, handleSendWhatsApp, handleViewReport, handleDownloadReport, readOnly]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [onEdit, onDelete, onSendLink, navigate, handleSendWhatsApp, handleViewReport, handleDownloadReport, readOnly, selectable, selectedIds, allSelectedOnPage]
   );
 
   const _pageSize = pageSize ?? 10;

@@ -18,6 +18,14 @@ export const VENDOR_CHECK_ROWS: { key: string; label: string }[] = [
   { key: 'date_of_verification', label: 'Date of Verification' },
 ];
 
+// This row is auto-filled (today's date), read-only, and has no verify/dispute
+// action — it records WHEN the verification happened, not a fact to verify.
+export const AUTO_DATE_ROW_KEY = 'date_of_verification';
+
+// Today's date as a display string (e.g. "02-Jul-2026").
+export const todayDisplay = (): string =>
+  new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
 // Build initial checks from a case, prefilling the "Profile Provided" column.
 export function buildVendorChecks(verification: any): VendorCheck[] {
   const vd = verification?.verificationData || {};
@@ -33,6 +41,8 @@ export function buildVendorChecks(verification: any): VendorCheck[] {
         return vd.periodOfStay || '';
       case 'landmark':
         return verification?.landmark || vd.landmark || '';
+      case 'date_of_verification':
+        return todayDisplay();
       default:
         return '';
     }

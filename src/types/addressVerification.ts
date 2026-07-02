@@ -68,6 +68,8 @@ export interface VendorWork {
   verifiedBy?: string;
   photos?: VendorPhoto[];
   documents?: DocumentUpload[];
+  price?: number | null;
+  assignedAt?: string;
   submittedAt?: string;
   submittedBy?: string;
 }

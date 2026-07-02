@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Upload, Download } from 'lucide-react';
+import { Plus, Upload, Download, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiService } from '@/services/api';
@@ -7,9 +7,17 @@ import { AddressVerification, AddressVerificationStats } from '@/types/addressVe
 import AddressVerificationTable from './AddressVerificationTable';
 import AddAddressVerificationDialog from './AddAddressVerificationDialog';
 import BulkUploadDialog from './BulkUploadDialog';
+import BulkAssignVendorDialog from './BulkAssignVendorDialog';
 import AddressVerificationFilters, { AVFilters } from './AddressVerificationFilters';
 
-const AddressVerificationTab = () => {
+type AVMode = 'digital' | 'vendor';
+
+interface AddressVerificationTabProps {
+  mode?: AVMode;
+}
+
+const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProps) => {
+  const isVendorMode = mode === 'vendor';
   const [verifications, setVerifications] = useState<AddressVerification[]>([]);
   const [stats, setStats] = useState<AddressVerificationStats>({
     total: 0,
@@ -38,19 +46,23 @@ const AddressVerificationTab = () => {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkAssignOpen, setIsBulkAssignOpen] = useState(false);
   const PAGE_SIZE = 10;
 
   useEffect(() => {
     fetchVerifications();
     fetchStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, currentPage]);
+  }, [filters, currentPage, mode]);
 
   const fetchVerifications = async () => {
     try {
       setLoading(true);
       const response = await apiService.getAddressVerifications({
         ...filters,
+        // Split the collection by whether a vendor is attached.
+        hasVendor: isVendorMode ? 'true' : 'false',
         page: currentPage,
         limit: PAGE_SIZE
       });
@@ -138,6 +150,29 @@ const AddressVerificationTab = () => {
     fetchStats();
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (ids: string[], checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => { if (checked) next.add(id); else next.delete(id); });
+      return next;
+    });
+  };
+
+  const handleBulkAssignSuccess = () => {
+    setIsBulkAssignOpen(false);
+    setSelectedIds(new Set());
+    fetchVerifications();
+    fetchStats();
+  };
+
   const handleExport = () => {
     // TODO: Implement Excel export
     alert('Export functionality will be implemented');
@@ -154,10 +189,16 @@ const AddressVerificationTab = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h2 className="text-2xl font-bold">Address Verification</h2>
-          <p className="text-gray-500">Manage and track address verification requests</p>
+          <h2 className="text-xl sm:text-2xl font-bold">
+            {isVendorMode ? 'Vendor Address Verification' : 'Digital Address Verification'}
+          </h2>
+          <p className="text-sm sm:text-base text-gray-500">
+            {isVendorMode
+              ? 'Cases assigned to vendors for field verification'
+              : 'Cases verified digitally (no vendor)'}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleExport}>
@@ -218,7 +259,23 @@ const AddressVerificationTab = () => {
       <AddressVerificationFilters
         filters={filters}
         onFilterChange={(newFilters) => { setCurrentPage(1); setFilters(newFilters); }}
+        hideVendorFilter={!isVendorMode}
       />
+
+      {/* Bulk action bar (Vendor tab only) */}
+      {isVendorMode && selectedIds.size > 0 && (
+        <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+          <span className="text-sm font-medium text-blue-900">{selectedIds.size} selected</span>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => setIsBulkAssignOpen(true)}>
+              <UserPlus className="w-4 h-4 mr-2" /> Assign to Vendor
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setSelectedIds(new Set())}>
+              <X className="w-4 h-4 mr-1" /> Clear
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <AddressVerificationTable
@@ -231,6 +288,10 @@ const AddressVerificationTab = () => {
         pageSize={PAGE_SIZE}
         totalCount={totalCount}
         onPageChange={setCurrentPage}
+        selectable={isVendorMode}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onToggleSelectAll={toggleSelectAll}
       />
 
       {/* Dialogs */}
@@ -242,6 +303,7 @@ const AddressVerificationTab = () => {
         }}
         onSuccess={handleDialogSuccess}
         editVerification={editingVerification}
+        mode={mode}
       />
 
       <BulkUploadDialog
@@ -249,6 +311,15 @@ const AddressVerificationTab = () => {
         onClose={() => setIsBulkUploadOpen(false)}
         onSuccess={handleBulkUploadSuccess}
       />
+
+      {isVendorMode && (
+        <BulkAssignVendorDialog
+          open={isBulkAssignOpen}
+          onClose={() => setIsBulkAssignOpen(false)}
+          onSuccess={handleBulkAssignSuccess}
+          caseIds={Array.from(selectedIds)}
+        />
+      )}
     </div>
   );
 };

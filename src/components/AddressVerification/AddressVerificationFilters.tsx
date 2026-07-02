@@ -21,9 +21,10 @@ export interface AVFilters {
 interface AddressVerificationFiltersProps {
   filters: AVFilters;
   onFilterChange: (filters: AVFilters) => void;
+  hideVendorFilter?: boolean;
 }
 
-const AddressVerificationFilters = ({ filters, onFilterChange }: AddressVerificationFiltersProps) => {
+const AddressVerificationFilters = ({ filters, onFilterChange, hideVendorFilter = false }: AddressVerificationFiltersProps) => {
   const [vendors, setVendors] = useState<{ _id: string; name: string }[]>([]);
   const [showMore, setShowMore] = useState(false);
 
@@ -116,20 +117,22 @@ const AddressVerificationFilters = ({ filters, onFilterChange }: AddressVerifica
           </select>
         </div>
 
-        <div>
-          <Label htmlFor="vendor">Vendor</Label>
-          <select
-            id="vendor"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={filters.vendor}
-            onChange={(e) => handleChange('vendor', e.target.value)}
-          >
-            <option value="">All Vendors</option>
-            {vendors.map((v) => (
-              <option key={v._id} value={v._id}>{v.name}</option>
-            ))}
-          </select>
-        </div>
+        {!hideVendorFilter && (
+          <div>
+            <Label htmlFor="vendor">Vendor</Label>
+            <select
+              id="vendor"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={filters.vendor}
+              onChange={(e) => handleChange('vendor', e.target.value)}
+            >
+              <option value="">All Vendors</option>
+              {vendors.map((v) => (
+                <option key={v._id} value={v._id}>{v.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {showMore && (
