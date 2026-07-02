@@ -83,8 +83,8 @@ const ReportsListTable: React.FC<ReportsListTableProps> = ({
                     <div>
                       <div className="text-sm font-medium text-gray-900">{report.reportType}</div>
                       <div className="text-xs text-gray-500 truncate max-w-xs">
-                        {report.description.substring(0, 50)}
-                        {report.description.length > 50 ? '...' : ''}
+                        {(report.description || '').substring(0, 50)}
+                        {(report.description || '').length > 50 ? '...' : ''}
                       </div>
                     </div>
                   </div>
@@ -96,29 +96,29 @@ const ReportsListTable: React.FC<ReportsListTableProps> = ({
                   <div className="flex items-start">
                     <Mail className="h-4 w-4 text-gray-400 mr-2 mt-0.5 flex-shrink-0" />
                     <div className="text-sm text-gray-900">
-                      {report.requestedEmails.map((emailObj, idx) => (
+                      {(report.requestedEmails || []).map((emailObj, idx) => (
                         <div key={idx} className="truncate max-w-xs">
                           {emailObj.email}
-                          {idx < report.requestedEmails.length - 1 && ', '}
+                          {idx < (report.requestedEmails || []).length - 1 && ', '}
                         </div>
                       ))}
                       <div className="text-xs text-gray-500 mt-1">
-                        {report.requestedEmails.length} recipient(s)
+                        {(report.requestedEmails || []).length} recipient(s)
                       </div>
                     </div>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <div className="text-sm font-medium text-gray-900">{report.documents.length}</div>
-                    {report.documents.length > 0 && (
+                    <div className="text-sm font-medium text-gray-900">{(report.documents || []).length}</div>
+                    {(report.documents || []).length > 0 && (
                       <CheckCircle className="h-4 w-4 text-green-500 ml-2" />
                     )}
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-900">{formatDate(report.createdAt)}</div>
-                  <div className="text-xs text-gray-500">{report.requestedBy.name}</div>
+                  <div className="text-xs text-gray-500">{report.requestedBy?.name || '—'}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex items-center justify-end space-x-2">

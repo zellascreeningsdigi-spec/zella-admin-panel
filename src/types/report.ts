@@ -32,12 +32,13 @@ export interface Report {
   };
   companyName: string;
   requestedEmails: RequestedEmail[];
+  // Can be null if the requesting user was deleted (populate → null).
   requestedBy: {
     _id: string;
     name: string;
     email: string;
     designation?: string;
-  };
+  } | null;
   dueDate?: string;
   status: 'pending' | 'in-progress' | 'submitted' | 'reviewed' | 'rejected';
   documents: ReportDocument[];
