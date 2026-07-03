@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Upload, Download, UserPlus, X, FileArchive } from 'lucide-react';
+import { Plus, Upload, Download, UserPlus, X, FileSpreadsheet, Images } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiService } from '@/services/api';
@@ -176,19 +176,37 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
     fetchStats();
   };
 
+  // Excel (data) and Images (photos) are two SEPARATE bulk exports — no
+  // combined report file.
   const MAX_BULK_VENDOR_REPORTS = 25;
-  const [exportingBulk, setExportingBulk] = useState(false);
-  const handleBulkExport = async () => {
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingPhotos, setExportingPhotos] = useState(false);
+
+  const handleBulkExportExcel = async () => {
     if (selectedIds.size === 0) return;
     if (selectedIds.size > MAX_BULK_VENDOR_REPORTS) {
       alert(`You can export at most ${MAX_BULK_VENDOR_REPORTS} reports at once. Please narrow your selection.`);
       return;
     }
-    setExportingBulk(true);
+    setExportingExcel(true);
     try {
-      await apiService.downloadBulkVendorReports(Array.from(selectedIds));
+      await apiService.downloadBulkVendorReportExcel(Array.from(selectedIds));
     } finally {
-      setExportingBulk(false);
+      setExportingExcel(false);
+    }
+  };
+
+  const handleBulkExportPhotos = async () => {
+    if (selectedIds.size === 0) return;
+    if (selectedIds.size > MAX_BULK_VENDOR_REPORTS) {
+      alert(`You can export at most ${MAX_BULK_VENDOR_REPORTS} reports at once. Please narrow your selection.`);
+      return;
+    }
+    setExportingPhotos(true);
+    try {
+      await apiService.downloadBulkVendorPhotos(Array.from(selectedIds));
+    } finally {
+      setExportingPhotos(false);
     }
   };
 
@@ -289,14 +307,24 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
             <Button size="sm" onClick={() => setIsBulkAssignOpen(true)}>
               <UserPlus className="w-4 h-4 mr-2" /> Assign to Vendor
             </Button>
+            {/* Excel and Images are two SEPARATE exports — no combined report file. */}
             <Button
               size="sm"
               variant="outline"
-              disabled={exportingBulk || selectedIds.size > MAX_BULK_VENDOR_REPORTS}
-              onClick={handleBulkExport}
+              disabled={exportingExcel || selectedIds.size > MAX_BULK_VENDOR_REPORTS}
+              onClick={handleBulkExportExcel}
               title={selectedIds.size > MAX_BULK_VENDOR_REPORTS ? `Max ${MAX_BULK_VENDOR_REPORTS} reports per export` : undefined}
             >
-              <FileArchive className="w-4 h-4 mr-2" /> {exportingBulk ? 'Exporting…' : `Export Reports${selectedIds.size > MAX_BULK_VENDOR_REPORTS ? ` (max ${MAX_BULK_VENDOR_REPORTS})` : ''}`}
+              <FileSpreadsheet className="w-4 h-4 mr-2" /> {exportingExcel ? 'Exporting…' : `Export Excel${selectedIds.size > MAX_BULK_VENDOR_REPORTS ? ` (max ${MAX_BULK_VENDOR_REPORTS})` : ''}`}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={exportingPhotos || selectedIds.size > MAX_BULK_VENDOR_REPORTS}
+              onClick={handleBulkExportPhotos}
+              title={selectedIds.size > MAX_BULK_VENDOR_REPORTS ? `Max ${MAX_BULK_VENDOR_REPORTS} reports per export` : undefined}
+            >
+              <Images className="w-4 h-4 mr-2" /> {exportingPhotos ? 'Exporting…' : `Export Photos${selectedIds.size > MAX_BULK_VENDOR_REPORTS ? ` (max ${MAX_BULK_VENDOR_REPORTS})` : ''}`}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setSelectedIds(new Set())}>
               <X className="w-4 h-4 mr-1" /> Clear

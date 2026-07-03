@@ -1081,60 +1081,70 @@ class ApiService {
     }
   }
 
-  // Download the vendor "Address Check" report (single case) as PDF.
-  async downloadVendorReport(id: string, code: string): Promise<void> {
+  // Shared blob-download helper for the vendor Excel/Images exports below.
+  private async downloadBlob(url: string, options: RequestInit, filename: string, errorLabel: string): Promise<void> {
     const token = this.getAuthToken();
-    const url = `${API_BASE_URL}/address-verifications/${id}/vendor-report?format=pdf`;
     try {
-      const response = await fetch(url, { method: 'GET', headers: { 'Authorization': `Bearer ${token}` } });
+      const response = await fetch(url, {
+        ...options,
+        headers: { ...(options.headers || {}), 'Authorization': `Bearer ${token}` },
+      });
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to download report' }));
-        throw new Error(errorData.message || 'Failed to download report');
+        const errorData = await response.json().catch(() => ({ message: `Failed to ${errorLabel}` }));
+        throw new Error(errorData.message || `Failed to ${errorLabel}`);
       }
       const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = downloadUrl;
-      link.download = `Vendor_Report_${code}.pdf`;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
-      console.error('Download vendor report error:', error);
-      alert(`Failed to download vendor report: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(`${errorLabel} error:`, error);
+      alert(`Failed to ${errorLabel}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   }
 
-  // Download vendor reports for multiple cases as a ZIP of PDFs.
-  async downloadBulkVendorReports(ids: string[]): Promise<void> {
-    const token = this.getAuthToken();
-    const url = `${API_BASE_URL}/address-verifications/vendor-report/bulk`;
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to download reports' }));
-        throw new Error(errorData.message || 'Failed to download reports');
-      }
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = 'vendor-reports.zip';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
-      console.error('Download bulk vendor reports error:', error);
-      alert(`Failed to download reports: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw error;
-    }
+  // Excel export (Address Check data only, no photos) — single + bulk.
+  async downloadVendorReportExcel(id: string, code: string): Promise<void> {
+    await this.downloadBlob(
+      `${API_BASE_URL}/address-verifications/${id}/vendor-report/excel`,
+      { method: 'GET' },
+      `Vendor_Report_${code}.xlsx`,
+      'download Excel report'
+    );
+  }
+
+  async downloadBulkVendorReportExcel(ids: string[]): Promise<void> {
+    await this.downloadBlob(
+      `${API_BASE_URL}/address-verifications/vendor-report/excel/bulk`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) },
+      'vendor-reports.xlsx',
+      'download Excel reports'
+    );
+  }
+
+  // Images export (field photos only, no table) — single + bulk.
+  async downloadVendorPhotos(id: string, code: string): Promise<void> {
+    await this.downloadBlob(
+      `${API_BASE_URL}/address-verifications/${id}/vendor-report/photos`,
+      { method: 'GET' },
+      `Vendor_Photos_${code}.zip`,
+      'download photos'
+    );
+  }
+
+  async downloadBulkVendorPhotos(ids: string[]): Promise<void> {
+    await this.downloadBlob(
+      `${API_BASE_URL}/address-verifications/vendor-report/photos/bulk`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) },
+      'vendor-photos.zip',
+      'download photos'
+    );
   }
 
   // Public verification endpoints (no auth required)

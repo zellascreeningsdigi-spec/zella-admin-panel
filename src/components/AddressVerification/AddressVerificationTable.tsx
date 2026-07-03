@@ -8,7 +8,7 @@ import {
   flexRender,
   ColumnDef,
 } from '@tanstack/react-table';
-import { Edit, Trash2, Send, Eye, MessageCircle, FileText, Download } from 'lucide-react';
+import { Edit, Trash2, Send, Eye, MessageCircle, FileText, Download, FileSpreadsheet, Images } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -65,12 +65,22 @@ const AddressVerificationTable = ({
 }: AddressVerificationTableProps) => {
   const navigate = useNavigate();
 
-  const handleDownloadVendorReport = useCallback(async (verification: AddressVerification) => {
+  // Excel and Images are two SEPARATE exports (no combined report file).
+  const handleDownloadVendorExcel = useCallback(async (verification: AddressVerification) => {
     if (!verification._id) return;
     try {
-      await apiService.downloadVendorReport(verification._id, verification.code);
+      await apiService.downloadVendorReportExcel(verification._id, verification.code);
     } catch (error) {
-      console.error('Download vendor report error:', error);
+      console.error('Download vendor excel error:', error);
+    }
+  }, []);
+
+  const handleDownloadVendorPhotos = useCallback(async (verification: AddressVerification) => {
+    if (!verification._id) return;
+    try {
+      await apiService.downloadVendorPhotos(verification._id, verification.code);
+    } catch (error) {
+      console.error('Download vendor photos error:', error);
     }
   }, []);
 
@@ -362,18 +372,31 @@ SECURE | AUTHENTICATE`;
                     </Button>
                   </>
                 )}
-                {/* Vendor "Address Check" report — Vendor tab only, never on the Digital tab. */}
+                {/* Vendor exports — Vendor tab only, never on the Digital tab.
+                    Excel (data) and Images (photos) are kept as two separate
+                    downloads, not one combined report. */}
                 {showVendorExport
                   && (row.original.vendorWork?.status === 'verified' || row.original.vendorWork?.status === 'disputed') && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDownloadVendorReport(row.original)}
-                    title="Export Vendor Report (PDF)"
-                    className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                  >
-                    <Download className="w-4 h-4" />
-                  </Button>
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDownloadVendorExcel(row.original)}
+                      title="Export Excel Report"
+                      className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                    >
+                      <FileSpreadsheet className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDownloadVendorPhotos(row.original)}
+                      title="Export Photos"
+                      className="text-teal-600 hover:text-teal-700 hover:bg-teal-50"
+                    >
+                      <Images className="w-4 h-4" />
+                    </Button>
+                  </>
                 )}
                 <Button
                   variant="ghost"
@@ -390,7 +413,7 @@ SECURE | AUTHENTICATE`;
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onEdit, onDelete, onSendLink, navigate, handleSendWhatsApp, handleViewReport, handleDownloadReport, handleDownloadVendorReport, readOnly, selectable, selectedIds, allSelectedOnPage, showVendorExport, showPrice]
+    [onEdit, onDelete, onSendLink, navigate, handleSendWhatsApp, handleViewReport, handleDownloadReport, handleDownloadVendorExcel, handleDownloadVendorPhotos, readOnly, selectable, selectedIds, allSelectedOnPage, showVendorExport, showPrice]
   );
 
   const _pageSize = pageSize ?? 10;
