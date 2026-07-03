@@ -176,9 +176,14 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
     fetchStats();
   };
 
+  const MAX_BULK_VENDOR_REPORTS = 25;
   const [exportingBulk, setExportingBulk] = useState(false);
   const handleBulkExport = async () => {
     if (selectedIds.size === 0) return;
+    if (selectedIds.size > MAX_BULK_VENDOR_REPORTS) {
+      alert(`You can export at most ${MAX_BULK_VENDOR_REPORTS} reports at once. Please narrow your selection.`);
+      return;
+    }
     setExportingBulk(true);
     try {
       await apiService.downloadBulkVendorReports(Array.from(selectedIds));
@@ -284,8 +289,14 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
             <Button size="sm" onClick={() => setIsBulkAssignOpen(true)}>
               <UserPlus className="w-4 h-4 mr-2" /> Assign to Vendor
             </Button>
-            <Button size="sm" variant="outline" disabled={exportingBulk} onClick={handleBulkExport}>
-              <FileArchive className="w-4 h-4 mr-2" /> {exportingBulk ? 'Exporting…' : 'Export Reports'}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={exportingBulk || selectedIds.size > MAX_BULK_VENDOR_REPORTS}
+              onClick={handleBulkExport}
+              title={selectedIds.size > MAX_BULK_VENDOR_REPORTS ? `Max ${MAX_BULK_VENDOR_REPORTS} reports per export` : undefined}
+            >
+              <FileArchive className="w-4 h-4 mr-2" /> {exportingBulk ? 'Exporting…' : `Export Reports${selectedIds.size > MAX_BULK_VENDOR_REPORTS ? ` (max ${MAX_BULK_VENDOR_REPORTS})` : ''}`}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setSelectedIds(new Set())}>
               <X className="w-4 h-4 mr-1" /> Clear

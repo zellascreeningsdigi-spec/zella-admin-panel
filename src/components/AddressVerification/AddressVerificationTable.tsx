@@ -338,7 +338,9 @@ SECURE | AUTHENTICATE`;
                     <MessageCircle className="w-4 h-4" />
                   </Button>
                 )}
-                {row.original.status === 'verified' && row.original.verificationStatus === 'completed' && (
+                {/* Digital candidate report — Digital tab only, never on the Vendor tab. */}
+                {!showVendorExport
+                  && row.original.status === 'verified' && row.original.verificationStatus === 'completed' && (
                   <>
                     <Button
                       variant="ghost"
@@ -360,6 +362,7 @@ SECURE | AUTHENTICATE`;
                     </Button>
                   </>
                 )}
+                {/* Vendor "Address Check" report — Vendor tab only, never on the Digital tab. */}
                 {showVendorExport
                   && (row.original.vendorWork?.status === 'verified' || row.original.vendorWork?.status === 'disputed') && (
                   <Button
