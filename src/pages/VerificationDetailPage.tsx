@@ -966,7 +966,7 @@ SECURE | AUTHENTICATE`;
                           <tr className="bg-gray-100 text-left">
                             <th className="p-2 border">Details</th>
                             <th className="p-2 border">Profile Provided</th>
-                            <th className="p-2 border">Entity Provided</th>
+                            <th className="p-2 border">Profile Verification</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1018,7 +1018,10 @@ SECURE | AUTHENTICATE`;
                             <a href={p.s3Url} target="_blank" rel="noreferrer">
                               <img src={p.s3Url} alt={p.docName || 'field photo'} className="w-full h-28 object-cover" />
                             </a>
-                            <div className="p-2 text-xs">
+                            <div className="p-2 text-xs space-y-1">
+                              {p.gpsAddress && p.gpsAddress !== `${p.latitude}, ${p.longitude}` && (
+                                <div className="text-gray-700">{p.gpsAddress}</div>
+                              )}
                               {p.latitude !== undefined && p.latitude !== null ? (
                                 <a
                                   className="text-blue-600 flex items-center"

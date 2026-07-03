@@ -867,8 +867,9 @@ class ApiService {
     return this.get(`/address-verifications${queryString ? `?${queryString}` : ''}`);
   }
 
-  async bulkAssignVendor(ids: string[], vendor: string, price: number): Promise<ApiResponse<{ updated: number; failed: number }>> {
-    return this.post('/address-verifications/bulk-assign', { ids, vendor, price });
+  async bulkAssignVendor(ids: string[], vendor: string, price?: number | null): Promise<ApiResponse<{ updated: number; failed: number }>> {
+    // price omitted → backend defaults to the vendor's rate (non-super-admins can't set it).
+    return this.post('/address-verifications/bulk-assign', price != null ? { ids, vendor, price } : { ids, vendor });
   }
 
   // Vendor analytics (super-admin + admin)
@@ -1076,6 +1077,62 @@ class ApiService {
     } catch (error) {
       console.error('Download report error:', error);
       alert(`Failed to download report: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
+  }
+
+  // Download the vendor "Address Check" report (single case) as PDF.
+  async downloadVendorReport(id: string, code: string): Promise<void> {
+    const token = this.getAuthToken();
+    const url = `${API_BASE_URL}/address-verifications/${id}/vendor-report?format=pdf`;
+    try {
+      const response = await fetch(url, { method: 'GET', headers: { 'Authorization': `Bearer ${token}` } });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to download report' }));
+        throw new Error(errorData.message || 'Failed to download report');
+      }
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `Vendor_Report_${code}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Download vendor report error:', error);
+      alert(`Failed to download vendor report: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    }
+  }
+
+  // Download vendor reports for multiple cases as a ZIP of PDFs.
+  async downloadBulkVendorReports(ids: string[]): Promise<void> {
+    const token = this.getAuthToken();
+    const url = `${API_BASE_URL}/address-verifications/vendor-report/bulk`;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to download reports' }));
+        throw new Error(errorData.message || 'Failed to download reports');
+      }
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'vendor-reports.zip';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Download bulk vendor reports error:', error);
+      alert(`Failed to download reports: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   }

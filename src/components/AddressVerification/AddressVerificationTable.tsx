@@ -39,6 +39,10 @@ interface AddressVerificationTableProps {
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onToggleSelectAll?: (ids: string[], checked: boolean) => void;
+  // Vendor tab: show a per-row "Export Vendor Report" action for submitted cases.
+  showVendorExport?: boolean;
+  // Whether to show the per-case ₹ price in the Handled By column (super-admin only).
+  showPrice?: boolean;
 }
 
 const AddressVerificationTable = ({
@@ -56,8 +60,19 @@ const AddressVerificationTable = ({
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
+  showVendorExport = false,
+  showPrice = true,
 }: AddressVerificationTableProps) => {
   const navigate = useNavigate();
+
+  const handleDownloadVendorReport = useCallback(async (verification: AddressVerification) => {
+    if (!verification._id) return;
+    try {
+      await apiService.downloadVendorReport(verification._id, verification.code);
+    } catch (error) {
+      console.error('Download vendor report error:', error);
+    }
+  }, []);
 
   const handleSendWhatsApp = useCallback((verification: AddressVerification) => {
     // Get the verification link from the verification object
@@ -261,7 +276,7 @@ SECURE | AUTHENTICATE`;
             <div className="text-sm">
               <div className="font-medium">{vendorName}</div>
               {memberName && <div className="text-gray-500">{memberName}</div>}
-              {vwPrice != null && <div className="text-gray-500">₹{vwPrice}</div>}
+              {showPrice && vwPrice != null && <div className="text-gray-500">₹{vwPrice}</div>}
               {vwStatus && vwStatus !== 'not_started' && (
                 <span
                   className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -345,6 +360,18 @@ SECURE | AUTHENTICATE`;
                     </Button>
                   </>
                 )}
+                {showVendorExport
+                  && (row.original.vendorWork?.status === 'verified' || row.original.vendorWork?.status === 'disputed') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDownloadVendorReport(row.original)}
+                    title="Export Vendor Report (PDF)"
+                    className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                  >
+                    <Download className="w-4 h-4" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -360,7 +387,7 @@ SECURE | AUTHENTICATE`;
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onEdit, onDelete, onSendLink, navigate, handleSendWhatsApp, handleViewReport, handleDownloadReport, readOnly, selectable, selectedIds, allSelectedOnPage]
+    [onEdit, onDelete, onSendLink, navigate, handleSendWhatsApp, handleViewReport, handleDownloadReport, handleDownloadVendorReport, readOnly, selectable, selectedIds, allSelectedOnPage, showVendorExport, showPrice]
   );
 
   const _pageSize = pageSize ?? 10;

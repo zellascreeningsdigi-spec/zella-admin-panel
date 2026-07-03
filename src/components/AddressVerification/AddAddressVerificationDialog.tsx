@@ -12,6 +12,8 @@ interface AddAddressVerificationDialogProps {
   onSuccess: () => void;
   editVerification?: AddressVerification | null;
   mode?: 'digital' | 'vendor';
+  // Only super-admins may see/enter the per-case price.
+  canSetPrice?: boolean;
 }
 
 interface FormData {
@@ -60,6 +62,7 @@ const AddAddressVerificationDialog = ({
   onSuccess,
   editVerification,
   mode = 'digital',
+  canSetPrice = false,
 }: AddAddressVerificationDialogProps) => {
   const isVendorMode = mode === 'vendor';
   const [formData, setFormData] = useState<FormData>({
@@ -189,14 +192,17 @@ const AddAddressVerificationDialog = ({
       newErrors.pin = 'PIN code must be 6 digits';
     }
 
-    // Vendor tab: vendor + price are mandatory (frontend-only).
+    // Vendor tab: vendor is mandatory. Price is super-admin-only (canSetPrice);
+    // admins never see it and it defaults to the vendor's rate server-side.
     if (isVendorMode) {
       if (!formData.vendor) newErrors.vendor = 'Vendor is required';
-      if (formData.vendorWorkPrice === '') {
-        newErrors.vendorWorkPrice = 'Price is required';
-      } else {
-        const p = Number(formData.vendorWorkPrice);
-        if (Number.isNaN(p) || p < 0) newErrors.vendorWorkPrice = 'Price must be a number ≥ 0';
+      if (canSetPrice) {
+        if (formData.vendorWorkPrice === '') {
+          newErrors.vendorWorkPrice = 'Price is required';
+        } else {
+          const p = Number(formData.vendorWorkPrice);
+          if (Number.isNaN(p) || p < 0) newErrors.vendorWorkPrice = 'Price must be a number ≥ 0';
+        }
       }
     }
 
@@ -218,9 +224,11 @@ const AddAddressVerificationDialog = ({
         formSubmitDate: new Date(formData.date).toISOString(),
       };
       if (isVendorMode) {
-        // Vendor tab: attach vendor + per-case price.
+        // Vendor tab: attach vendor; only super-admin sends a per-case price.
         submitData.vendor = vendor || null;
-        submitData.vendorWorkPrice = vendorWorkPrice === '' ? null : Number(vendorWorkPrice);
+        if (canSetPrice) {
+          submitData.vendorWorkPrice = vendorWorkPrice === '' ? null : Number(vendorWorkPrice);
+        }
       } else if (editVerification) {
         // Digital tab editing: preserve whatever vendor state exists, don't force it.
         submitData.vendor = vendor || null;
@@ -509,9 +517,9 @@ const AddAddressVerificationDialog = ({
             </div>
           </div>
 
-          {/* Assign Vendor + price — Vendor tab only */}
+          {/* Assign Vendor + price — Vendor tab only; price is super-admin-only */}
           {isVendorMode && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className={`grid grid-cols-1 gap-4 ${canSetPrice ? 'sm:grid-cols-2' : ''}`}>
               <div>
                 <Label htmlFor="vendor">
                   Assign Vendor <span className="text-red-500">*</span>
@@ -544,23 +552,25 @@ const AddAddressVerificationDialog = ({
                 </select>
                 {errors.vendor && <p className="text-sm text-red-500 mt-1">{errors.vendor}</p>}
               </div>
-              <div>
-                <Label htmlFor="vendorWorkPrice">
-                  Price per case (₹) <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="vendorWorkPrice"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={formData.vendorWorkPrice}
-                  onChange={(e) => handleInputChange('vendorWorkPrice', e.target.value)}
-                  placeholder="e.g., 250"
-                />
-                {errors.vendorWorkPrice && (
-                  <p className="text-sm text-red-500 mt-1">{errors.vendorWorkPrice}</p>
-                )}
-              </div>
+              {canSetPrice && (
+                <div>
+                  <Label htmlFor="vendorWorkPrice">
+                    Price per case (₹) <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="vendorWorkPrice"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={formData.vendorWorkPrice}
+                    onChange={(e) => handleInputChange('vendorWorkPrice', e.target.value)}
+                    placeholder="e.g., 250"
+                  />
+                  {errors.vendorWorkPrice && (
+                    <p className="text-sm text-red-500 mt-1">{errors.vendorWorkPrice}</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

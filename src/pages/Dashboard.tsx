@@ -87,7 +87,7 @@ const Dashboard: React.FC = () => {
       case 'vendors':
         return user?.role === 'super-admin' ? <VendorsTab /> : <DashboardOverview />;
       case 'vendor-analytics':
-        return (user?.role === 'super-admin' || user?.role === 'admin')
+        return user?.role === 'super-admin'
           ? <VendorAnalyticsTab />
           : <DashboardOverview />;
       case 'my-cases':

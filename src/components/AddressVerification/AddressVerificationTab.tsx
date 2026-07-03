@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Plus, Upload, Download, UserPlus, X } from 'lucide-react';
+import { Plus, Upload, Download, UserPlus, X, FileArchive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiService } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 import { AddressVerification, AddressVerificationStats } from '@/types/addressVerification';
 import AddressVerificationTable from './AddressVerificationTable';
 import AddAddressVerificationDialog from './AddAddressVerificationDialog';
@@ -18,6 +19,8 @@ interface AddressVerificationTabProps {
 
 const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProps) => {
   const isVendorMode = mode === 'vendor';
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super-admin';
   const [verifications, setVerifications] = useState<AddressVerification[]>([]);
   const [stats, setStats] = useState<AddressVerificationStats>({
     total: 0,
@@ -173,6 +176,17 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
     fetchStats();
   };
 
+  const [exportingBulk, setExportingBulk] = useState(false);
+  const handleBulkExport = async () => {
+    if (selectedIds.size === 0) return;
+    setExportingBulk(true);
+    try {
+      await apiService.downloadBulkVendorReports(Array.from(selectedIds));
+    } finally {
+      setExportingBulk(false);
+    }
+  };
+
   const handleExport = () => {
     // TODO: Implement Excel export
     alert('Export functionality will be implemented');
@@ -270,6 +284,9 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
             <Button size="sm" onClick={() => setIsBulkAssignOpen(true)}>
               <UserPlus className="w-4 h-4 mr-2" /> Assign to Vendor
             </Button>
+            <Button size="sm" variant="outline" disabled={exportingBulk} onClick={handleBulkExport}>
+              <FileArchive className="w-4 h-4 mr-2" /> {exportingBulk ? 'Exporting…' : 'Export Reports'}
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setSelectedIds(new Set())}>
               <X className="w-4 h-4 mr-1" /> Clear
             </Button>
@@ -292,6 +309,8 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
         onToggleSelectAll={toggleSelectAll}
+        showVendorExport={isVendorMode}
+        showPrice={isSuperAdmin}
       />
 
       {/* Dialogs */}
@@ -304,6 +323,7 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
         onSuccess={handleDialogSuccess}
         editVerification={editingVerification}
         mode={mode}
+        canSetPrice={isSuperAdmin}
       />
 
       <BulkUploadDialog
@@ -318,6 +338,7 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
           onClose={() => setIsBulkAssignOpen(false)}
           onSuccess={handleBulkAssignSuccess}
           caseIds={Array.from(selectedIds)}
+          canSetPrice={isSuperAdmin}
         />
       )}
     </div>

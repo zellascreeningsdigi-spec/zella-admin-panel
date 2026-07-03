@@ -17,10 +17,13 @@ interface BulkAssignVendorDialogProps {
   onClose: () => void;
   onSuccess: () => void;
   caseIds: string[];
+  // Only super-admins may see/set the batch price.
+  canSetPrice?: boolean;
 }
 
-// Assign a selection of cases to ONE vendor at ONE price for the whole batch.
-const BulkAssignVendorDialog = ({ open, onClose, onSuccess, caseIds }: BulkAssignVendorDialogProps) => {
+// Assign a selection of cases to ONE vendor for the whole batch. Super-admins
+// may also set a batch price; otherwise it defaults to the vendor's rate.
+const BulkAssignVendorDialog = ({ open, onClose, onSuccess, caseIds, canSetPrice = false }: BulkAssignVendorDialogProps) => {
   const [vendors, setVendors] = useState<VendorOption[]>([]);
   const [vendor, setVendor] = useState('');
   const [price, setPrice] = useState('');
@@ -55,17 +58,19 @@ const BulkAssignVendorDialog = ({ open, onClose, onSuccess, caseIds }: BulkAssig
     e.preventDefault();
     const next: { vendor?: string; price?: string } = {};
     if (!vendor) next.vendor = 'Vendor is required';
-    if (price === '') next.price = 'Price is required';
-    else {
-      const p = Number(price);
-      if (Number.isNaN(p) || p < 0) next.price = 'Price must be a number ≥ 0';
+    if (canSetPrice) {
+      if (price === '') next.price = 'Price is required';
+      else {
+        const p = Number(price);
+        if (Number.isNaN(p) || p < 0) next.price = 'Price must be a number ≥ 0';
+      }
     }
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
     setSubmitting(true);
     try {
-      const res = await apiService.bulkAssignVendor(caseIds, vendor, Number(price));
+      const res = await apiService.bulkAssignVendor(caseIds, vendor, canSetPrice ? Number(price) : null);
       if (res.success) {
         alert(res.message || 'Cases assigned');
         onSuccess();
@@ -101,20 +106,24 @@ const BulkAssignVendorDialog = ({ open, onClose, onSuccess, caseIds }: BulkAssig
             </select>
             {errors.vendor && <p className="text-sm text-red-500 mt-1">{errors.vendor}</p>}
           </div>
-          <div>
-            <Label htmlFor="bulk-price">Price per case (₹) <span className="text-red-500">*</span></Label>
-            <Input
-              id="bulk-price"
-              type="number"
-              min={0}
-              step="0.01"
-              value={price}
-              onChange={(e) => { setPrice(e.target.value); if (errors.price) setErrors((p) => ({ ...p, price: '' })); }}
-              placeholder="e.g., 250"
-            />
-            {errors.price && <p className="text-sm text-red-500 mt-1">{errors.price}</p>}
-            <p className="text-xs text-gray-400 mt-1">This price applies to every selected case.</p>
-          </div>
+          {canSetPrice ? (
+            <div>
+              <Label htmlFor="bulk-price">Price per case (₹) <span className="text-red-500">*</span></Label>
+              <Input
+                id="bulk-price"
+                type="number"
+                min={0}
+                step="0.01"
+                value={price}
+                onChange={(e) => { setPrice(e.target.value); if (errors.price) setErrors((p) => ({ ...p, price: '' })); }}
+                placeholder="e.g., 250"
+              />
+              {errors.price && <p className="text-sm text-red-500 mt-1">{errors.price}</p>}
+              <p className="text-xs text-gray-400 mt-1">This price applies to every selected case.</p>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400">Each case uses the vendor's default price.</p>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
             <Button type="submit" disabled={submitting}>{submitting ? 'Assigning...' : 'Assign'}</Button>

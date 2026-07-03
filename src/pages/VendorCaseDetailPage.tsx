@@ -335,7 +335,7 @@ const VendorCaseDetailPage = () => {
                 <tr className="bg-gray-100 text-left">
                   <th className="p-2 border w-1/4">Details</th>
                   <th className="p-2 border">Profile Provided Information</th>
-                  <th className="p-2 border">Entity Provided Information</th>
+                  <th className="p-2 border">Profile Verification</th>
                 </tr>
               </thead>
               <tbody>
