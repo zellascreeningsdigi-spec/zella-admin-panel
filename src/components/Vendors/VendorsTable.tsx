@@ -21,6 +21,7 @@ export interface Vendor {
   isActive: boolean;
   type?: 'independent' | 'company';
   createdAt?: string;
+  locations?: string[];
 }
 
 interface VendorsTableProps {
@@ -69,6 +70,7 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate }: VendorsTablePr
               <TableHead>Company</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Contact</TableHead>
+              <TableHead>Locations</TableHead>
               <TableHead>GSTIN</TableHead>
               <TableHead>Price / Case (₹)</TableHead>
               <TableHead>Status</TableHead>
@@ -91,6 +93,15 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate }: VendorsTablePr
                 <TableCell>
                   <div className="text-sm">{vendor.email}</div>
                   {vendor.phone && <div className="text-xs text-gray-500">{vendor.phone}</div>}
+                </TableCell>
+                <TableCell className="max-w-[160px]">
+                  {vendor.locations && vendor.locations.length > 0 ? (
+                    <span className="text-sm truncate block" title={vendor.locations.join(', ')}>
+                      {vendor.locations.join(', ')}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-400">-</span>
+                  )}
                 </TableCell>
                 <TableCell className="font-mono text-sm">{vendor.gstin || '-'}</TableCell>
                 <TableCell>{vendor.addressVerificationPrice}</TableCell>
@@ -135,6 +146,9 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate }: VendorsTablePr
             <div className="text-sm"><span className="text-gray-500">Type:</span> <span className="capitalize">{vendor.type || 'independent'}</span></div>
             <div className="text-sm break-all"><span className="text-gray-500">Email:</span> {vendor.email}</div>
             {vendor.phone && <div className="text-sm"><span className="text-gray-500">Phone:</span> {vendor.phone}</div>}
+            {vendor.locations && vendor.locations.length > 0 && (
+              <div className="text-sm"><span className="text-gray-500">Locations:</span> {vendor.locations.join(', ')}</div>
+            )}
             <div className="text-sm"><span className="text-gray-500">GSTIN:</span> {vendor.gstin || '-'}</div>
             <div className="text-sm"><span className="text-gray-500">Price / Case (₹):</span> {vendor.addressVerificationPrice}</div>
             <div className="flex gap-2 pt-1">

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Upload, Download, UserPlus, X, FileSpreadsheet, Images } from 'lucide-react';
+import { Plus, Upload, Download, UserPlus, X, Images } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiService } from '@/services/api';
@@ -176,23 +176,23 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
     fetchStats();
   };
 
-  // Excel (data) and Images (photos) are two SEPARATE bulk exports — no
-  // combined report file.
+  // Report PDF (table) and Photos PDF (field photos) are two SEPARATE bulk
+  // exports — no combined report file.
   const MAX_BULK_VENDOR_REPORTS = 25;
-  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportingReports, setExportingReports] = useState(false);
   const [exportingPhotos, setExportingPhotos] = useState(false);
 
-  const handleBulkExportExcel = async () => {
+  const handleBulkExportReports = async () => {
     if (selectedIds.size === 0) return;
     if (selectedIds.size > MAX_BULK_VENDOR_REPORTS) {
       alert(`You can export at most ${MAX_BULK_VENDOR_REPORTS} reports at once. Please narrow your selection.`);
       return;
     }
-    setExportingExcel(true);
+    setExportingReports(true);
     try {
-      await apiService.downloadBulkVendorReportExcel(Array.from(selectedIds));
+      await apiService.downloadBulkVendorReports(Array.from(selectedIds));
     } finally {
-      setExportingExcel(false);
+      setExportingReports(false);
     }
   };
 
@@ -204,7 +204,7 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
     }
     setExportingPhotos(true);
     try {
-      await apiService.downloadBulkVendorPhotos(Array.from(selectedIds));
+      await apiService.downloadBulkVendorPhotosReports(Array.from(selectedIds));
     } finally {
       setExportingPhotos(false);
     }
@@ -307,15 +307,15 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
             <Button size="sm" onClick={() => setIsBulkAssignOpen(true)}>
               <UserPlus className="w-4 h-4 mr-2" /> Assign to Vendor
             </Button>
-            {/* Excel and Images are two SEPARATE exports — no combined report file. */}
+            {/* Report PDF and Photos PDF are two SEPARATE exports — never combined. */}
             <Button
               size="sm"
               variant="outline"
-              disabled={exportingExcel || selectedIds.size > MAX_BULK_VENDOR_REPORTS}
-              onClick={handleBulkExportExcel}
+              disabled={exportingReports || selectedIds.size > MAX_BULK_VENDOR_REPORTS}
+              onClick={handleBulkExportReports}
               title={selectedIds.size > MAX_BULK_VENDOR_REPORTS ? `Max ${MAX_BULK_VENDOR_REPORTS} reports per export` : undefined}
             >
-              <FileSpreadsheet className="w-4 h-4 mr-2" /> {exportingExcel ? 'Exporting…' : `Export Excel${selectedIds.size > MAX_BULK_VENDOR_REPORTS ? ` (max ${MAX_BULK_VENDOR_REPORTS})` : ''}`}
+              <Download className="w-4 h-4 mr-2" /> {exportingReports ? 'Exporting…' : `Export Reports${selectedIds.size > MAX_BULK_VENDOR_REPORTS ? ` (max ${MAX_BULK_VENDOR_REPORTS})` : ''}`}
             </Button>
             <Button
               size="sm"

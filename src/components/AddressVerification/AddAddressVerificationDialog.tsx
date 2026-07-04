@@ -3,6 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import SearchableSelect from '@/components/ui/searchable-select';
+import { INDIAN_CITIES } from '@/data/indianCities';
 import { apiService } from '@/services/api';
 import { AddressVerification } from '@/types/addressVerification';
 
@@ -43,6 +45,7 @@ interface VendorOption {
   name: string;
   email: string;
   addressVerificationPrice?: number;
+  locations?: string[];
 }
 
 // An AddressVerification.vendor may be a populated object or an id string.
@@ -90,14 +93,21 @@ const AddAddressVerificationDialog = ({
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [vendors, setVendors] = useState<VendorOption[]>([]);
+  const [vendorLocationFilter, setVendorLocationFilter] = useState('');
 
-  // Load the active vendor list once the dialog opens.
+  // Load the active vendor list once the dialog opens, refetching whenever
+  // the location filter changes so the dropdown only shows vendors covering
+  // that city.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     (async () => {
       try {
-        const response = await apiService.getVendors({ isActive: true, limit: 200 });
+        const response = await apiService.getVendors({
+          isActive: true,
+          limit: 200,
+          ...(vendorLocationFilter ? { location: vendorLocationFilter } : {}),
+        });
         if (!cancelled && response.success && response.data) {
           setVendors(response.data.vendors || []);
         }
@@ -108,6 +118,11 @@ const AddAddressVerificationDialog = ({
     return () => {
       cancelled = true;
     };
+  }, [open, vendorLocationFilter]);
+
+  // Reset the filter each time the dialog opens fresh.
+  useEffect(() => {
+    if (open) setVendorLocationFilter('');
   }, [open]);
 
   useEffect(() => {
@@ -519,7 +534,19 @@ const AddAddressVerificationDialog = ({
 
           {/* Assign Vendor + price — Vendor tab only; price is super-admin-only */}
           {isVendorMode && (
-            <div className={`grid grid-cols-1 gap-4 ${canSetPrice ? 'sm:grid-cols-2' : ''}`}>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="vendor-location-filter">Filter Vendors by Location</Label>
+                <SearchableSelect
+                  options={INDIAN_CITIES}
+                  value={vendorLocationFilter}
+                  onChange={setVendorLocationFilter}
+                  placeholder="All locations"
+                  allLabel="All locations"
+                  searchPlaceholder="Search cities…"
+                />
+              </div>
+              <div className={`grid grid-cols-1 gap-4 ${canSetPrice ? 'sm:grid-cols-2' : ''}`}>
               <div>
                 <Label htmlFor="vendor">
                   Assign Vendor <span className="text-red-500">*</span>
@@ -571,6 +598,7 @@ const AddAddressVerificationDialog = ({
                   )}
                 </div>
               )}
+              </div>
             </div>
           )}
 

@@ -3,6 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import MultiSelectCombobox from '@/components/ui/multi-select-combobox';
+import { INDIAN_CITIES } from '@/data/indianCities';
 import { apiService } from '@/services/api';
 
 interface Vendor {
@@ -16,6 +18,7 @@ interface Vendor {
   addressVerificationPrice?: number;
   isActive?: boolean;
   type?: 'independent' | 'company';
+  locations?: string[];
 }
 
 interface AddVendorDialogProps {
@@ -53,6 +56,7 @@ const emptyForm: FormData = {
 
 const AddVendorDialog = ({ open, onClose, onSuccess, editVendor }: AddVendorDialogProps) => {
   const [formData, setFormData] = useState<FormData>(emptyForm);
+  const [locations, setLocations] = useState<string[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -71,9 +75,11 @@ const AddVendorDialog = ({ open, onClose, onSuccess, editVendor }: AddVendorDial
             : '',
         type: editVendor.type || 'independent',
       });
+      setLocations(editVendor.locations || []);
       setErrors({});
     } else if (open && !editVendor) {
       setFormData(emptyForm);
+      setLocations([]);
       setErrors({});
     }
   }, [open, editVendor]);
@@ -120,6 +126,7 @@ const AddVendorDialog = ({ open, onClose, onSuccess, editVendor }: AddVendorDial
         gstin: formData.gstin.trim(),
         addressVerificationPrice: Number(formData.addressVerificationPrice),
         type: formData.type,
+        locations,
       };
 
       const response = editVendor?._id
@@ -224,6 +231,20 @@ const AddVendorDialog = ({ open, onClose, onSuccess, editVendor }: AddVendorDial
               />
               {errors.phone && <p className="text-sm text-red-500 mt-1">{errors.phone}</p>}
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="vendor-locations">Locations (cities operated in)</Label>
+            <MultiSelectCombobox
+              options={INDIAN_CITIES}
+              selected={locations}
+              onChange={setLocations}
+              placeholder="Select cities…"
+              searchPlaceholder="Search cities…"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Used to filter vendors by location when assigning cases.
+            </p>
           </div>
 
           <div>

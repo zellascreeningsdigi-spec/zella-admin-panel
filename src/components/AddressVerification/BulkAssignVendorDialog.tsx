@@ -3,6 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import SearchableSelect from '@/components/ui/searchable-select';
+import { INDIAN_CITIES } from '@/data/indianCities';
 import { apiService } from '@/services/api';
 
 interface VendorOption {
@@ -10,6 +12,7 @@ interface VendorOption {
   name: string;
   email: string;
   addressVerificationPrice?: number;
+  locations?: string[];
 }
 
 interface BulkAssignVendorDialogProps {
@@ -27,6 +30,7 @@ const BulkAssignVendorDialog = ({ open, onClose, onSuccess, caseIds, canSetPrice
   const [vendors, setVendors] = useState<VendorOption[]>([]);
   const [vendor, setVendor] = useState('');
   const [price, setPrice] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
   const [errors, setErrors] = useState<{ vendor?: string; price?: string }>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -34,16 +38,26 @@ const BulkAssignVendorDialog = ({ open, onClose, onSuccess, caseIds, canSetPrice
     if (!open) return;
     setVendor('');
     setPrice('');
+    setLocationFilter('');
     setErrors({});
+  }, [open]);
+
+  // Refetch vendors whenever the dialog opens or the location filter changes.
+  useEffect(() => {
+    if (!open) return;
     (async () => {
       try {
-        const res = await apiService.getVendors({ isActive: true, limit: 200 });
+        const res = await apiService.getVendors({
+          isActive: true,
+          limit: 200,
+          ...(locationFilter ? { location: locationFilter } : {}),
+        });
         if (res.success && res.data) setVendors(res.data.vendors || []);
       } catch (e) {
         console.error('Failed to load vendors:', e);
       }
     })();
-  }, [open]);
+  }, [open, locationFilter]);
 
   const handleVendorChange = (vid: string) => {
     setVendor(vid);
@@ -91,6 +105,17 @@ const BulkAssignVendorDialog = ({ open, onClose, onSuccess, caseIds, canSetPrice
           <DialogTitle>Assign {caseIds.length} case{caseIds.length === 1 ? '' : 's'} to a vendor</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="bulk-vendor-location">Filter Vendors by Location</Label>
+            <SearchableSelect
+              options={INDIAN_CITIES}
+              value={locationFilter}
+              onChange={setLocationFilter}
+              placeholder="All locations"
+              allLabel="All locations"
+              searchPlaceholder="Search cities…"
+            />
+          </div>
           <div>
             <Label htmlFor="bulk-vendor">Vendor <span className="text-red-500">*</span></Label>
             <select

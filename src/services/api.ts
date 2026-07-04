@@ -397,6 +397,7 @@ class ApiService {
     limit?: number;
     search?: string;
     isActive?: boolean;
+    location?: string;
   }): Promise<ApiResponse<{
     vendors: any[];
     pagination: {
@@ -411,6 +412,7 @@ class ApiService {
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.search) queryParams.append('search', params.search);
     if (params?.isActive !== undefined) queryParams.append('isActive', String(params.isActive));
+    if (params?.location) queryParams.append('location', params.location);
 
     const endpoint = queryParams.toString() ? `/vendors?${queryParams}` : '/vendors';
     return this.get(endpoint);
@@ -1081,7 +1083,7 @@ class ApiService {
     }
   }
 
-  // Shared blob-download helper for the vendor Excel/Images exports below.
+  // Shared blob-download helper for the vendor report/photos PDF exports below.
   private async downloadBlob(url: string, options: RequestInit, filename: string, errorLabel: string): Promise<void> {
     const token = this.getAuthToken();
     try {
@@ -1109,41 +1111,42 @@ class ApiService {
     }
   }
 
-  // Excel export (Address Check data only, no photos) — single + bulk.
-  async downloadVendorReportExcel(id: string, code: string): Promise<void> {
+  // Vendor "Address Check" report PDF (table + verifier details, no photos) — single + bulk.
+  async downloadVendorReport(id: string, code: string): Promise<void> {
     await this.downloadBlob(
-      `${API_BASE_URL}/address-verifications/${id}/vendor-report/excel`,
+      `${API_BASE_URL}/address-verifications/${id}/vendor-report?format=pdf`,
       { method: 'GET' },
-      `Vendor_Report_${code}.xlsx`,
-      'download Excel report'
+      `Vendor_Report_${code}.pdf`,
+      'download report'
     );
   }
 
-  async downloadBulkVendorReportExcel(ids: string[]): Promise<void> {
+  async downloadBulkVendorReports(ids: string[]): Promise<void> {
     await this.downloadBlob(
-      `${API_BASE_URL}/address-verifications/vendor-report/excel/bulk`,
+      `${API_BASE_URL}/address-verifications/vendor-report/bulk`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) },
-      'vendor-reports.xlsx',
-      'download Excel reports'
+      'vendor-reports.zip',
+      'download reports'
     );
   }
 
-  // Images export (field photos only, no table) — single + bulk.
-  async downloadVendorPhotos(id: string, code: string): Promise<void> {
+  // Vendor "Field Photographs" PDF (photos only, no table) — a SEPARATE PDF
+  // from the report above, not combined — single + bulk.
+  async downloadVendorPhotosReport(id: string, code: string): Promise<void> {
     await this.downloadBlob(
-      `${API_BASE_URL}/address-verifications/${id}/vendor-report/photos`,
+      `${API_BASE_URL}/address-verifications/${id}/vendor-report/photos?format=pdf`,
       { method: 'GET' },
-      `Vendor_Photos_${code}.zip`,
-      'download photos'
+      `Vendor_Photos_${code}.pdf`,
+      'download photos report'
     );
   }
 
-  async downloadBulkVendorPhotos(ids: string[]): Promise<void> {
+  async downloadBulkVendorPhotosReports(ids: string[]): Promise<void> {
     await this.downloadBlob(
       `${API_BASE_URL}/address-verifications/vendor-report/photos/bulk`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) },
-      'vendor-photos.zip',
-      'download photos'
+      'vendor-photos-reports.zip',
+      'download photos reports'
     );
   }
 
