@@ -1,4 +1,4 @@
-import { Edit, Ban } from 'lucide-react';
+import { Edit, Ban, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -29,9 +29,11 @@ interface VendorsTableProps {
   loading: boolean;
   onEdit: (vendor: Vendor) => void;
   onDeactivate: (vendor: Vendor) => void;
+  // Permanently deletes the vendor + its logins (super-admin only, irreversible).
+  onDeletePermanently: (vendor: Vendor) => void;
 }
 
-const VendorsTable = ({ vendors, loading, onEdit, onDeactivate }: VendorsTableProps) => {
+const VendorsTable = ({ vendors, loading, onEdit, onDeactivate, onDeletePermanently }: VendorsTableProps) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -121,6 +123,14 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate }: VendorsTablePr
                         <Ban className="w-4 h-4 text-red-500" />
                       </Button>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDeletePermanently(vendor)}
+                      title="Delete Permanently"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-700" />
+                    </Button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -160,6 +170,9 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate }: VendorsTablePr
                   <Ban className="w-4 h-4 mr-2" /> Deactivate
                 </Button>
               )}
+              <Button variant="outline" size="sm" className="flex-1 text-red-700" onClick={() => onDeletePermanently(vendor)}>
+                <Trash2 className="w-4 h-4 mr-2" /> Delete
+              </Button>
             </div>
           </div>
         ))}

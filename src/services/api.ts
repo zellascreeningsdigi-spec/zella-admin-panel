@@ -434,6 +434,12 @@ class ApiService {
     return this.delete(`/vendors/${vendorId}`);
   }
 
+  // Permanently deletes the vendor + its logins (super-admin only, irreversible).
+  // Cases previously assigned to this vendor are kept, just unlinked.
+  async permanentlyDeleteVendor(vendorId: string): Promise<ApiResponse<{}>> {
+    return this.delete(`/vendors/${vendorId}/permanent`);
+  }
+
   // ── Vendor portal (vendor / vendor-member) ──────────────────────────────
   async getMyVendor(): Promise<ApiResponse<{ vendor: any; role: string }>> {
     return this.get('/vendors/me');

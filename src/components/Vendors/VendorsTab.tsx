@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { apiService } from '@/services/api';
 import VendorsTable, { Vendor } from './VendorsTable';
 import AddVendorDialog from './AddVendorDialog';
+import DeleteVendorDialog from './DeleteVendorDialog';
 
 const PAGE_SIZE = 20;
 
@@ -16,6 +17,7 @@ const VendorsTab = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
+  const [deletingVendor, setDeletingVendor] = useState<Vendor | null>(null);
 
   const fetchVendors = useCallback(async () => {
     try {
@@ -75,6 +77,11 @@ const VendorsTab = () => {
     fetchVendors();
   };
 
+  const handleDeletePermanentlySuccess = () => {
+    setDeletingVendor(null);
+    fetchVendors();
+  };
+
   const pageCount = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
@@ -111,6 +118,7 @@ const VendorsTab = () => {
         loading={loading}
         onEdit={handleEdit}
         onDeactivate={handleDeactivate}
+        onDeletePermanently={setDeletingVendor}
       />
 
       {pageCount > 1 && (
@@ -148,6 +156,13 @@ const VendorsTab = () => {
         }}
         onSuccess={handleDialogSuccess}
         editVendor={editingVendor}
+      />
+
+      <DeleteVendorDialog
+        open={!!deletingVendor}
+        vendor={deletingVendor}
+        onClose={() => setDeletingVendor(null)}
+        onSuccess={handleDeletePermanentlySuccess}
       />
     </div>
   );
