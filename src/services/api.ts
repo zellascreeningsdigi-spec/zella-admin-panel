@@ -526,11 +526,17 @@ class ApiService {
   }
 
   // Customer Documents API
-  async getCustomerDocuments(customerId: string): Promise<ApiResponse<{
+  async getCustomerDocuments(customerId: string, params?: { dateFrom?: string; dateTo?: string }): Promise<ApiResponse<{
     documents: any[];
     documentsRequired: string[];
   }>> {
-    return this.get(`/customers/${customerId}/documents`);
+    const queryParams = new URLSearchParams();
+    if (params?.dateFrom) queryParams.append('dateFrom', params.dateFrom);
+    if (params?.dateTo) queryParams.append('dateTo', params.dateTo);
+    const endpoint = queryParams.toString()
+      ? `/customers/${customerId}/documents?${queryParams}`
+      : `/customers/${customerId}/documents`;
+    return this.get(endpoint);
   }
 
   async uploadCustomerDocument(customerId: string, formData: FormData): Promise<ApiResponse<{

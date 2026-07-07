@@ -58,11 +58,10 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
   const fetchDocuments = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await apiService.getCustomerDocuments(customer._id!);
+      // Backend applies the role-based visibility filter, the date-range
+      // filter, and returns documents newest-first.
+      const response = await apiService.getCustomerDocuments(customer._id!, { dateFrom, dateTo });
       if (response.success && response.data) {
-        // Documents are already filtered by the backend based on user role
-        // Super-admin and Admin receive all documents
-        // Operator and Customer users receive only documents they uploaded
         setDocuments(response.data.documents || []);
         setDocumentsRequired(response.data.documentsRequired || []);
       }
@@ -71,7 +70,7 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
     } finally {
       setLoading(false);
     }
-  }, [customer._id]);
+  }, [customer._id, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchDocuments();
@@ -332,53 +331,17 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
     return documents.filter((doc) => doc.name === documentName);
   };
 
-  // Filter documents based on search query and date range
+  // The backend already applies the date-range filter and returns documents
+  // newest-first (see fetchDocuments); this only applies the search filter,
+  // which stays client-side for instant-as-you-type filtering without a refetch.
   const filteredDocuments = useMemo(() => {
-    let filtered = documents;
-
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((doc) =>
-        doc.originalName.toLowerCase().includes(query) ||
-        doc.name.toLowerCase().includes(query)
-      );
-    }
-
-    // Apply date range filter
-    if (dateFrom || dateTo) {
-      filtered = filtered.filter((doc) => {
-        const uploadDate = new Date(doc.uploadedAt);
-        const fromDate = dateFrom ? new Date(dateFrom) : null;
-        const toDate = dateTo ? new Date(dateTo) : null;
-
-        // Set time to start/end of day for accurate comparison
-        if (fromDate) {
-          fromDate.setHours(0, 0, 0, 0);
-        }
-        if (toDate) {
-          toDate.setHours(23, 59, 59, 999);
-        }
-
-        if (fromDate && toDate) {
-          return uploadDate >= fromDate && uploadDate <= toDate;
-        } else if (fromDate) {
-          return uploadDate >= fromDate;
-        } else if (toDate) {
-          return uploadDate <= toDate;
-        }
-        return true;
-      });
-    }
-
-    // Newest first. Sort a copy — `filtered` may still be the same reference
-    // as `documents` (state) when neither filter above ran.
-    filtered = [...filtered].sort(
-      (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    if (!searchQuery.trim()) return documents;
+    const query = searchQuery.toLowerCase();
+    return documents.filter((doc) =>
+      doc.originalName.toLowerCase().includes(query) ||
+      doc.name.toLowerCase().includes(query)
     );
-
-    return filtered;
-  }, [documents, searchQuery, dateFrom, dateTo]);
+  }, [documents, searchQuery]);
 
   // Get filtered documents for a specific document name
   const getFilteredDocumentsForName = (documentName: string): CustomerDocument[] => {
