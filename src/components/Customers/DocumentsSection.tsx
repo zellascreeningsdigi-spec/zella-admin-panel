@@ -13,6 +13,26 @@ interface DocumentsSectionProps {
   onDocumentsUpdated?: () => void;
 }
 
+// Local-date-safe YYYY-MM-DD formatter for the native <input type="date">
+// value — avoids toISOString()'s UTC shift, which can be off-by-one for
+// users west of UTC.
+const toLocalDateString = (d: Date): string => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Default date filter range: last 7 days. The From/To filter already lets
+// anyone widen this to see older documents, so there's no need to show every
+// document ever uploaded by default.
+const getDefaultDateRange = () => {
+  const today = new Date();
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(today.getDate() - 7);
+  return { from: toLocalDateString(sevenDaysAgo), to: toLocalDateString(today) };
+};
+
 const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumentsUpdated }) => {
   const { user } = useAuth();
   const [documents, setDocuments] = useState<CustomerDocument[]>([]);
@@ -27,8 +47,8 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
   const [searchQuery, setSearchQuery] = useState('');
   const [showAllDocuments, setShowAllDocuments] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(() => getDefaultDateRange().from);
+  const [dateTo, setDateTo] = useState(() => getDefaultDateRange().to);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
@@ -350,6 +370,12 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
         return true;
       });
     }
+
+    // Newest first. Sort a copy — `filtered` may still be the same reference
+    // as `documents` (state) when neither filter above ran.
+    filtered = [...filtered].sort(
+      (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+    );
 
     return filtered;
   }, [documents, searchQuery, dateFrom, dateTo]);
