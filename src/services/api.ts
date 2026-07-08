@@ -391,6 +391,13 @@ class ApiService {
     return this.post('/customers/bulk-password-reminders', { customerIds, enabled });
   }
 
+  async setCustomerPasswordReminders(
+    customerId: string,
+    enabled: boolean
+  ): Promise<ApiResponse<{ customer: any }>> {
+    return this.patch(`/customers/${customerId}/password-reminders`, { enabled });
+  }
+
   // Vendors API methods (super-admin only)
   async getVendors(params?: {
     page?: number;

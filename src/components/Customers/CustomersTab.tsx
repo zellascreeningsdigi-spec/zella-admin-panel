@@ -144,6 +144,26 @@ const CustomersTab: React.FC = () => {
     fetchCustomers(undefined, 1);
   };
 
+  const handleToggleReminders = async (customer: Customer) => {
+    if (!customer._id) return;
+    const enabled = !customer.sendPasswordExpiryReminders;
+    // Optimistic update so the bell flips immediately.
+    setCustomers(prev =>
+      prev.map(c => (c._id === customer._id ? { ...c, sendPasswordExpiryReminders: enabled } : c))
+    );
+    try {
+      const res = await apiService.setCustomerPasswordReminders(customer._id, enabled);
+      if (!res.success) {
+        throw new Error(res.message || 'Update failed');
+      }
+    } catch (err) {
+      console.error('Toggle reminders error:', err);
+      alert(`Failed to update reminders: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      // Revert on failure.
+      fetchCustomers();
+    }
+  };
+
   const openBulkConfirm = (enable: boolean) => {
     if (selectedCustomers.length === 0) return;
     setBulkConfirm({ open: true, enable });
@@ -386,6 +406,7 @@ const CustomersTab: React.FC = () => {
             onPageChange={setCurrentPage}
             enableSelection={isSuperAdmin}
             onSelectionChange={setSelectedCustomers}
+            onToggleReminders={handleToggleReminders}
           />
         </CardContent>
       </Card>

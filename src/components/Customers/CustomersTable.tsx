@@ -22,6 +22,8 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import {
+  BellOff,
+  BellRing,
   ChevronLeft,
   ChevronRight,
   Edit,
@@ -41,9 +43,10 @@ interface CustomersTableProps {
   onPageChange?: (page: number) => void;
   enableSelection?: boolean;
   onSelectionChange?: (selectedCustomers: Customer[]) => void;
+  onToggleReminders?: (customer: Customer) => void;
 }
 
-const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustomer, onEditCustomer, onDeleteCustomer, currentPage, pageSize, totalCount, onPageChange, enableSelection, onSelectionChange }) => {
+const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustomer, onEditCustomer, onDeleteCustomer, currentPage, pageSize, totalCount, onPageChange, enableSelection, onSelectionChange, onToggleReminders }) => {
   const { user } = useAuth();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -88,9 +91,43 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
       {
         accessorKey: 'companyName',
         header: 'Company Name',
-        cell: ({ row }) => (
-          <div className="font-medium">{row.getValue('companyName')}</div>
-        ),
+        cell: ({ row }) => {
+          const customer = row.original;
+          const on = !!customer.sendPasswordExpiryReminders;
+          const isSuperAdmin = user?.role === 'super-admin';
+          const Icon = on ? BellRing : BellOff;
+          const iconClass = `h-4 w-4 ${on ? 'text-green-600' : 'text-gray-400'}`;
+          const statusTitle = on
+            ? 'Password reminders ON'
+            : 'Password reminders OFF';
+          return (
+            <div className="flex items-center gap-2">
+              {isSuperAdmin ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleReminders?.(customer);
+                  }}
+                  title={on
+                    ? 'Password reminders ON — click to turn off'
+                    : 'Password reminders OFF — click to turn on'}
+                  aria-label={on
+                    ? `Turn off password reminders for ${customer.companyName}`
+                    : `Turn on password reminders for ${customer.companyName}`}
+                  className="flex-shrink-0 rounded p-0.5 hover:bg-gray-100"
+                >
+                  <Icon className={iconClass} />
+                </button>
+              ) : (
+                <span className="flex-shrink-0" title={statusTitle} aria-label={statusTitle}>
+                  <Icon className={iconClass} />
+                </span>
+              )}
+              <span className="font-medium">{row.getValue('companyName')}</span>
+            </div>
+          );
+        },
       },
       {
         accessorKey: 'emails',
@@ -162,7 +199,7 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
         },
       },
     ],
-    [onViewCustomer, onEditCustomer, onDeleteCustomer, user, enableSelection]
+    [onViewCustomer, onEditCustomer, onDeleteCustomer, onToggleReminders, user, enableSelection]
   );
 
   const _pageSize = pageSize ?? 10;
