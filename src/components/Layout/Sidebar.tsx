@@ -60,7 +60,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, open = false,
           h-screen bg-gray-900 text-white flex flex-col
           ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
-      <div className="flex items-center p-5 space-x-3">
+      <div className="flex items-center p-5 space-x-3 flex-shrink-0">
         <div className="flex-shrink-0">
           <img src={logo} width={50} height={50} alt="Zella Screenings Logo"></img>
         </div>
@@ -70,7 +70,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, open = false,
       </div>
 
 
-      <nav className="flex-1 px-4">
+      <nav className="flex-1 min-h-0 overflow-y-auto px-4 py-2">
         <ul className="space-y-2">
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -110,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, open = false,
         </ul>
       </nav>
       
-      <div className="p-4">
+      <div className="p-4 flex-shrink-0 border-t border-gray-800">
         <Button
           variant="outline"
           className="w-full text-black border-gray-600"
