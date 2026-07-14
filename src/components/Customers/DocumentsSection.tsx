@@ -23,15 +23,18 @@ const toLocalDateString = (d: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-// Default date filter range: last 7 days. The From/To filter already lets
-// anyone widen this to see older documents, so there's no need to show every
-// document ever uploaded by default.
-const getDefaultDateRange = () => {
+// Date range covering the last `days` days (inclusive of today).
+const getLastNDaysRange = (days: number) => {
   const today = new Date();
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(today.getDate() - 7);
-  return { from: toLocalDateString(sevenDaysAgo), to: toLocalDateString(today) };
+  const start = new Date();
+  start.setDate(today.getDate() - days);
+  return { from: toLocalDateString(start), to: toLocalDateString(today) };
 };
+
+// Default date filter range: last 7 days. Customers land on their most recent
+// uploads; the presets / From-To pickers below let them widen to 30 days or
+// "All time" to see everything they've uploaded previously.
+const getDefaultDateRange = () => getLastNDaysRange(7);
 
 const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumentsUpdated }) => {
   const { user } = useAuth();
@@ -75,6 +78,30 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
   useEffect(() => {
     fetchDocuments();
   }, [fetchDocuments]);
+
+  // Apply a quick range preset. "all" clears both dates so the backend
+  // returns every document ever uploaded (unbounded).
+  const applyRangePreset = useCallback((preset: '7d' | '30d' | 'all') => {
+    if (preset === 'all') {
+      setDateFrom('');
+      setDateTo('');
+      return;
+    }
+    const { from, to } = getLastNDaysRange(preset === '7d' ? 7 : 30);
+    setDateFrom(from);
+    setDateTo(to);
+  }, []);
+
+  // Which preset (if any) the current From/To pair corresponds to, so we can
+  // highlight the active button and show a friendly "Showing …" label.
+  const activePreset: '7d' | '30d' | 'all' | 'custom' = useMemo(() => {
+    if (!dateFrom && !dateTo) return 'all';
+    const r7 = getLastNDaysRange(7);
+    if (dateFrom === r7.from && dateTo === r7.to) return '7d';
+    const r30 = getLastNDaysRange(30);
+    if (dateFrom === r30.from && dateTo === r30.to) return '30d';
+    return 'custom';
+  }, [dateFrom, dateTo]);
 
   const handleFileUpload = useCallback(async (file: File, documentName: string) => {
     try {
@@ -483,75 +510,104 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
             )}
           </div>
         </div>
-        {/* Search Bar and Filters */}
-        {documents.length > 0 && (
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+        {/* Search Bar and Filters — always rendered (even when the current
+            range has no documents) so the customer can always widen the range
+            to find older uploads. */}
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              type="text"
+              placeholder="Search documents by filename..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+            {searchQuery && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0"
+                onClick={() => setSearchQuery('')}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+
+          {/* Quick range presets */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">Show:</span>
+            <Button
+              variant={activePreset === '7d' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => applyRangePreset('7d')}
+            >
+              Last 7 days
+            </Button>
+            <Button
+              variant={activePreset === '30d' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => applyRangePreset('30d')}
+            >
+              Last 30 days
+            </Button>
+            <Button
+              variant={activePreset === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => applyRangePreset('all')}
+            >
+              All time
+            </Button>
+          </div>
+
+          {/* Date Filter */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-1">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">From:</label>
               <Input
-                type="text"
-                placeholder="Search documents by filename..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="flex-1"
               />
-              {searchQuery && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0"
-                  onClick={() => setSearchQuery('')}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
             </div>
-
-            {/* Date Filter */}
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 flex-1">
-                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">From:</label>
-                <Input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="flex-1"
-                />
-              </div>
-              <div className="flex items-center gap-2 flex-1">
-                <label className="text-sm font-medium text-gray-700 whitespace-nowrap">To:</label>
-                <Input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="flex-1"
-                />
-              </div>
-              {(dateFrom || dateTo) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setDateFrom('');
-                    setDateTo('');
-                  }}
-                  className="whitespace-nowrap"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Clear Dates
-                </Button>
-              )}
+            <div className="flex items-center gap-2 flex-1">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">To:</label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="flex-1"
+              />
             </div>
+            {(dateFrom || dateTo) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDateFrom('');
+                  setDateTo('');
+                }}
+                className="whitespace-nowrap"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear Dates
+              </Button>
+            )}
+          </div>
 
-            {/* Active Filters Summary */}
-            {(searchQuery || dateFrom || dateTo) && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <span className="font-medium">Active filters:</span>
-                {searchQuery && (
-                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                    Search: "{searchQuery}"
-                  </span>
-                )}
+          {/* Current-view label so the customer knows what window they're seeing */}
+          <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+            <span className="font-medium">Showing:</span>
+            {activePreset === 'all' ? (
+              <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded">All uploads (any date)</span>
+            ) : activePreset === '7d' ? (
+              <span className="bg-green-100 text-green-800 px-2 py-1 rounded">Last 7 days (default)</span>
+            ) : activePreset === '30d' ? (
+              <span className="bg-green-100 text-green-800 px-2 py-1 rounded">Last 30 days</span>
+            ) : (
+              <>
                 {dateFrom && (
                   <span className="bg-green-100 text-green-800 px-2 py-1 rounded">
                     From: {new Date(dateFrom).toLocaleDateString('en-GB')}
@@ -562,15 +618,47 @@ const DocumentsSection: React.FC<DocumentsSectionProps> = ({ customer, onDocumen
                     To: {new Date(dateTo).toLocaleDateString('en-GB')}
                   </span>
                 )}
-                <span className="text-gray-500">
-                  ({filteredDocuments.length} of {documents.length} documents)
-                </span>
-              </div>
+                {!dateFrom && !dateTo && (
+                  <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded">All uploads (any date)</span>
+                )}
+              </>
             )}
+            {searchQuery && (
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                Search: "{searchQuery}"
+              </span>
+            )}
+            <span className="text-gray-500">
+              ({filteredDocuments.length} of {documents.length} in this range)
+            </span>
           </div>
-        )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Empty-range hint — the current date window has no uploads, but the
+            customer may have older documents. Nudge them to widen the range so
+            they don't think their data is gone. */}
+        {documents.length === 0 && !loading && activePreset !== 'all' && (
+          <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
+            <p className="text-sm text-amber-800 font-medium">
+              No documents found in this date range.
+            </p>
+            <p className="text-sm text-amber-700 mt-1">
+              You're viewing {activePreset === '7d' ? 'the last 7 days' : activePreset === '30d' ? 'the last 30 days' : 'a limited date range'} by default.
+              Older documents you uploaded may fall outside this window.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 border-amber-300 text-amber-800 hover:bg-amber-100"
+              onClick={() => applyRangePreset('all')}
+            >
+              <FolderOpen className="h-4 w-4 mr-2" />
+              Show all my uploads
+            </Button>
+          </div>
+        )}
+
         {/* Add New Document Requirement */}
         {addingNew && (
           <div className="border-2 border-dashed border-blue-500 rounded-lg p-4 bg-blue-50">
