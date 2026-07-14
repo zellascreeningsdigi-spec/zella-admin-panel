@@ -78,14 +78,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, open = false,
               <li key={item.id}>
                 <button
                   onClick={() => handleNavClick(item.id)}
-                  className={`w-full flex items-center px-4 py-3 rounded-lg transition-colors ${
+                  className={`w-full flex items-center px-4 py-3 rounded-lg transition-colors text-left ${
                     activeTab === item.id
                       ? 'bg-blue-600 text-white'
                       : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
                 >
-                  <Icon className="h-5 w-5 mr-3" />
-                  {item.label}
+                  <Icon className="h-5 w-5 mr-3 flex-shrink-0" />
+                  <span>{item.label}</span>
                 </button>
               </li>
             );
