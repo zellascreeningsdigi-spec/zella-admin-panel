@@ -142,6 +142,11 @@ const VendorCaseDetailPage = () => {
 
   const submit = async (outcome: 'verified' | 'disputed') => {
     if (!id) return;
+    // At least one uploaded document is mandatory before finalizing.
+    if ((verification.vendorWork?.documents || []).length === 0) {
+      alert('Please upload at least one document before submitting this case.');
+      return;
+    }
     // Require a reason on any disputed row.
     const missingReason = checks.find((c) => c.entityStatus === 'disputed' && !c.disputeReason.trim());
     if (missingReason) {
@@ -390,114 +395,12 @@ const VendorCaseDetailPage = () => {
           </div>
         </div>
 
-        {/* Geo-stamped photos */}
+        {/* Uploaded documents (mandatory before submitting) */}
         <div className="bg-white rounded-lg border p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold">Field Photos</h2>
-            <div className="text-xs">
-              {geoStatus === 'granted' && coords.latitude !== undefined ? (
-                <span className="text-green-600 flex items-center">
-                  <MapPin className="w-3 h-3 mr-1" />
-                  {coords.latitude.toFixed(5)}, {coords.longitude!.toFixed(5)}
-                </span>
-              ) : (
-                <button type="button" onClick={captureGeolocation} className="text-blue-600 underline">
-                  {geoStatus === 'requesting' ? 'Getting location…' : 'Enable location'}
-                </button>
-              )}
-            </div>
-          </div>
-          {geoStatus !== 'granted' && (
-            <p className="text-xs text-amber-600 mb-3">
-              Location not captured yet — photos will be saved without GPS. Tap "Enable location" and allow access.
-            </p>
-          )}
-
-          {!readOnly && (
-            <div className="mb-4">
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => handlePhotoSelected(e.target.files?.[0] || null)}
-              />
-
-              {pendingPhoto ? (
-                /* Preview before upload */
-                <div className="border rounded-md p-3 bg-gray-50">
-                  <p className="text-sm font-medium mb-2">Preview</p>
-                  <img src={pendingPhoto.url} alt="preview" className="w-full max-h-72 object-contain rounded-md bg-white" />
-                  <div className="text-xs text-gray-500 mt-2 flex items-center">
-                    {coords.latitude !== undefined ? (
-                      <><MapPin className="w-3 h-3 mr-1" />Location will be attached: {coords.latitude.toFixed(5)}, {coords.longitude!.toFixed(5)}</>
-                    ) : (
-                      <span className="text-amber-600">No GPS yet — will save without location.</span>
-                    )}
-                  </div>
-                  <div className="flex gap-2 mt-3">
-                    <Button type="button" className="flex-1 bg-green-600 hover:bg-green-700" disabled={uploading} onClick={confirmPendingPhoto}>
-                      <CheckCircle className="w-4 h-4 mr-2" /> {uploading ? 'Uploading…' : 'Use Photo'}
-                    </Button>
-                    <Button type="button" variant="outline" className="flex-1" disabled={uploading} onClick={() => { cancelPendingPhoto(); photoInputRef.current?.click(); }}>
-                      <Camera className="w-4 h-4 mr-2" /> Retake
-                    </Button>
-                    <Button type="button" variant="outline" disabled={uploading} onClick={cancelPendingPhoto}>
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <Button type="button" variant="outline" disabled={uploading} onClick={() => photoInputRef.current?.click()}>
-                  <Camera className="w-4 h-4 mr-2" /> Take / Add Photo
-                </Button>
-              )}
-            </div>
-          )}
-
-          {photos.length === 0 ? (
-            <p className="text-sm text-gray-400">No photos yet.</p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {photos.map((p: any) => (
-                <div key={p._id} className="border rounded-md overflow-hidden">
-                  <a href={p.s3Url} target="_blank" rel="noreferrer">
-                    <img src={p.s3Url} alt={p.docName} className="w-full h-32 object-cover" />
-                  </a>
-                  <div className="p-2 text-xs text-gray-600 space-y-1">
-                    {p.gpsAddress && p.gpsAddress !== `${p.latitude}, ${p.longitude}` && (
-                      <div className="text-gray-700">{p.gpsAddress}</div>
-                    )}
-                    {p.latitude !== undefined && p.latitude !== null ? (
-                      <a
-                        className="text-blue-600 flex items-center"
-                        href={`https://maps.google.com/?q=${p.latitude},${p.longitude}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <MapPin className="w-3 h-3 mr-1" />
-                        {Number(p.latitude).toFixed(4)}, {Number(p.longitude).toFixed(4)}
-                      </a>
-                    ) : (
-                      <span className="text-gray-400">No GPS</span>
-                    )}
-                    {!readOnly && (
-                      <button onClick={() => deletePhoto(p._id)} className="text-red-500 flex items-center">
-                        <Trash2 className="w-3 h-3 mr-1" /> Delete
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Optional documents */}
-        <div className="bg-white rounded-lg border p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold">Supporting Documents (optional)</h2>
+            <h2 className="text-lg font-bold">
+              Uploaded Documents <span className="text-red-500">*</span>
+            </h2>
             {!readOnly && (
               <>
                 <input
@@ -508,26 +411,42 @@ const VendorCaseDetailPage = () => {
                   onChange={(e) => handleDocSelected(e.target.files?.[0] || null)}
                 />
                 <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => docInputRef.current?.click()}>
-                  <Upload className="w-4 h-4 mr-2" /> Attach
+                  <Upload className="w-4 h-4 mr-2" /> {uploading ? 'Uploading…' : 'Upload'}
                 </Button>
               </>
             )}
           </div>
           {documents.length === 0 ? (
-            <p className="text-sm text-gray-400">No documents attached.</p>
+            <p className="text-sm text-amber-600">
+              At least one document is required before you can submit this case.
+            </p>
           ) : (
-            <ul className="space-y-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {documents.map((d: any) => (
-                <li key={d._id} className="flex items-center justify-between text-sm border rounded-md p-2">
-                  <a href={d.s3Url} target="_blank" rel="noreferrer" className="text-blue-600 truncate">{d.docName}</a>
-                  {!readOnly && (
-                    <button onClick={() => deleteDoc(d._id)} className="text-red-500">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </li>
+                <div key={d._id} className="border rounded-md overflow-hidden">
+                  <a href={d.s3Url} target="_blank" rel="noreferrer" className="block bg-gray-50">
+                    {isImage(d.docName) ? (
+                      <img src={d.s3Url} alt={d.docName} className="w-full h-32 object-cover" />
+                    ) : (
+                      <div className="w-full h-32 flex flex-col items-center justify-center text-gray-400">
+                        <Upload className="w-8 h-8 mb-1" />
+                        <span className="text-xs">Document</span>
+                      </div>
+                    )}
+                  </a>
+                  <div className="p-2 text-xs text-gray-600 flex items-center justify-between gap-2">
+                    <a href={d.s3Url} target="_blank" rel="noreferrer" className="text-blue-600 truncate" title={d.docName}>
+                      {d.docName}
+                    </a>
+                    {!readOnly && (
+                      <button onClick={() => deleteDoc(d._id)} className="text-red-500 flex-shrink-0">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
 

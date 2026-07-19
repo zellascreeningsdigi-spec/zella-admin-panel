@@ -33,6 +33,7 @@ export interface AddressVerification {
 }
 
 export interface DocumentUpload {
+  _id?: string;
   docName: string;
   s3Key: string;
   s3Url: string;

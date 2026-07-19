@@ -1013,51 +1013,31 @@ SECURE | AUTHENTICATE`;
                     </div>
                   )}
 
-                  {/* Geo-stamped photos */}
-                  {verification.vendorWork?.photos && verification.vendorWork.photos.length > 0 && (
+                  {/* Uploaded documents */}
+                  {verification.vendorWork?.documents && verification.vendorWork.documents.length > 0 && (
                     <div>
-                      <div className="text-sm font-medium text-gray-700 mb-2">Field Photos</div>
+                      <div className="text-sm font-medium text-gray-700 mb-2">Uploaded Documents</div>
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {verification.vendorWork.photos.map((p, idx) => (
-                          <div key={p._id || idx} className="border rounded-md overflow-hidden">
-                            <a href={p.s3Url} target="_blank" rel="noreferrer">
-                              <img src={p.s3Url} alt={p.docName || 'field photo'} className="w-full h-28 object-cover" />
-                            </a>
-                            <div className="p-2 text-xs space-y-1">
-                              {p.gpsAddress && p.gpsAddress !== `${p.latitude}, ${p.longitude}` && (
-                                <div className="text-gray-700">{p.gpsAddress}</div>
-                              )}
-                              {p.latitude !== undefined && p.latitude !== null ? (
-                                <a
-                                  className="text-blue-600 flex items-center"
-                                  href={`https://maps.google.com/?q=${p.latitude},${p.longitude}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  <MapPin className="w-3 h-3 mr-1" />
-                                  {Number(p.latitude).toFixed(4)}, {Number(p.longitude).toFixed(4)}
-                                </a>
+                        {verification.vendorWork.documents.map((d, idx) => (
+                          <div key={d._id || idx} className="border rounded-md overflow-hidden">
+                            <a href={d.s3Url} target="_blank" rel="noreferrer" className="block bg-gray-50">
+                              {isImage(d.docName || '') ? (
+                                <img src={d.s3Url} alt={d.docName || 'document'} className="w-full h-28 object-cover" />
                               ) : (
-                                <span className="text-gray-400">No GPS</span>
+                                <div className="w-full h-28 flex flex-col items-center justify-center text-gray-400">
+                                  <FileText className="w-8 h-8 mb-1" />
+                                  <span className="text-xs">Document</span>
+                                </div>
                               )}
+                            </a>
+                            <div className="p-2 text-xs">
+                              <a href={d.s3Url} target="_blank" rel="noreferrer" className="text-blue-600 truncate block" title={d.docName}>
+                                {d.docName}
+                              </a>
                             </div>
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Vendor documents */}
-                  {verification.vendorWork?.documents && verification.vendorWork.documents.length > 0 && (
-                    <div>
-                      <div className="text-sm font-medium text-gray-700 mb-2">Vendor Documents</div>
-                      <ul className="space-y-1 text-sm">
-                        {verification.vendorWork.documents.map((d, idx) => (
-                          <li key={idx}>
-                            <a href={d.s3Url} target="_blank" rel="noreferrer" className="text-blue-600">{d.docName}</a>
-                          </li>
-                        ))}
-                      </ul>
                     </div>
                   )}
                 </CardContent>
