@@ -917,7 +917,9 @@ class ApiService {
     return this.get(`/vendors/${vendorId}/analytics/members`);
   }
 
-  async getAddressVerificationStats(): Promise<ApiResponse<{
+  async getAddressVerificationStats(params?: {
+    hasVendor?: 'true' | 'false';
+  }): Promise<ApiResponse<{
     stats: {
       total: number;
       pending: number;
@@ -928,7 +930,10 @@ class ApiService {
       successRate: number;
     };
   }>> {
-    return this.get('/address-verifications/stats');
+    const queryParams = new URLSearchParams();
+    if (params?.hasVendor) queryParams.append('hasVendor', params.hasVendor);
+    const queryString = queryParams.toString();
+    return this.get(`/address-verifications/stats${queryString ? `?${queryString}` : ''}`);
   }
 
   async getAddressVerificationById(id: string): Promise<ApiResponse<any>> {

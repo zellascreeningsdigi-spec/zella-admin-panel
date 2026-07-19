@@ -46,6 +46,10 @@ const VerificationDetailPage = () => {
   const [loading, setLoading] = useState(true);
   // Route "Back" to the tab the case belongs to (vendor-assigned vs digital).
   const backTab = () => (verification?.vendor ? 'vendor-address-verification' : 'digital-address-verification');
+  // Vendor cases are handled in the field by the vendor, so the digital
+  // self-service sections (contact person, ID proof, uploaded documents) are
+  // never filled — hide them and show only the Vendor Handling section.
+  const isVendorCase = !!verification?.vendor;
   const [updating, setUpdating] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
@@ -736,8 +740,9 @@ SECURE | AUTHENTICATE`;
               </CardContent>
             </Card>
 
-            {/* Submitted Verification Data - Only show if submitted */}
-            {hasSubmitted && verification.verificationData && (
+            {/* Submitted Verification Data - digital cases only (vendors fill
+                the Vendor Handling section instead). */}
+            {!isVendorCase && hasSubmitted && verification.verificationData && (
               <>
                 {/* Contact Person Information */}
                 <Card>
@@ -1059,7 +1064,9 @@ SECURE | AUTHENTICATE`;
               </Card>
             )}
 
-            {/* Document Gallery - Always visible (independent of submission status) */}
+            {/* Document Gallery - digital cases only (vendor cases use the
+                Vendor Handling section's photos/documents instead). */}
+            {!isVendorCase && (
             <Card>
               <CardHeader className="bg-orange-50 border-b border-orange-200">
                 <CardTitle className="flex items-center gap-2 text-gray-900">
@@ -1188,6 +1195,7 @@ SECURE | AUTHENTICATE`;
                 </div>
               </CardContent>
             </Card>
+            )}
           </div>
 
           {/* Right Column - Admin Actions */}

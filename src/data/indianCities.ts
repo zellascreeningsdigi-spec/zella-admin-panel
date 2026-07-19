@@ -40,7 +40,11 @@ export const INDIAN_CITIES_BY_STATE: Record<string, string[]> = {
   "Puducherry": ["Puducherry","Karaikal","Mahe","Yanam"],
 };
 
-// Flat, sorted list of every city — the actual dropdown source.
+// Flat, sorted list of every city — kept for legacy display.
 export const INDIAN_CITIES: string[] = Array.from(
   new Set(Object.values(INDIAN_CITIES_BY_STATE).flat())
 ).sort((a, b) => a.localeCompare(b));
+
+// Sorted list of states/UTs — the vendor-location dropdown source.
+export const INDIAN_STATES: string[] = Object.keys(INDIAN_CITIES_BY_STATE)
+  .sort((a, b) => a.localeCompare(b));

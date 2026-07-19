@@ -1,15 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Camera, Upload, Trash2, MapPin, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Upload, Trash2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiService } from '@/services/api';
 import { VendorCheck, buildVendorChecks, AUTO_DATE_ROW_KEY, todayDisplay } from '@/lib/vendorCheckRows';
 
-type GeoStatus =
-  | 'idle' | 'requesting' | 'granted' | 'denied_soft' | 'denied_hard'
-  | 'timeout' | 'unavailable' | 'insecure_context' | 'unsupported';
+// Is this uploaded file an image we can preview inline?
+const isImage = (name?: string) => !!name && /\.(jpe?g|png|gif|webp|bmp|heic)$/i.test(name);
 
 const VendorCaseDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,63 +25,7 @@ const VendorCaseDetailPage = () => {
   const [verifierContact, setVerifierContact] = useState('');
   const [verifiedBy, setVerifiedBy] = useState('');
 
-  const [geoStatus, setGeoStatus] = useState<GeoStatus>('idle');
-  const [coords, setCoords] = useState<{ latitude?: number; longitude?: number }>({});
-  // Locally-tracked photos so uploads append without a full page refetch
-  // (keeps scroll position). Seeded from the fetched case.
-  const [photos, setPhotos] = useState<any[]>([]);
-  // Staged capture awaiting the user's confirmation (preview before upload).
-  const [pendingPhoto, setPendingPhoto] = useState<{ file: File; url: string } | null>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
-
-  // Geolocation state machine — reused from the candidate AddressVerificationPage.
-  const captureGeolocation = useCallback(async () => {
-    if (typeof window !== 'undefined' && window.isSecureContext === false) {
-      setGeoStatus('insecure_context');
-      return;
-    }
-    if (!('geolocation' in navigator)) {
-      setGeoStatus('unsupported');
-      return;
-    }
-    if (navigator.permissions && typeof navigator.permissions.query === 'function') {
-      try {
-        const perm = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-        if (perm.state === 'denied') {
-          setGeoStatus('denied_hard');
-          return;
-        }
-      } catch {
-        /* older Safari throws — fall through */
-      }
-    }
-    setGeoStatus('requesting');
-    const tryGet = (highAccuracy: boolean, timeout: number) =>
-      new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: highAccuracy,
-          timeout,
-          maximumAge: highAccuracy ? 0 : 60_000,
-        });
-      });
-    const apply = (pos: GeolocationPosition) => {
-      setCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-      setGeoStatus('granted');
-    };
-    try {
-      apply(await tryGet(true, 25_000));
-    } catch (e1: any) {
-      if (e1?.code === 1) { setGeoStatus('denied_soft'); return; }
-      try {
-        apply(await tryGet(false, 15_000));
-      } catch (e2: any) {
-        if (e2?.code === 1) setGeoStatus('denied_soft');
-        else if (e2?.code === 2) setGeoStatus('unavailable');
-        else setGeoStatus('timeout');
-      }
-    }
-  }, []);
 
   const fetchVerification = useCallback(async () => {
     if (!id) return;
@@ -111,7 +54,6 @@ const VendorCaseDetailPage = () => {
         setVerifierName(vw.verifierName || '');
         setVerifierContact(vw.verifierContact || '');
         setVerifiedBy(vw.verifiedBy || '');
-        setPhotos(Array.isArray(vw.photos) ? vw.photos : []);
       } else {
         alert('Case not found or access denied');
         navigate('/dashboard');
@@ -126,8 +68,7 @@ const VendorCaseDetailPage = () => {
 
   useEffect(() => {
     fetchVerification();
-    captureGeolocation();
-  }, [fetchVerification, captureGeolocation]);
+  }, [fetchVerification]);
 
   const alreadyFinalized =
     verification?.vendorWork?.status === 'verified' || verification?.vendorWork?.status === 'disputed';
@@ -151,45 +92,6 @@ const VendorCaseDetailPage = () => {
     setChecks((prev) => prev.map((c) => (c.key === key ? { ...c, profileValue } : c)));
   };
 
-  // Stage a captured photo for preview (do NOT upload yet).
-  const handlePhotoSelected = (file: File | null) => {
-    if (photoInputRef.current) photoInputRef.current.value = '';
-    if (!file) return;
-    setPendingPhoto((prev) => {
-      if (prev) URL.revokeObjectURL(prev.url);
-      return { file, url: URL.createObjectURL(file) };
-    });
-  };
-
-  const cancelPendingPhoto = () => {
-    setPendingPhoto((prev) => {
-      if (prev) URL.revokeObjectURL(prev.url);
-      return null;
-    });
-  };
-
-  // Confirm the previewed photo → upload → append to local state (no refetch,
-  // so the page doesn't jump back to the top).
-  const confirmPendingPhoto = async () => {
-    if (!pendingPhoto || !id) return;
-    setUploading(true);
-    try {
-      const res = await apiService.uploadVendorPhoto(id, pendingPhoto.file, coords);
-      if (res.success && res.data?.photo) {
-        setPhotos((prev) => [...prev, res.data!.photo]);
-        cancelPendingPhoto();
-        // Refresh location for the next photo (background).
-        captureGeolocation();
-      } else {
-        alert(res.message || 'Upload failed');
-      }
-    } catch (error: any) {
-      alert(error.message || 'Failed to upload photo');
-    } finally {
-      setUploading(false);
-    }
-  };
-
   const handleDocSelected = async (file: File | null) => {
     if (!file || !id) return;
     setUploading(true);
@@ -202,17 +104,6 @@ const VendorCaseDetailPage = () => {
     } finally {
       setUploading(false);
       if (docInputRef.current) docInputRef.current.value = '';
-    }
-  };
-
-  const deletePhoto = async (photoId: string) => {
-    if (!id || !window.confirm('Delete this photo?')) return;
-    try {
-      await apiService.deleteVendorPhoto(id, photoId);
-      // Update local state (no refetch → keep scroll position).
-      setPhotos((prev) => prev.filter((p) => p._id !== photoId));
-    } catch (error: any) {
-      alert(error.message || 'Failed to delete photo');
     }
   };
 

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import MultiSelectCombobox from '@/components/ui/multi-select-combobox';
-import { INDIAN_CITIES } from '@/data/indianCities';
+import { INDIAN_STATES } from '@/data/indianCities';
 import { apiService } from '@/services/api';
 
 interface Vendor {
@@ -234,13 +234,13 @@ const AddVendorDialog = ({ open, onClose, onSuccess, editVendor }: AddVendorDial
           </div>
 
           <div>
-            <Label htmlFor="vendor-locations">Locations (cities operated in)</Label>
+            <Label htmlFor="vendor-locations">Locations (states operated in)</Label>
             <MultiSelectCombobox
-              options={INDIAN_CITIES}
+              options={INDIAN_STATES}
               selected={locations}
               onChange={setLocations}
-              placeholder="Select cities…"
-              searchPlaceholder="Search cities…"
+              placeholder="Select states…"
+              searchPlaceholder="Search states…"
             />
             <p className="text-xs text-gray-400 mt-1">
               Used to filter vendors by location when assigning cases.

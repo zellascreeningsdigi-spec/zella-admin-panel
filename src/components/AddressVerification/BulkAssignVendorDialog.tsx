@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import SearchableSelect from '@/components/ui/searchable-select';
-import { INDIAN_CITIES } from '@/data/indianCities';
+import { INDIAN_STATES } from '@/data/indianCities';
 import { apiService } from '@/services/api';
 
 interface VendorOption {
@@ -108,12 +108,12 @@ const BulkAssignVendorDialog = ({ open, onClose, onSuccess, caseIds, canSetPrice
           <div>
             <Label htmlFor="bulk-vendor-location">Filter Vendors by Location</Label>
             <SearchableSelect
-              options={INDIAN_CITIES}
+              options={INDIAN_STATES}
               value={locationFilter}
               onChange={setLocationFilter}
               placeholder="All locations"
               allLabel="All locations"
-              searchPlaceholder="Search cities…"
+              searchPlaceholder="Search states…"
             />
           </div>
           <div>

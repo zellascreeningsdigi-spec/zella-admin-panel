@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import SearchableSelect from '@/components/ui/searchable-select';
-import { INDIAN_CITIES } from '@/data/indianCities';
+import { INDIAN_STATES } from '@/data/indianCities';
 import { apiService } from '@/services/api';
 import { AddressVerification } from '@/types/addressVerification';
 
@@ -538,12 +538,12 @@ const AddAddressVerificationDialog = ({
               <div>
                 <Label htmlFor="vendor-location-filter">Filter Vendors by Location</Label>
                 <SearchableSelect
-                  options={INDIAN_CITIES}
+                  options={INDIAN_STATES}
                   value={vendorLocationFilter}
                   onChange={setVendorLocationFilter}
                   placeholder="All locations"
                   allLabel="All locations"
-                  searchPlaceholder="Search cities…"
+                  searchPlaceholder="Search states…"
                 />
               </div>
               <div className={`grid grid-cols-1 gap-4 ${canSetPrice ? 'sm:grid-cols-2' : ''}`}>

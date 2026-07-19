@@ -84,7 +84,10 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
 
   const fetchStats = async () => {
     try {
-      const response = await apiService.getAddressVerificationStats();
+      const response = await apiService.getAddressVerificationStats({
+        // Same Digital vs Vendor split as the table, so the cards match the list.
+        hasVendor: isVendorMode ? 'true' : 'false',
+      });
       if (response.success && response.data) {
         setStats(response.data.stats);
       }
