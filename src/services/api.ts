@@ -80,6 +80,15 @@ class ApiService {
           throw new Error(data.message || 'Authentication required');
         }
 
+        // Vendor hasn't signed the mandatory agreement — route to the gate
+        // (which lives at /dashboard behind VendorGuard).
+        if (response.status === 403 && data?.code === 'AGREEMENT_NOT_SIGNED') {
+          if (window.location.pathname !== '/dashboard') {
+            window.location.href = '/dashboard';
+          }
+          throw new Error(data.message || 'Agreement not signed');
+        }
+
         throw new Error(data.message || `HTTP error! status: ${response.status}`);
       }
 
@@ -450,6 +459,23 @@ class ApiService {
   // ── Vendor portal (vendor / vendor-member) ──────────────────────────────
   async getMyVendor(): Promise<ApiResponse<{ vendor: any; role: string }>> {
     return this.get('/vendors/me');
+  }
+
+  // ── Vendor agreement (mandatory e-signature) ────────────────────────────
+  async getVendorAgreement(): Promise<ApiResponse<{
+    version: string;
+    title: string;
+    sections: { heading: string | null; body: string }[];
+    vendorName: string;
+    status: { signed: boolean; signedName: string; signedAt: string | null; agreementVersion: string };
+  }>> {
+    return this.get('/vendors/agreement');
+  }
+
+  async signVendorAgreement(signedName: string): Promise<ApiResponse<{
+    status: { signed: boolean; signedName: string; signedAt: string | null; agreementVersion: string };
+  }>> {
+    return this.post('/vendors/agreement/sign', { signedName });
   }
 
   async getVendorMembers(): Promise<ApiResponse<{ members: any[] }>> {

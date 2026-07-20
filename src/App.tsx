@@ -1,4 +1,5 @@
-import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import VendorAgreementGate from '@/components/Vendors/VendorAgreementGate';
 import Dashboard from '@/pages/Dashboard';
 import DigiLockerCallback from '@/pages/DigiLockerCallback';
 import Login from '@/pages/Login';
@@ -13,6 +14,15 @@ import DocumentCollectionDetailPage from './pages/DocumentCollectionDetailPage';
 import DocumentCollectionDocumentsPage from './pages/DocumentCollectionDocumentsPage';
 import PasswordExpiryBanner from './components/PasswordExpiryBanner';
 
+// Gate vendor / vendor-member users behind the mandatory agreement signing.
+// Non-vendor roles (and logged-out users) pass straight through.
+function VendorGuard({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const isVendor = user?.role === 'vendor' || user?.role === 'vendor-member';
+  if (!isVendor) return <>{children}</>;
+  return <VendorAgreementGate>{children}</VendorAgreementGate>;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -22,7 +32,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
 
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/dashboard" element={<VendorGuard><Dashboard /></VendorGuard>} />
 
             <Route path="/digilocker" element={<DigiLockerCallback />} />
 
@@ -34,7 +44,7 @@ function App() {
 
             <Route path="/address-verifications/:id" element={<VerificationDetailPage />} />
 
-            <Route path="/vendor/cases/:id" element={<VendorCaseDetailPage />} />
+            <Route path="/vendor/cases/:id" element={<VendorGuard><VendorCaseDetailPage /></VendorGuard>} />
 
             <Route path="/verification/documents/:token" element={<DocumentCollectionPage />} />
 

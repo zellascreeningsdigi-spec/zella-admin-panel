@@ -22,6 +22,12 @@ export interface Vendor {
   type?: 'independent' | 'company';
   createdAt?: string;
   locations?: string[];
+  agreement?: {
+    signed?: boolean;
+    signedName?: string;
+    signedAt?: string | null;
+    agreementVersion?: string;
+  };
 }
 
 interface VendorsTableProps {
@@ -61,6 +67,30 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate, onDeletePermanen
     </span>
   );
 
+  const fmtDate = (d?: string | null) =>
+    d ? new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+
+  // Shows whether the vendor has e-signed the agreement, and by whom / when.
+  const agreementCell = (vendor: Vendor) => {
+    const a = vendor.agreement;
+    if (a?.signed) {
+      return (
+        <div className="text-xs">
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            Signed
+          </span>
+          {a.signedName && <div className="mt-1 text-gray-700">by {a.signedName}</div>}
+          {a.signedAt && <div className="text-gray-400">{fmtDate(a.signedAt)}</div>}
+        </div>
+      );
+    }
+    return (
+      <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+        Not signed
+      </span>
+    );
+  };
+
   return (
     <>
       {/* Desktop table */}
@@ -76,6 +106,7 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate, onDeletePermanen
               <TableHead>GSTIN</TableHead>
               <TableHead>Price / Case (₹)</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Agreement</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -108,6 +139,7 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate, onDeletePermanen
                 <TableCell className="font-mono text-sm">{vendor.gstin || '-'}</TableCell>
                 <TableCell>{vendor.addressVerificationPrice}</TableCell>
                 <TableCell>{statusBadge(vendor.isActive)}</TableCell>
+                <TableCell>{agreementCell(vendor)}</TableCell>
                 <TableCell>
                   <div className="flex gap-2">
                     <Button variant="ghost" size="sm" onClick={() => onEdit(vendor)} title="Edit">
@@ -161,6 +193,9 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate, onDeletePermanen
             )}
             <div className="text-sm"><span className="text-gray-500">GSTIN:</span> {vendor.gstin || '-'}</div>
             <div className="text-sm"><span className="text-gray-500">Price / Case (₹):</span> {vendor.addressVerificationPrice}</div>
+            <div className="text-sm flex items-center gap-2">
+              <span className="text-gray-500">Agreement:</span> {agreementCell(vendor)}
+            </div>
             <div className="flex gap-2 pt-1">
               <Button variant="outline" size="sm" className="flex-1" onClick={() => onEdit(vendor)}>
                 <Edit className="w-4 h-4 mr-2" /> Edit
