@@ -3,10 +3,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiService } from '@/services/api';
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 
-type Step = 'password' | 'otp' | 'force-reset';
+type Step = 'password' | 'otp' | 'force-reset' | 'forgot-email' | 'forgot-otp';
 
 const RESEND_COOLDOWN_SEC = 60;
 
@@ -91,10 +92,68 @@ const Login: React.FC = () => {
     }
   };
 
+  // ── Forgot password ──────────────────────────────────────────────────────
+  const handleForgotEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setInfo('');
+    setIsLoading(true);
+    try {
+      const result = await apiService.forgotPassword(email);
+      if (result.success) {
+        setOtp('');
+        setStep('forgot-otp');
+        setResendIn(RESEND_COOLDOWN_SEC);
+        setInfo(`If an account exists for ${email}, a reset code has been sent.`);
+      } else {
+        setError(result.message || 'Could not start password reset');
+      }
+    } catch {
+      setError('An error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setInfo('');
+    setIsLoading(true);
+    try {
+      const result = await apiService.verifyForgotPasswordOtp(email, otp);
+      if (result.success && result.data?.resetToken) {
+        setResetToken(result.data.resetToken);
+        setStep('force-reset');
+        setInfo('Code verified. Please set a new password.');
+      } else {
+        setError(result.message || 'Invalid or expired code');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid or expired code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleResend = async () => {
     if (resendIn > 0 || isLoading) return;
     setError('');
     setInfo('');
+    // Resend for whichever OTP flow is active.
+    if (step === 'forgot-otp') {
+      const result = await apiService.resendForgotPasswordOtp(email);
+      if (result.success) {
+        setInfo('A new code has been sent to your email.');
+        setResendIn(RESEND_COOLDOWN_SEC);
+        setOtp('');
+      } else {
+        setError(result.message || 'Could not resend code');
+        if (result.data?.retryInSec) setResendIn(result.data.retryInSec);
+      }
+      return;
+    }
+
     const result = await resendOtp(email);
     if (result.success) {
       setInfo('A new code has been sent to your email.');
@@ -109,6 +168,7 @@ const Login: React.FC = () => {
   const handleBack = () => {
     setStep('password');
     setOtp('');
+    setPassword('');
     setError('');
     setInfo('');
   };
@@ -153,6 +213,8 @@ const Login: React.FC = () => {
             {step === 'password' && 'Enter your credentials to access the portal'}
             {step === 'otp' && 'Enter the 6-digit code sent to your email'}
             {step === 'force-reset' && 'Set a new password to continue'}
+            {step === 'forgot-email' && 'Enter your email to receive a reset code'}
+            {step === 'forgot-otp' && 'Enter the 6-digit code sent to your email'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -188,6 +250,106 @@ const Login: React.FC = () => {
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? 'Sending code...' : 'Continue'}
               </Button>
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('forgot-email');
+                    setError('');
+                    setInfo('');
+                    setPassword('');
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                  disabled={isLoading}
+                >
+                  Forgot password?
+                </button>
+              </div>
+            </form>
+          )}
+
+          {step === 'forgot-email' && (
+            <form onSubmit={handleForgotEmailSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="forgot-email">Email</Label>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="admin@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  autoFocus
+                />
+              </div>
+              {info && (
+                <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">{info}</div>
+              )}
+              {error && (
+                <div className="text-sm text-red-600 bg-red-50 p-3 rounded">{error}</div>
+              )}
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Sending code...' : 'Send reset code'}
+              </Button>
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="text-sm text-gray-600 hover:text-gray-900 underline"
+                  disabled={isLoading}
+                >
+                  Back to sign in
+                </button>
+              </div>
+            </form>
+          )}
+
+          {step === 'forgot-otp' && (
+            <form onSubmit={handleForgotOtpSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="forgot-otp">Reset code</Label>
+                <Input
+                  id="forgot-otp"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="123456"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  required
+                  disabled={isLoading}
+                  autoFocus
+                />
+              </div>
+              {info && (
+                <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">{info}</div>
+              )}
+              {error && (
+                <div className="text-sm text-red-600 bg-red-50 p-3 rounded">{error}</div>
+              )}
+              <Button type="submit" className="w-full" disabled={isLoading || otp.length !== 6}>
+                {isLoading ? 'Verifying...' : 'Verify code'}
+              </Button>
+              <div className="flex items-center justify-between text-sm">
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="text-gray-600 hover:text-gray-900 underline"
+                  disabled={isLoading}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendIn > 0 || isLoading}
+                  className="text-blue-600 hover:text-blue-800 disabled:text-gray-400 disabled:no-underline underline"
+                >
+                  {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend code'}
+                </button>
+              </div>
             </form>
           )}
 

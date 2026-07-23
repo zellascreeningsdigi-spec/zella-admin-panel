@@ -263,6 +263,19 @@ class ApiService {
     return this.post('/auth/login/resend-otp', { email });
   }
 
+  // ── Forgot password ────────────────────────────────────────────────────
+  async forgotPassword(email: string): Promise<ApiResponse<{}>> {
+    return this.post('/auth/forgot-password', { email });
+  }
+
+  async verifyForgotPasswordOtp(email: string, otp: string): Promise<ApiResponse<{ resetToken: string }>> {
+    return this.post('/auth/forgot-password/verify-otp', { email, otp });
+  }
+
+  async resendForgotPasswordOtp(email: string): Promise<ApiResponse<{ retryInSec?: number }>> {
+    return this.post('/auth/forgot-password/resend-otp', { email });
+  }
+
   async forceResetPassword(newPassword: string, resetToken: string): Promise<ApiResponse<{ token: string; user: any }>> {
     return this.request('/auth/force-reset-password', {
       method: 'POST',
