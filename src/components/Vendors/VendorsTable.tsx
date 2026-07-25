@@ -75,7 +75,7 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate, onDeletePermanen
   // Download the signed agreement PDF (admin/super-admin). Signed vendors only.
   const handleDownloadAgreement = async (vendor: Vendor) => {
     try {
-      await apiService.downloadVendorAgreement(vendor._id, vendor.name);
+      await apiService.downloadVendorAgreement(vendor._id, vendor.name, vendor.agreement?.signedAt);
     } catch {
       // apiService.downloadBlob already surfaces an alert on failure.
     }

@@ -1225,12 +1225,15 @@ class ApiService {
   }
 
   // Signed vendor agreement PDF (admin + super-admin). Only signed vendors have one.
-  async downloadVendorAgreement(vendorId: string, vendorName: string): Promise<void> {
+  // Filename: "<vendorName>_<dateOfSign>_sign.pdf" (dateOfSign = YYYY-MM-DD).
+  async downloadVendorAgreement(vendorId: string, vendorName: string, signedAt?: string | null): Promise<void> {
     const safeName = (vendorName || 'vendor').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
+    const d = signedAt ? new Date(signedAt) : null;
+    const signDate = d && !Number.isNaN(d.getTime()) ? d.toISOString().slice(0, 10) : 'unknown';
     await this.downloadBlob(
       `${API_BASE_URL}/vendors/${vendorId}/agreement/pdf`,
       { method: 'GET' },
-      `Vendor_Agreement_${safeName}.pdf`,
+      `${safeName}_${signDate}_sign.pdf`,
       'download agreement'
     );
   }
