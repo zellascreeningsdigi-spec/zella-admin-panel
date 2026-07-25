@@ -480,6 +480,7 @@ class ApiService {
     title: string;
     sections: { heading: string | null; body: string }[];
     vendorName: string;
+    vendorAddress: string;
     status: { signed: boolean; signedName: string; signedAt: string | null; agreementVersion: string };
   }>> {
     return this.get('/vendors/agreement');

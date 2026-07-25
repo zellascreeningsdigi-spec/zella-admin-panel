@@ -10,6 +10,11 @@ interface AgreementSection {
   body: string;
 }
 
+// Zella's registered address — mirrors ZELLA_ADDRESS in the backend
+// (utils/vendorAgreement.js) so the on-screen parties block matches the PDF.
+const ZELLA_LEGAL_NAME = 'Zella Screenings Private Limited';
+const ZELLA_ADDRESS = 'DB 60F, Top Floor, LIG Flats, Hari Nagar, New Delhi 110064';
+
 interface VendorAgreementGateProps {
   // Rendered once the vendor has signed the current agreement version.
   children: React.ReactNode;
@@ -25,6 +30,7 @@ const VendorAgreementGate = ({ children }: VendorAgreementGateProps) => {
   const [title, setTitle] = useState('Third-Party Vendor Agreement');
   const [sections, setSections] = useState<AgreementSection[]>([]);
   const [vendorName, setVendorName] = useState('');
+  const [vendorAddress, setVendorAddress] = useState('');
   const [typedName, setTypedName] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -40,6 +46,7 @@ const VendorAgreementGate = ({ children }: VendorAgreementGateProps) => {
           setTitle(res.data.title);
           setSections(res.data.sections || []);
           setVendorName(res.data.vendorName || '');
+          setVendorAddress(res.data.vendorAddress || '');
           setSigned(!!res.data.status?.signed);
         } else {
           setError(res.message || 'Failed to load the agreement.');
@@ -96,6 +103,26 @@ const VendorAgreementGate = ({ children }: VendorAgreementGateProps) => {
               You must read and sign this agreement before you can use the Zella Screenings vendor
               platform.
             </p>
+
+            {/* Parties block — Zella + Vendor (name + address), matching the PDF. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div className="border rounded-md p-3">
+                <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">
+                  Zella Screenings
+                </div>
+                <div className="font-semibold text-gray-900">{ZELLA_LEGAL_NAME}</div>
+                <div className="text-sm text-gray-700">{ZELLA_ADDRESS}</div>
+              </div>
+              <div className="border rounded-md p-3">
+                <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">
+                  Vendor
+                </div>
+                <div className="font-semibold text-gray-900">{vendorName || '—'}</div>
+                <div className="text-sm text-gray-700">
+                  {vendorAddress || <span className="italic text-gray-400">Address not provided</span>}
+                </div>
+              </div>
+            </div>
 
             {/* Agreement body */}
             <div className="max-h-[45vh] overflow-y-auto border rounded-md p-4 bg-gray-50 space-y-4 text-sm text-gray-800">
