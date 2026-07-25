@@ -15,6 +15,7 @@ interface Vendor {
   phone?: string;
   description?: string;
   gstin?: string;
+  address?: string;
   addressVerificationPrice?: number;
   isActive?: boolean;
   type?: 'independent' | 'company';
@@ -35,6 +36,7 @@ interface FormData {
   phone: string;
   description: string;
   gstin: string;
+  address: string;
   addressVerificationPrice: string;
   type: 'independent' | 'company';
 }
@@ -50,6 +52,7 @@ const emptyForm: FormData = {
   phone: '',
   description: '',
   gstin: '',
+  address: '',
   addressVerificationPrice: '',
   type: 'independent',
 };
@@ -69,6 +72,7 @@ const AddVendorDialog = ({ open, onClose, onSuccess, editVendor }: AddVendorDial
         phone: editVendor.phone || '',
         description: editVendor.description || '',
         gstin: editVendor.gstin || '',
+        address: editVendor.address || '',
         addressVerificationPrice:
           editVendor.addressVerificationPrice != null
             ? String(editVendor.addressVerificationPrice)
@@ -124,6 +128,7 @@ const AddVendorDialog = ({ open, onClose, onSuccess, editVendor }: AddVendorDial
         phone: formData.phone.trim(),
         description: formData.description.trim(),
         gstin: formData.gstin.trim(),
+        address: formData.address.trim(),
         addressVerificationPrice: Number(formData.addressVerificationPrice),
         type: formData.type,
         locations,
@@ -244,6 +249,21 @@ const AddVendorDialog = ({ open, onClose, onSuccess, editVendor }: AddVendorDial
             />
             <p className="text-xs text-gray-400 mt-1">
               Used to filter vendors by location when assigning cases.
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="vendor-address">Address</Label>
+            <textarea
+              id="vendor-address"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={2}
+              value={formData.address}
+              onChange={(e) => handleChange('address', e.target.value)}
+              placeholder="Full postal/office address"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Shown on the vendor agreement alongside Zella's address.
             </p>
           </div>
 

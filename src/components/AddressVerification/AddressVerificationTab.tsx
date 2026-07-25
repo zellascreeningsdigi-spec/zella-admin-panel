@@ -213,9 +213,29 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
     }
   };
 
-  const handleExport = () => {
-    // TODO: Implement Excel export
-    alert('Export functionality will be implemented');
+  // Vendor-cases Excel export — mirrors the current filters so the download
+  // matches the filtered view on screen. Vendor tab only (admin/super-admin).
+  const [exportingExcel, setExportingExcel] = useState(false);
+
+  const handleExport = async () => {
+    setExportingExcel(true);
+    try {
+      await apiService.downloadVendorCasesExcel({
+        vendor: filters.vendor || undefined,
+        vendorWorkStatus: filters.vendorWorkStatus || undefined,
+        status: filters.status || undefined,
+        companyName: filters.companyName || undefined,
+        city: filters.city || undefined,
+        state: filters.state || undefined,
+        dateFrom: filters.dateFrom || undefined,
+        dateTo: filters.dateTo || undefined,
+        search: filters.search || undefined,
+      });
+    } catch {
+      // apiService.downloadBlob already surfaces an alert on failure.
+    } finally {
+      setExportingExcel(false);
+    }
   };
 
   if (loading && verifications.length === 0) {
@@ -241,10 +261,12 @@ const AddressVerificationTab = ({ mode = 'digital' }: AddressVerificationTabProp
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExport}>
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
+          {isVendorMode && (
+            <Button variant="outline" onClick={handleExport} disabled={exportingExcel}>
+              <Download className="w-4 h-4 mr-2" />
+              {exportingExcel ? 'Exporting…' : 'Download Excel'}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setIsBulkUploadOpen(true)}>
             <Upload className="w-4 h-4 mr-2" />
             Bulk Upload

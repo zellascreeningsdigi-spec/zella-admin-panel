@@ -1213,6 +1213,52 @@ class ApiService {
     );
   }
 
+  // Signed vendor agreement PDF (admin + super-admin). Only signed vendors have one.
+  async downloadVendorAgreement(vendorId: string, vendorName: string): Promise<void> {
+    const safeName = (vendorName || 'vendor').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '');
+    await this.downloadBlob(
+      `${API_BASE_URL}/vendors/${vendorId}/agreement/pdf`,
+      { method: 'GET' },
+      `Vendor_Agreement_${safeName}.pdf`,
+      'download agreement'
+    );
+  }
+
+  // Vendor-cases Excel export (admin + super-admin). Mirrors the vendor AV-tab
+  // filters so the download matches the current filtered view. No pagination.
+  async downloadVendorCasesExcel(filters?: {
+    vendor?: string;
+    vendorWorkStatus?: string;
+    assignedMember?: string;
+    status?: string;
+    companyName?: string;
+    city?: string;
+    state?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    search?: string;
+  }): Promise<void> {
+    const queryParams = new URLSearchParams();
+    if (filters?.vendor) queryParams.append('vendor', filters.vendor);
+    if (filters?.vendorWorkStatus) queryParams.append('vendorWorkStatus', filters.vendorWorkStatus);
+    if (filters?.assignedMember) queryParams.append('assignedMember', filters.assignedMember);
+    if (filters?.status) queryParams.append('status', filters.status);
+    if (filters?.companyName) queryParams.append('companyName', filters.companyName);
+    if (filters?.city) queryParams.append('city', filters.city);
+    if (filters?.state) queryParams.append('state', filters.state);
+    if (filters?.dateFrom) queryParams.append('dateFrom', filters.dateFrom);
+    if (filters?.dateTo) queryParams.append('dateTo', filters.dateTo);
+    if (filters?.search) queryParams.append('search', filters.search);
+    const qs = queryParams.toString();
+    const stamp = new Date().toISOString().slice(0, 10);
+    await this.downloadBlob(
+      `${API_BASE_URL}/address-verifications/vendor-cases/export${qs ? `?${qs}` : ''}`,
+      { method: 'GET' },
+      `Vendor_Cases_${stamp}.xlsx`,
+      'export vendor cases'
+    );
+  }
+
   // Public verification endpoints (no auth required)
   async getVerificationByToken(token: string): Promise<ApiResponse<any>> {
     return fetch(`${API_BASE_URL}/address-verifications/public/${token}`)

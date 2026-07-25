@@ -1,5 +1,6 @@
-import { Edit, Ban, Trash2 } from 'lucide-react';
+import { Edit, Ban, Trash2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { apiService } from '@/services/api';
 import {
   Table,
   TableBody,
@@ -17,6 +18,7 @@ export interface Vendor {
   phone?: string;
   description?: string;
   gstin?: string;
+  address?: string;
   addressVerificationPrice: number;
   isActive: boolean;
   type?: 'independent' | 'company';
@@ -70,15 +72,36 @@ const VendorsTable = ({ vendors, loading, onEdit, onDeactivate, onDeletePermanen
   const fmtDate = (d?: string | null) =>
     d ? new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '';
 
+  // Download the signed agreement PDF (admin/super-admin). Signed vendors only.
+  const handleDownloadAgreement = async (vendor: Vendor) => {
+    try {
+      await apiService.downloadVendorAgreement(vendor._id, vendor.name);
+    } catch {
+      // apiService.downloadBlob already surfaces an alert on failure.
+    }
+  };
+
   // Shows whether the vendor has e-signed the agreement, and by whom / when.
+  // Signed vendors also get a Download button for the agreement PDF.
   const agreementCell = (vendor: Vendor) => {
     const a = vendor.agreement;
     if (a?.signed) {
       return (
         <div className="text-xs">
-          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            Signed
-          </span>
+          <div className="flex items-center gap-1">
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              Signed
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1"
+              onClick={() => handleDownloadAgreement(vendor)}
+              title="Download agreement PDF"
+            >
+              <Download className="w-4 h-4 text-blue-600" />
+            </Button>
+          </div>
           {a.signedName && <div className="mt-1 text-gray-700">by {a.signedName}</div>}
           {a.signedAt && <div className="text-gray-400">{fmtDate(a.signedAt)}</div>}
         </div>
