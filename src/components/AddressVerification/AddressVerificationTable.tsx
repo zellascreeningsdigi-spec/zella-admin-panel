@@ -70,7 +70,7 @@ const AddressVerificationTable = ({
   const handleDownloadVendorReport = useCallback(async (verification: AddressVerification) => {
     if (!verification._id) return;
     try {
-      await apiService.downloadVendorReport(verification._id, verification.code);
+      await apiService.downloadVendorReport(verification._id, verification.code, verification.name);
     } catch (error) {
       console.error('Download vendor report error:', error);
     }
@@ -79,7 +79,7 @@ const AddressVerificationTable = ({
   const handleDownloadVendorPhotosReport = useCallback(async (verification: AddressVerification) => {
     if (!verification._id) return;
     try {
-      await apiService.downloadVendorPhotosReport(verification._id, verification.code);
+      await apiService.downloadVendorPhotosReport(verification._id, verification.code, verification.name);
     } catch (error) {
       console.error('Download vendor photos report error:', error);
     }

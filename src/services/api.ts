@@ -1175,12 +1175,22 @@ class ApiService {
     }
   }
 
+  // Filesystem-safe slug for a filename part (candidate name, code, etc.).
+  private slugForFilename(value: string, fallback = ''): string {
+    return (value || fallback).trim().replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || fallback;
+  }
+
+  // Vendor report/photos filename base: "<candidateName>_<code(BGVID)>".
+  private vendorReportFileBase(name: string, code: string): string {
+    return `${this.slugForFilename(name, 'candidate')}_${this.slugForFilename(code, 'case')}`;
+  }
+
   // Vendor "Address Check" report PDF (table + verifier details, no photos) — single + bulk.
-  async downloadVendorReport(id: string, code: string): Promise<void> {
+  async downloadVendorReport(id: string, code: string, name = ''): Promise<void> {
     await this.downloadBlob(
       `${API_BASE_URL}/address-verifications/${id}/vendor-report?format=pdf`,
       { method: 'GET' },
-      `Vendor_Report_${code}.pdf`,
+      `${this.vendorReportFileBase(name, code)}.pdf`,
       'download report'
     );
   }
@@ -1196,11 +1206,11 @@ class ApiService {
 
   // Vendor "Field Photographs" PDF (photos only, no table) — a SEPARATE PDF
   // from the report above, not combined — single + bulk.
-  async downloadVendorPhotosReport(id: string, code: string): Promise<void> {
+  async downloadVendorPhotosReport(id: string, code: string, name = ''): Promise<void> {
     await this.downloadBlob(
       `${API_BASE_URL}/address-verifications/${id}/vendor-report/photos?format=pdf`,
       { method: 'GET' },
-      `Vendor_Photos_${code}.pdf`,
+      `${this.vendorReportFileBase(name, code)}_photos.pdf`,
       'download photos report'
     );
   }
