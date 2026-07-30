@@ -496,7 +496,7 @@ const DocumentCollectionPage = () => {
               </a>
               <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
                 <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span>+91 8178685006 / +91 9871967859</span>
+                <span>+91 7982938489 / +91 9871967859</span>
               </p>
             </div>
           </div>
@@ -968,7 +968,7 @@ const DocumentCollectionPage = () => {
         <div className="text-center mt-6 sm:mt-8 text-sm text-gray-500 bg-white p-4 sm:p-6 rounded-lg shadow">
           <p className="font-medium text-gray-700 mb-2">Need Help?</p>
           <p className="break-words">Contact us at <a href="mailto:start@zellascreenings.com" className="text-brand-green hover:underline font-medium">start@zellascreenings.com</a></p>
-          <p className="mt-1 break-words">Phone: <a href="tel:+918178685006" className="hover:text-brand-green">+91 8178685006</a> / <a href="tel:+919871967859" className="hover:text-brand-green">+91 9871967859</a></p>
+          <p className="mt-1 break-words">Phone: <a href="tel:+917982938489" className="hover:text-brand-green">+91 7982938489</a> / <a href="tel:+919871967859" className="hover:text-brand-green">+91 9871967859</a></p>
           <p className="mt-4 text-xs text-gray-400">&copy; {new Date().getFullYear()} Zella Screenings. All rights reserved.</p>
         </div>
       </div>

@@ -345,7 +345,7 @@ ${verificationLink}
 
 If you have any questions, please contact us:
 📧 Email: start@zellascreenings.com
-📞 Phone: +91 8178685006 / +91 9871967859
+📞 Phone: +91 7982938489 / +91 9871967859
 
 Best regards,
 *Team Zella Screenings*
