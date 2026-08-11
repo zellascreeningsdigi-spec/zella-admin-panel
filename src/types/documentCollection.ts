@@ -7,7 +7,11 @@ export interface DocumentUpload {
 
 export interface Address {
   address: string;
+  /** Legacy free-text duration ("3 years"). Present on pre-existing records. */
   duration: string;
+  addressType?: 'current' | 'permanent' | 'other' | '';
+  durationYears?: number | null;
+  durationMonths?: number | null;
 }
 
 export interface Employment {

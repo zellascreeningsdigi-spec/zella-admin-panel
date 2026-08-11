@@ -9,6 +9,7 @@ import { Stepper, Step } from '@/components/ui/stepper';
 import { apiService } from '@/services/api';
 import type { BGVFormData, Employment, Reference, Address, GapDetailEntry } from '@/types/documentCollection';
 import type { BGVFormConfig } from '@/types/customer';
+import { validateBGVFormData } from '@/lib/bgvValidators';
 
 const ALL_STEPS = [
   { configKey: 'personalInfo', title: 'Personal Info', description: 'Basic Details', alwaysEnabled: true },
@@ -42,7 +43,17 @@ const emptyReference: Reference = {
   name: '', designation: '', organization: '', relationship: '', contact: '', email: ''
 };
 
-const emptyAddress: Address = { address: '', duration: '' };
+const emptyAddress: Address = { address: '', duration: '', addressType: '', durationYears: null, durationMonths: null };
+
+// Which field paths belong to which step, so Next only reports errors the
+// candidate can actually see and fix on the current screen.
+const STEP_ERROR_PREFIXES: Record<string, string[]> = {
+  personalInfo: ['personalInfo.'],
+  education: ['education.'],
+  employment: ['employmentHistory.'],
+  references: ['references.'],
+  gapDetails: ['gapDetails.'],
+};
 
 const buildGapEntries = (employments: Employment[]): GapDetailEntry[] => {
   const entries: GapDetailEntry[] = [];
@@ -81,6 +92,10 @@ const DocumentCollectionPage = () => {
   const [error, setError] = useState('');
   const [caseData, setCaseData] = useState<any>(null);
   const [formConfig, setFormConfig] = useState<BGVFormConfig | undefined>(undefined);
+  // field path -> message. Populated on a failed Next/Submit or on blur, so a
+  // candidate is not shown errors for fields they have not reached yet.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const enabledSteps = useMemo(() => {
     const steps = formConfig?.steps;
@@ -248,7 +263,12 @@ const DocumentCollectionPage = () => {
   const updateAddress = (index: number, field: string, value: string) => {
     setFormData(prev => {
       const addresses = [...prev.personalInfo.addresses];
-      addresses[index] = { ...addresses[index], [field]: value };
+      // Duration is stored numerically so routing rules can compare months
+      // directly; an empty box is null rather than 0.
+      const parsed = (field === 'durationYears' || field === 'durationMonths')
+        ? (value === '' ? null : Math.max(0, parseInt(value, 10) || 0))
+        : value;
+      addresses[index] = { ...addresses[index], [field]: parsed };
       return { ...prev, personalInfo: { ...prev.personalInfo, addresses } };
     });
   };
@@ -383,7 +403,30 @@ const DocumentCollectionPage = () => {
     return data;
   };
 
+  /** Errors for the step currently on screen. */
+  const validateCurrentStep = (): Record<string, string> => {
+    const all = validateBGVFormData(buildSubmissionData(), formConfig || {});
+    const prefixes = STEP_ERROR_PREFIXES[currentStepConfig || ''] || [];
+    if (prefixes.length === 0) return {};
+    return Object.fromEntries(
+      Object.entries(all).filter(([path]) => prefixes.some(p => path.startsWith(p)))
+    );
+  };
+
   const handleNext = async () => {
+    const stepErrors = validateCurrentStep();
+    if (Object.keys(stepErrors).length > 0) {
+      setFieldErrors(stepErrors);
+      // Reveal every error on this step, not just the fields already blurred.
+      setTouched(prev => ({
+        ...prev,
+        ...Object.fromEntries(Object.keys(stepErrors).map(k => [k, true]))
+      }));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    setFieldErrors({});
+
     // Save progress to server before advancing
     setSaving(true);
     try {
@@ -405,36 +448,117 @@ const DocumentCollectionPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Documents are uploaded eagerly on file selection, so no batch upload needed here
+    const submissionData = buildSubmissionData();
+
+    // Final check across every step — a candidate can reach Submit with an
+    // earlier step still invalid (e.g. by editing after passing it).
+    const allErrors = validateBGVFormData(submissionData, formConfig || {});
+    if (Object.keys(allErrors).length > 0) {
+      setFieldErrors(allErrors);
+      setTouched(prev => ({
+        ...prev,
+        ...Object.fromEntries(Object.keys(allErrors).map(k => [k, true]))
+      }));
+      const firstStep = enabledSteps.find(s => {
+        const prefixes = STEP_ERROR_PREFIXES[s.configKey] || [];
+        return Object.keys(allErrors).some(path => prefixes.some(p => path.startsWith(p)));
+      });
+      if (firstStep) setCurrentStep(firstStep.id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     setSubmitting(true);
 
     try {
-      // Documents are uploaded eagerly on file selection, so no batch upload needed here
-      const submissionData = buildSubmissionData();
-
       // Submit form data
       const submitResponse = await apiService.submitDocumentCollection(token!, { formData: submissionData });
       if (!submitResponse.success) {
+        // The server re-validates and returns 422 with a field-path error map.
+        const serverErrors = (submitResponse as any).fieldErrors;
+        if (serverErrors && Object.keys(serverErrors).length > 0) {
+          setFieldErrors(serverErrors);
+          setTouched(prev => ({
+            ...prev,
+            ...Object.fromEntries(Object.keys(serverErrors).map((k: string) => [k, true]))
+          }));
+          const firstStep = enabledSteps.find(s => {
+            const prefixes = STEP_ERROR_PREFIXES[s.configKey] || [];
+            return Object.keys(serverErrors).some(path => prefixes.some(p => path.startsWith(p)));
+          });
+          if (firstStep) setCurrentStep(firstStep.id);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
         throw new Error(submitResponse.message || 'Failed to submit');
       }
 
       setSubmitted(true);
     } catch (err: any) {
       console.error('Submit error:', err);
-      alert(err.message || 'Failed to submit form');
+      // The server re-validates; surface its field errors rather than a generic alert.
+      if (err?.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+        setFieldErrors(err.fieldErrors);
+        setTouched(prev => ({
+          ...prev,
+          ...Object.fromEntries(Object.keys(err.fieldErrors).map((k: string) => [k, true]))
+        }));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        alert(err.message || 'Failed to submit form');
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   // ---- Render helpers ----
-  const renderField = (label: string, id: string, value: string, onChange: (v: string) => void, opts?: { type?: string; required?: boolean; placeholder?: string }) => (
-    <div>
-      <Label htmlFor={id} className="text-gray-700 font-medium">
-        {label} {opts?.required && <span className="text-red-500">*</span>}
-      </Label>
-      <Input id={id} type={opts?.type || 'text'} value={value} onChange={e => onChange(e.target.value)} placeholder={opts?.placeholder || ''} className="mt-1" />
-    </div>
-  );
+  /** Re-run validation for one field once it has been blurred. */
+  const revalidateField = (path: string) => {
+    setTouched(prev => ({ ...prev, [path]: true }));
+    const all = validateBGVFormData(buildSubmissionData(), formConfig || {});
+    setFieldErrors(prev => {
+      const next = { ...prev };
+      if (all[path]) next[path] = all[path];
+      else delete next[path];
+      return next;
+    });
+  };
+
+  const renderField = (
+    label: string,
+    id: string,
+    value: string,
+    onChange: (v: string) => void,
+    opts?: { type?: string; required?: boolean; placeholder?: string; path?: string }
+  ) => {
+    const path = opts?.path;
+    const showError = path ? touched[path] && fieldErrors[path] : undefined;
+    return (
+      <div>
+        <Label htmlFor={id} className="text-gray-700 font-medium">
+          {label} {opts?.required && <span className="text-red-500">*</span>}
+        </Label>
+        <Input
+          id={id}
+          type={opts?.type || 'text'}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onBlur={path ? () => revalidateField(path) : undefined}
+          placeholder={opts?.placeholder || ''}
+          aria-invalid={showError ? true : undefined}
+          className={`mt-1 ${showError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+        />
+        {showError && (
+          <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {fieldErrors[path!]}
+          </p>
+        )}
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -526,12 +650,12 @@ const DocumentCollectionPage = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {renderField('Full Name', 'fullName', formData.personalInfo.fullName, v => updatePersonalInfo('fullName', v), { required: true })}
+                    {renderField('Full Name', 'fullName', formData.personalInfo.fullName, v => updatePersonalInfo('fullName', v), { required: true, path: 'personalInfo.fullName' })}
                     {renderField('Date of Birth', 'dob', formData.personalInfo.dob, v => updatePersonalInfo('dob', v), { type: 'date', required: true })}
                     {renderField('Nationality', 'nationality', formData.personalInfo.nationality, v => updatePersonalInfo('nationality', v))}
-                    {renderField("Father's Name", 'fathersName', formData.personalInfo.fathersName, v => updatePersonalInfo('fathersName', v), { required: true })}
-                    {renderField('Mobile Number', 'mobile', formData.personalInfo.mobile, v => updatePersonalInfo('mobile', v), { required: true, type: 'tel' })}
-                    {renderField('Alternate Number', 'alternateNumber', formData.personalInfo.alternateNumber, v => updatePersonalInfo('alternateNumber', v), { type: 'tel' })}
+                    {renderField("Father's Name", 'fathersName', formData.personalInfo.fathersName, v => updatePersonalInfo('fathersName', v), { required: true, path: 'personalInfo.fathersName' })}
+                    {renderField('Mobile Number', 'mobile', formData.personalInfo.mobile, v => updatePersonalInfo('mobile', v), { required: true, type: 'tel', path: 'personalInfo.mobile' })}
+                    {renderField('Alternate Number', 'alternateNumber', formData.personalInfo.alternateNumber, v => updatePersonalInfo('alternateNumber', v), { type: 'tel', path: 'personalInfo.alternateNumber' })}
                     <div>
                       <Label className="text-gray-700 font-medium">Gender <span className="text-red-500">*</span></Label>
                       <select className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" value={formData.personalInfo.gender} onChange={e => updatePersonalInfo('gender', e.target.value)}>
@@ -541,9 +665,9 @@ const DocumentCollectionPage = () => {
                         <option value="other">Other</option>
                       </select>
                     </div>
-                    {renderField('Email', 'pi-email', formData.personalInfo.email, v => updatePersonalInfo('email', v), { type: 'email', required: true })}
-                    {renderField('Aadhaar Number', 'aadhaarNumber', formData.personalInfo.aadhaarNumber, v => updatePersonalInfo('aadhaarNumber', v), { required: true })}
-                    {renderField('PAN Number', 'panNumber', formData.personalInfo.panNumber, v => updatePersonalInfo('panNumber', v), { required: true })}
+                    {renderField('Email', 'pi-email', formData.personalInfo.email, v => updatePersonalInfo('email', v), { type: 'email', required: true, path: 'personalInfo.email' })}
+                    {renderField('Aadhaar Number', 'aadhaarNumber', formData.personalInfo.aadhaarNumber, v => updatePersonalInfo('aadhaarNumber', v), { required: true, path: 'personalInfo.aadhaarNumber' })}
+                    {renderField('PAN Number', 'panNumber', formData.personalInfo.panNumber, v => updatePersonalInfo('panNumber', v), { required: true, path: 'personalInfo.panNumber' })}
                   </div>
 
                   <div className="mt-6">
@@ -553,16 +677,71 @@ const DocumentCollectionPage = () => {
                         <Plus className="w-4 h-4 mr-1" /> Add Address
                       </Button>
                     </div>
+                    {fieldErrors['personalInfo.addresses.type'] && (
+                      <p className="mb-3 text-sm text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {fieldErrors['personalInfo.addresses.type']}
+                      </p>
+                    )}
                     {formData.personalInfo.addresses.map((addr, i) => (
                       <div key={i} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3 p-3 bg-gray-50 rounded-lg relative">
-                        <div className="md:col-span-3">
+                        <div className="md:col-span-2">
                           <Label className="text-sm">Address {i + 1}</Label>
-                          <Input value={addr.address} onChange={e => updateAddress(i, 'address', e.target.value)} placeholder="Full address" className="mt-1" />
+                          <Input
+                            value={addr.address}
+                            onChange={e => updateAddress(i, 'address', e.target.value)}
+                            onBlur={() => revalidateField(`personalInfo.addresses.${i}.address`)}
+                            placeholder="Full address"
+                            className={`mt-1 ${touched[`personalInfo.addresses.${i}.address`] && fieldErrors[`personalInfo.addresses.${i}.address`] ? 'border-red-500' : ''}`}
+                          />
+                          {touched[`personalInfo.addresses.${i}.address`] && fieldErrors[`personalInfo.addresses.${i}.address`] && (
+                            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {fieldErrors[`personalInfo.addresses.${i}.address`]}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <Label className="text-sm">Address Type</Label>
+                          <select
+                            className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md"
+                            value={addr.addressType || ''}
+                            onChange={e => updateAddress(i, 'addressType', e.target.value)}
+                          >
+                            <option value="">Select</option>
+                            <option value="current">Current</option>
+                            <option value="permanent">Permanent</option>
+                            <option value="other">Other</option>
+                          </select>
                         </div>
                         <div className="flex gap-2 items-end">
                           <div className="flex-1">
-                            <Label className="text-sm">Duration</Label>
-                            <Input value={addr.duration} onChange={e => updateAddress(i, 'duration', e.target.value)} placeholder="e.g. 3 years" className="mt-1" />
+                            <Label className="text-sm">Duration of Stay</Label>
+                            <div className="mt-1 flex gap-2 items-center">
+                              <Input
+                                type="number"
+                                min={0}
+                                value={addr.durationYears ?? ''}
+                                onChange={e => updateAddress(i, 'durationYears', e.target.value)}
+                                onBlur={() => revalidateField(`personalInfo.addresses.${i}.durationYears`)}
+                                placeholder="0"
+                                className={`w-16 ${touched[`personalInfo.addresses.${i}.durationYears`] && fieldErrors[`personalInfo.addresses.${i}.durationYears`] ? 'border-red-500' : ''}`}
+                              />
+                              <span className="text-sm text-gray-600">yrs</span>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={11}
+                                value={addr.durationMonths ?? ''}
+                                onChange={e => updateAddress(i, 'durationMonths', e.target.value)}
+                                placeholder="0"
+                                className="w-16"
+                              />
+                              <span className="text-sm text-gray-600">mos</span>
+                            </div>
+                            {touched[`personalInfo.addresses.${i}.durationYears`] && fieldErrors[`personalInfo.addresses.${i}.durationYears`] && (
+                              <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {fieldErrors[`personalInfo.addresses.${i}.durationYears`]}
+                              </p>
+                            )}
                           </div>
                           {formData.personalInfo.addresses.length > 1 && (
                             <Button type="button" variant="ghost" size="sm" onClick={() => removeAddress(i)} className="text-red-500 mb-0.5">
@@ -591,13 +770,13 @@ const DocumentCollectionPage = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {renderField('Degree / Qualification', 'degree', formData.education.degree, v => updateEducation('degree', v), { required: true })}
-                    {renderField('Enrollment No.', 'enrollmentNo', formData.education.enrollmentNo, v => updateEducation('enrollmentNo', v))}
-                    {renderField('Year of Passing', 'yearOfPassing', formData.education.yearOfPassing, v => updateEducation('yearOfPassing', v), { required: true })}
-                    {renderField('University / Board Name', 'universityName', formData.education.universityName, v => updateEducation('universityName', v), { required: true })}
-                    {renderField('University Location', 'universityLocation', formData.education.universityLocation, v => updateEducation('universityLocation', v))}
+                    {renderField('Degree / Qualification', 'degree', formData.education.degree, v => updateEducation('degree', v), { required: true, path: 'education.degree' })}
+                    {renderField('Enrollment No.', 'enrollmentNo', formData.education.enrollmentNo, v => updateEducation('enrollmentNo', v), { path: 'education.enrollmentNo' })}
+                    {renderField('Year of Passing', 'yearOfPassing', formData.education.yearOfPassing, v => updateEducation('yearOfPassing', v), { required: true, path: 'education.yearOfPassing' })}
+                    {renderField('University / Board Name', 'universityName', formData.education.universityName, v => updateEducation('universityName', v), { required: true, path: 'education.universityName' })}
+                    {renderField('University Location', 'universityLocation', formData.education.universityLocation, v => updateEducation('universityLocation', v), { path: 'education.universityLocation' })}
                     {renderField('Period of Study From', 'periodOfStudyFrom', formData.education.periodOfStudyFrom, v => updateEducation('periodOfStudyFrom', v), { type: 'date' })}
-                    {renderField('Period of Study To', 'periodOfStudyTo', formData.education.periodOfStudyTo, v => updateEducation('periodOfStudyTo', v), { type: 'date' })}
+                    {renderField('Period of Study To', 'periodOfStudyTo', formData.education.periodOfStudyTo, v => updateEducation('periodOfStudyTo', v), { type: 'date', path: 'education.periodOfStudyTo' })}
                     <div>
                       <Label className="text-gray-700 font-medium">Course Type</Label>
                       <select className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" value={formData.education.courseType} onChange={e => updateEducation('courseType', e.target.value)}>
@@ -649,20 +828,20 @@ const DocumentCollectionPage = () => {
                         </Button>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {renderField('Company Name', `emp-${i}-company`, emp.companyName, v => updateEmployment(i, 'companyName', v), { required: true })}
-                        {renderField('Designation', `emp-${i}-designation`, emp.designation, v => updateEmployment(i, 'designation', v))}
+                        {renderField('Company Name', `emp-${i}-company`, emp.companyName, v => updateEmployment(i, 'companyName', v), { required: true, path: `employmentHistory.${i}.companyName` })}
+                        {renderField('Designation', `emp-${i}-designation`, emp.designation, v => updateEmployment(i, 'designation', v), { path: `employmentHistory.${i}.designation` })}
                         {renderField('Period From', `emp-${i}-from`, emp.periodFrom, v => updateEmployment(i, 'periodFrom', v), { type: 'date' })}
-                        {renderField('Period To', `emp-${i}-to`, emp.periodTo, v => updateEmployment(i, 'periodTo', v), { type: 'date' })}
-                        {renderField('CTC', `emp-${i}-ctc`, emp.ctc, v => updateEmployment(i, 'ctc', v))}
+                        {renderField('Period To', `emp-${i}-to`, emp.periodTo, v => updateEmployment(i, 'periodTo', v), { type: 'date', path: `employmentHistory.${i}.periodTo` })}
+                        {renderField('CTC', `emp-${i}-ctc`, emp.ctc, v => updateEmployment(i, 'ctc', v), { path: `employmentHistory.${i}.ctc` })}
                         {renderField('Employee ID', `emp-${i}-empId`, emp.employeeId, v => updateEmployment(i, 'employeeId', v))}
-                        {renderField('Supervisor Name', `emp-${i}-supName`, emp.supervisorName, v => updateEmployment(i, 'supervisorName', v))}
+                        {renderField('Supervisor Name', `emp-${i}-supName`, emp.supervisorName, v => updateEmployment(i, 'supervisorName', v), { path: `employmentHistory.${i}.supervisorName` })}
                         {renderField('Supervisor Designation', `emp-${i}-supDesg`, emp.supervisorDesignation, v => updateEmployment(i, 'supervisorDesignation', v))}
-                        {renderField('Supervisor Contact', `emp-${i}-supContact`, emp.supervisorContact, v => updateEmployment(i, 'supervisorContact', v))}
-                        {renderField('Supervisor Email', `emp-${i}-supEmail`, emp.supervisorEmail, v => updateEmployment(i, 'supervisorEmail', v), { type: 'email' })}
-                        {renderField('HR Name', `emp-${i}-hrName`, emp.hrName, v => updateEmployment(i, 'hrName', v))}
-                        {renderField('HR Contact', `emp-${i}-hrContact`, emp.hrContact, v => updateEmployment(i, 'hrContact', v))}
-                        {renderField('HR Email', `emp-${i}-hrEmail`, emp.hrEmail, v => updateEmployment(i, 'hrEmail', v), { type: 'email' })}
-                        {renderField('Reason for Leaving', `emp-${i}-reason`, emp.reasonForLeaving, v => updateEmployment(i, 'reasonForLeaving', v))}
+                        {renderField('Supervisor Contact', `emp-${i}-supContact`, emp.supervisorContact, v => updateEmployment(i, 'supervisorContact', v), { path: `employmentHistory.${i}.supervisorContact` })}
+                        {renderField('Supervisor Email', `emp-${i}-supEmail`, emp.supervisorEmail, v => updateEmployment(i, 'supervisorEmail', v), { type: 'email', path: `employmentHistory.${i}.supervisorEmail` })}
+                        {renderField('HR Name', `emp-${i}-hrName`, emp.hrName, v => updateEmployment(i, 'hrName', v), { path: `employmentHistory.${i}.hrName` })}
+                        {renderField('HR Contact', `emp-${i}-hrContact`, emp.hrContact, v => updateEmployment(i, 'hrContact', v), { path: `employmentHistory.${i}.hrContact` })}
+                        {renderField('HR Email', `emp-${i}-hrEmail`, emp.hrEmail, v => updateEmployment(i, 'hrEmail', v), { type: 'email', path: `employmentHistory.${i}.hrEmail` })}
+                        {renderField('Reason for Leaving', `emp-${i}-reason`, emp.reasonForLeaving, v => updateEmployment(i, 'reasonForLeaving', v), { path: `employmentHistory.${i}.reasonForLeaving` })}
                         <div>
                           <Label className="text-gray-700 font-medium">Nature of Employment</Label>
                           <select className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" value={emp.natureOfEmployment} onChange={e => updateEmployment(i, 'natureOfEmployment', e.target.value)}>
@@ -716,12 +895,12 @@ const DocumentCollectionPage = () => {
                         )}
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {renderField('Name', `ref-${i}-name`, ref.name, v => updateReference(i, 'name', v), { required: true })}
-                        {renderField('Designation', `ref-${i}-designation`, ref.designation, v => updateReference(i, 'designation', v))}
-                        {renderField('Organization', `ref-${i}-organization`, ref.organization, v => updateReference(i, 'organization', v))}
-                        {renderField('Relationship', `ref-${i}-relationship`, ref.relationship, v => updateReference(i, 'relationship', v))}
-                        {renderField('Contact Number', `ref-${i}-contact`, ref.contact, v => updateReference(i, 'contact', v), { type: 'tel', required: true })}
-                        {renderField('Email', `ref-${i}-email`, ref.email, v => updateReference(i, 'email', v), { type: 'email' })}
+                        {renderField('Name', `ref-${i}-name`, ref.name, v => updateReference(i, 'name', v), { required: true, path: `references.${i}.name` })}
+                        {renderField('Designation', `ref-${i}-designation`, ref.designation, v => updateReference(i, 'designation', v), { path: `references.${i}.designation` })}
+                        {renderField('Organization', `ref-${i}-organization`, ref.organization, v => updateReference(i, 'organization', v), { path: `references.${i}.organization` })}
+                        {renderField('Relationship', `ref-${i}-relationship`, ref.relationship, v => updateReference(i, 'relationship', v), { path: `references.${i}.relationship` })}
+                        {renderField('Contact Number', `ref-${i}-contact`, ref.contact, v => updateReference(i, 'contact', v), { type: 'tel', required: true, path: `references.${i}.contact` })}
+                        {renderField('Email', `ref-${i}-email`, ref.email, v => updateReference(i, 'email', v), { type: 'email', path: `references.${i}.email` })}
                       </div>
                     </div>
                   ))}
@@ -755,8 +934,8 @@ const DocumentCollectionPage = () => {
                         </div>
                         {gap.hasGap === 'yes' && (
                           <>
-                            {renderField('Duration', `gap-${gap.key}-duration`, gap.duration, v => updateGapDetail(index, 'duration', v), { placeholder: 'e.g. 6 months' })}
-                            {renderField('Reason', `gap-${gap.key}-reason`, gap.reason, v => updateGapDetail(index, 'reason', v))}
+                            {renderField('Duration', `gap-${gap.key}-duration`, gap.duration, v => updateGapDetail(index, 'duration', v), { placeholder: 'e.g. 6 months', path: `gapDetails.${index}.duration` })}
+                            {renderField('Reason', `gap-${gap.key}-reason`, gap.reason, v => updateGapDetail(index, 'reason', v), { path: `gapDetails.${index}.reason` })}
                           </>
                         )}
                       </div>
