@@ -439,8 +439,14 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
   // --- Addresses -----------------------------------------------------------
   const addresses = Array.isArray(pi.addresses) ? pi.addresses : [];
   addresses.forEach((addr: any, i: number) => {
-    if (!has(addr.address)) set(`personalInfo.addresses.${i}.address`, MESSAGES.required);
-    else if (!isMeaningfulText(addr.address, { minLength: 10 })) {
+    // A wholly blank row is skipped, exactly as employment and reference rows
+    // are. The form ships one empty address by default, so requiring it would
+    // reject every candidate who never typed an address.
+    const addrFilled = has(addr.address) || has(addr.duration) ||
+      addr.durationYears != null || addr.durationMonths != null || has(addr.addressType);
+    if (!addrFilled) return;
+
+    if (has(addr.address) && !isMeaningfulText(addr.address, { minLength: 10 })) {
       set(`personalInfo.addresses.${i}.address`, textError(addr.address));
     }
 
