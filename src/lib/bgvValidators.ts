@@ -162,10 +162,19 @@ export const normalise = {
 // 'y' counts as a vowel: "Symbiosis", "Mysuru", "Krishnamurthy" depend on it.
 const VOWELS = 'aeiouy';
 
-// Sequences that indicate a finger dragged across the keyboard.
+// Sequences that indicate a finger dragged across the keyboard — rows in both
+// directions, plus the vertical/diagonal columns ("qaz", "wsx", "edc") that a
+// row-only check misses.
 const KEYBOARD_ROWS = [
   'qwertyuiop', 'asdfghjkl', 'zxcvbnm',
   '1234567890', 'poiuytrewq', 'lkjhgfdsa', 'mnbvcxz'
+];
+
+// Only full 3-letter column walks. Two-letter fragments like "ol"/"lo" occur
+// constantly in real words ("Technology"), so they are excluded entirely.
+const KEYBOARD_COLUMNS = [
+  'qaz', 'wsx', 'edc', 'rfv', 'tgb', 'yhn', 'ujm', 'plm',
+  'zaq', 'xsw', 'cde', 'vfr', 'bgt', 'nhy', 'mju', 'mlp'
 ];
 
 /** 4+ characters appearing consecutively on one keyboard row. */
@@ -176,7 +185,13 @@ function hasKeyboardRun(lower: string): boolean {
       if (letters.includes(row.slice(i, i + 4))) return true;
     }
   }
-  return false;
+  // Two adjacent column-walks back to back ("qaz"+"wsx") is mashing; a single
+  // 3-letter column can occur inside real words, so one alone does not count.
+  let columnHits = 0;
+  for (const col of KEYBOARD_COLUMNS) {
+    if (letters.includes(col)) columnHits++;
+  }
+  return columnHits >= 2;
 }
 
 /**
@@ -212,22 +227,30 @@ function isWhollyRepeatedUnit(token: string): boolean {
 function hasImplausibleConsonantRun(word: string): boolean {
   const letters = word.replace(/[^a-z]/g, '');
   if (letters.length < 5) return false;
+  // Threshold is 6, not 5: "strengths" (ngths) and "schwartz" (schw) are real
+  // words with 4-5 consonant runs. Anything at 6+ is mashing.
   return letters
     .split(new RegExp(`[${VOWELS}]+`))
     .filter(Boolean)
-    .some((run: string) => run.length >= 5);
+    .some((run) => run.length >= 6);
 }
 
 /**
- * Vowel-to-letter ratio sanity check. Real words in Latin script sit roughly
- * between 0.2 and 0.8. Values far outside that are mashing.
+ * Vowel-to-letter ratio sanity check.
+ *
+ * The floor is deliberately low. English packs consonants far denser than it
+ * first appears — "growth" (2/6), "strength" (1/8), "knight" and "bright"
+ * (2/6 counting y) are all ordinary words, and a 0.2 floor rejected every one
+ * of them, blocking "Career Growth" as a reason for leaving. Only a word with
+ * essentially no vowels at all is treated as mashing here; the keyboard-run
+ * and repeated-unit rules do the real work.
  */
 function hasImplausibleVowelRatio(word: string): boolean {
   const letters = word.replace(/[^a-z]/g, '');
   if (letters.length < 5) return false;
   const vowels = letters.split('').filter((c: string) => VOWELS.includes(c)).length;
   const ratio = vowels / letters.length;
-  return ratio < 0.2 || ratio > 0.8;
+  return ratio < 0.12 || ratio > 0.85;
 }
 
 /**
@@ -243,6 +266,15 @@ function hasImplausibleVowelRun(word: string): boolean {
   return new RegExp(`[${VOWELS}]{4,}`).test(letters);
 }
 
+/**
+ * Two-letter values that are real qualifications or titles. Anything else of
+ * length 2 is treated as placeholder input.
+ */
+const SHORT_QUALIFICATIONS = new Set([
+  'be', 'me', 'ba', 'bs', 'ma', 'ms', 'ca', 'cs', 'cf', 'cm', 'md', 'do',
+  'jd', 'ed', 'bd', 'dm', 'ch', 'pg', 'ug', 'hr', 'it', 'qa', 'sr', 'jr'
+]);
+
 /** Words allowed to bypass the vowel requirement (common abbreviations). */
 const KNOWN_ABBREVIATIONS = new Set([
   'bsc', 'msc', 'mba', 'bca', 'mca', 'bba', 'phd', 'llb', 'llm', 'bds', 'mds',
@@ -257,16 +289,24 @@ const KNOWN_ABBREVIATIONS = new Set([
  *
  * @param {string} value
  * @param {{ minLength?: number, allowCode?: boolean }} [opts]
- *   minLength — minimum trimmed length (default 3)
+ *   minLength — minimum trimmed length (default 2; "BE", "ME", "CA" and "BA"
+ *               are real degrees, so 3 wrongly rejected them)
  *   allowCode — treat as an identifier (enrollment no.); skips the vowel,
  *               consonant-run and vowel-ratio rules, which do not apply to
  *               alphanumeric codes like "1RV18CS045".
  */
 export function isMeaningfulText(value: unknown, opts: { minLength?: number; allowCode?: boolean } = {}): boolean {
-  const { minLength = 3, allowCode = false } = opts;
+  const { minLength = 2, allowCode = false } = opts;
   const v = str(value);
 
   if (v.length < minLength) return false;
+
+  // Two-character values are accepted only when they are known qualifications
+  // ("BE", "ME", "CA"). Without this, lowering minLength to admit real degrees
+  // would also admit "ab", "xx" and "df".
+  if (v.replace(/[^A-Za-z0-9]/g, '').length === 2) {
+    return SHORT_QUALIFICATIONS.has(v.toLowerCase().replace(/[^a-z]/g, ''));
+  }
 
   const lower = v.toLowerCase();
 
@@ -329,6 +369,10 @@ export const MESSAGES = {
   ctc: 'Enter numbers only',
   email: 'Enter a valid email (e.g. name@company.com)',
   text: 'Enter a valid value',
+  // A digits-only value in a descriptive field is almost always a phone number
+  // or ID pasted into the wrong box. Saying so beats "Enter a valid value",
+  // which leaves the candidate retyping the same thing.
+  numericInTextField: 'This looks like a number — please enter text here',
   reason: 'Enter a meaningful reason (at least 10 characters)',
   required: 'This field is required',
   periodOrder: 'Period To must be after Period From',
@@ -337,6 +381,14 @@ export const MESSAGES = {
 };
 
 const has = (v: unknown): boolean => str(v).length > 0;
+
+/**
+ * Message for a rejected free-text field. Distinguishes "you put a number in a
+ * text box" from generic gibberish, because the fix is different and the
+ * candidate cannot guess it from "Enter a valid value".
+ */
+const textError = (value: unknown): string =>
+  /^[\d\s+()-]+$/.test(str(value)) ? MESSAGES.numericInTextField : MESSAGES.text;
 
 /**
  * Validate candidate-submitted BGV form data.
@@ -362,10 +414,10 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
   const pi = formData.personalInfo || {};
 
   if (!has(pi.fullName)) set('personalInfo.fullName', MESSAGES.required);
-  else if (!isMeaningfulText(pi.fullName)) set('personalInfo.fullName', MESSAGES.text);
+  else if (!isMeaningfulText(pi.fullName)) set('personalInfo.fullName', textError(pi.fullName));
 
   if (has(pi.fathersName) && !isMeaningfulText(pi.fathersName)) {
-    set('personalInfo.fathersName', MESSAGES.text);
+    set('personalInfo.fathersName', textError(pi.fathersName));
   }
 
   if (!has(pi.mobile)) set('personalInfo.mobile', MESSAGES.required);
@@ -389,7 +441,7 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
   addresses.forEach((addr: any, i: number) => {
     if (!has(addr.address)) set(`personalInfo.addresses.${i}.address`, MESSAGES.required);
     else if (!isMeaningfulText(addr.address, { minLength: 10 })) {
-      set(`personalInfo.addresses.${i}.address`, MESSAGES.text);
+      set(`personalInfo.addresses.${i}.address`, textError(addr.address));
     }
 
     // Duration is NOT required. Candidates who began the form before the
@@ -416,20 +468,20 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
     const ed = formData.education || {};
 
     if (!has(ed.degree)) set('education.degree', MESSAGES.required);
-    else if (!isMeaningfulText(ed.degree)) set('education.degree', MESSAGES.text);
+    else if (!isMeaningfulText(ed.degree)) set('education.degree', textError(ed.degree));
 
     if (has(ed.enrollmentNo) && !isMeaningfulText(ed.enrollmentNo, { allowCode: true })) {
-      set('education.enrollmentNo', MESSAGES.text);
+      set('education.enrollmentNo', textError(ed.enrollmentNo));
     }
 
     if (!has(ed.yearOfPassing)) set('education.yearOfPassing', MESSAGES.required);
     else if (!isValidYear(ed.yearOfPassing)) set('education.yearOfPassing', MESSAGES.year);
 
     if (!has(ed.universityName)) set('education.universityName', MESSAGES.required);
-    else if (!isMeaningfulText(ed.universityName)) set('education.universityName', MESSAGES.text);
+    else if (!isMeaningfulText(ed.universityName)) set('education.universityName', textError(ed.universityName));
 
     if (has(ed.universityLocation) && !isMeaningfulText(ed.universityLocation)) {
-      set('education.universityLocation', MESSAGES.text);
+      set('education.universityLocation', textError(ed.universityLocation));
     }
 
     if (!isAfter(ed.periodOfStudyTo, ed.periodOfStudyFrom)) {
@@ -446,20 +498,20 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
       const filled = Object.values(emp || {}).some((val: unknown) => has(val));
       if (!filled) return;
 
-      if (has(emp.companyName) && !isMeaningfulText(emp.companyName)) set(p('companyName'), MESSAGES.text);
-      if (has(emp.designation) && !isMeaningfulText(emp.designation)) set(p('designation'), MESSAGES.text);
+      if (has(emp.companyName) && !isMeaningfulText(emp.companyName)) set(p('companyName'), textError(emp.companyName));
+      if (has(emp.designation) && !isMeaningfulText(emp.designation)) set(p('designation'), textError(emp.designation));
       if (has(emp.ctc) && !isValidCtc(emp.ctc)) set(p('ctc'), MESSAGES.ctc);
 
-      if (has(emp.supervisorName) && !isMeaningfulText(emp.supervisorName)) set(p('supervisorName'), MESSAGES.text);
+      if (has(emp.supervisorName) && !isMeaningfulText(emp.supervisorName)) set(p('supervisorName'), textError(emp.supervisorName));
       if (has(emp.supervisorContact) && !isValidMobile(emp.supervisorContact)) set(p('supervisorContact'), MESSAGES.mobile);
       if (has(emp.supervisorEmail) && !isValidEmail(emp.supervisorEmail)) set(p('supervisorEmail'), MESSAGES.email);
 
-      if (has(emp.hrName) && !isMeaningfulText(emp.hrName)) set(p('hrName'), MESSAGES.text);
+      if (has(emp.hrName) && !isMeaningfulText(emp.hrName)) set(p('hrName'), textError(emp.hrName));
       if (has(emp.hrContact) && !isValidMobile(emp.hrContact)) set(p('hrContact'), MESSAGES.mobile);
       if (has(emp.hrEmail) && !isValidEmail(emp.hrEmail)) set(p('hrEmail'), MESSAGES.email);
 
       if (has(emp.reasonForLeaving) && !isMeaningfulText(emp.reasonForLeaving)) {
-        set(p('reasonForLeaving'), MESSAGES.text);
+        set(p('reasonForLeaving'), textError(emp.reasonForLeaving));
       }
 
       if (!isAfter(emp.periodTo, emp.periodFrom)) set(p('periodTo'), MESSAGES.periodOrder);
@@ -474,10 +526,10 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
       const filled = Object.values(ref || {}).some((val: unknown) => has(val));
       if (!filled) return;
 
-      if (has(ref.name) && !isMeaningfulText(ref.name)) set(p('name'), MESSAGES.text);
-      if (has(ref.designation) && !isMeaningfulText(ref.designation)) set(p('designation'), MESSAGES.text);
-      if (has(ref.organization) && !isMeaningfulText(ref.organization)) set(p('organization'), MESSAGES.text);
-      if (has(ref.relationship) && !isMeaningfulText(ref.relationship)) set(p('relationship'), MESSAGES.text);
+      if (has(ref.name) && !isMeaningfulText(ref.name)) set(p('name'), textError(ref.name));
+      if (has(ref.designation) && !isMeaningfulText(ref.designation)) set(p('designation'), textError(ref.designation));
+      if (has(ref.organization) && !isMeaningfulText(ref.organization)) set(p('organization'), textError(ref.organization));
+      if (has(ref.relationship) && !isMeaningfulText(ref.relationship)) set(p('relationship'), textError(ref.relationship));
       if (has(ref.contact) && !isValidMobile(ref.contact)) set(p('contact'), MESSAGES.mobile);
       if (has(ref.email) && !isValidEmail(ref.email)) set(p('email'), MESSAGES.email);
     });
@@ -491,7 +543,7 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
       // Answering "Yes" makes duration and reason mandatory and quality-checked.
       if (!has(gap.duration)) set(`gapDetails.${i}.duration`, MESSAGES.required);
       else if (!isMeaningfulText(gap.duration, { allowCode: true })) {
-        set(`gapDetails.${i}.duration`, MESSAGES.text);
+        set(`gapDetails.${i}.duration`, textError(gap.duration));
       }
 
       if (!has(gap.reason)) set(`gapDetails.${i}.reason`, MESSAGES.required);
