@@ -96,6 +96,9 @@ const DocumentCollectionPage = () => {
   // candidate is not shown errors for fields they have not reached yet.
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  // Step titles that currently hold errors, so a candidate on the final step
+  // can see which earlier step needs attention instead of a blank page.
+  const [errorSummary, setErrorSummary] = useState<string[]>([]);
 
   const enabledSteps = useMemo(() => {
     const steps = formConfig?.steps;
@@ -403,6 +406,32 @@ const DocumentCollectionPage = () => {
     return data;
   };
 
+  /**
+   * Surface a validation failure so the candidate can actually act on it.
+   *
+   * Errors frequently belong to a step other than the one on screen (Submit
+   * lives on the last step, but a bad value may be on step 1). Showing only an
+   * alert there strands the candidate: nothing on the page is highlighted.
+   * So we jump to the first offending step and record a summary listing every
+   * affected step by name.
+   */
+  const showValidationErrors = (errors: Record<string, string>) => {
+    setFieldErrors(errors);
+    setTouched(prev => ({
+      ...prev,
+      ...Object.fromEntries(Object.keys(errors).map(k => [k, true]))
+    }));
+
+    const affected = enabledSteps.filter(s => {
+      const prefixes = STEP_ERROR_PREFIXES[s.configKey] || [];
+      return Object.keys(errors).some(path => prefixes.some(p => path.startsWith(p)));
+    });
+    setErrorSummary(affected.map(s => s.title));
+
+    if (affected.length > 0) setCurrentStep(affected[0].id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   /** Errors for the step currently on screen. */
   const validateCurrentStep = (): Record<string, string> => {
     const all = validateBGVFormData(buildSubmissionData(), formConfig || {});
@@ -416,16 +445,11 @@ const DocumentCollectionPage = () => {
   const handleNext = async () => {
     const stepErrors = validateCurrentStep();
     if (Object.keys(stepErrors).length > 0) {
-      setFieldErrors(stepErrors);
-      // Reveal every error on this step, not just the fields already blurred.
-      setTouched(prev => ({
-        ...prev,
-        ...Object.fromEntries(Object.keys(stepErrors).map(k => [k, true]))
-      }));
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      showValidationErrors(stepErrors);
       return;
     }
     setFieldErrors({});
+    setErrorSummary([]);
 
     // Save progress to server before advancing
     setSaving(true);
@@ -456,17 +480,7 @@ const DocumentCollectionPage = () => {
     // earlier step still invalid (e.g. by editing after passing it).
     const allErrors = validateBGVFormData(submissionData, formConfig || {});
     if (Object.keys(allErrors).length > 0) {
-      setFieldErrors(allErrors);
-      setTouched(prev => ({
-        ...prev,
-        ...Object.fromEntries(Object.keys(allErrors).map(k => [k, true]))
-      }));
-      const firstStep = enabledSteps.find(s => {
-        const prefixes = STEP_ERROR_PREFIXES[s.configKey] || [];
-        return Object.keys(allErrors).some(path => prefixes.some(p => path.startsWith(p)));
-      });
-      if (firstStep) setCurrentStep(firstStep.id);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      showValidationErrors(allErrors);
       return;
     }
 
@@ -479,17 +493,7 @@ const DocumentCollectionPage = () => {
         // The server re-validates and returns 422 with a field-path error map.
         const serverErrors = (submitResponse as any).fieldErrors;
         if (serverErrors && Object.keys(serverErrors).length > 0) {
-          setFieldErrors(serverErrors);
-          setTouched(prev => ({
-            ...prev,
-            ...Object.fromEntries(Object.keys(serverErrors).map((k: string) => [k, true]))
-          }));
-          const firstStep = enabledSteps.find(s => {
-            const prefixes = STEP_ERROR_PREFIXES[s.configKey] || [];
-            return Object.keys(serverErrors).some(path => prefixes.some(p => path.startsWith(p)));
-          });
-          if (firstStep) setCurrentStep(firstStep.id);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          showValidationErrors(serverErrors);
           return;
         }
         throw new Error(submitResponse.message || 'Failed to submit');
@@ -500,12 +504,7 @@ const DocumentCollectionPage = () => {
       console.error('Submit error:', err);
       // The server re-validates; surface its field errors rather than a generic alert.
       if (err?.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
-        setFieldErrors(err.fieldErrors);
-        setTouched(prev => ({
-          ...prev,
-          ...Object.fromEntries(Object.keys(err.fieldErrors).map((k: string) => [k, true]))
-        }));
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        showValidationErrors(err.fieldErrors);
       } else {
         alert(err.message || 'Failed to submit form');
       }
@@ -640,6 +639,20 @@ const DocumentCollectionPage = () => {
         <Card className="shadow-xl">
           <CardContent className="px-3 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-6">
             <form onSubmit={handleSubmit}>
+              {errorSummary.length > 0 && (
+                <div className="mb-4 p-3 border border-red-300 bg-red-50 rounded-lg">
+                  <p className="text-sm text-red-800 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      Please correct the highlighted fields
+                      {errorSummary.length > 0 && (
+                        <> in: <strong>{errorSummary.join(', ')}</strong></>
+                      )}
+                      . We have taken you to the first one.
+                    </span>
+                  </p>
+                </div>
+              )}
 
               {/* ===== STEP: Personal Information ===== */}
               {currentStepConfig === 'personalInfo' && (

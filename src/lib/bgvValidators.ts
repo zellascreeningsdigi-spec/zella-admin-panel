@@ -78,10 +78,25 @@ export function isValidMobile(value: unknown): boolean {
   return /^[6-9]\d{9}$/.test(digits);
 }
 
-/** Aadhaar: exactly 12 digits AND a valid Verhoeff checksum. */
+/**
+ * Aadhaar: exactly 12 digits.
+ *
+ * The Verhoeff checksum is deliberately NOT enforced here. It was tried and
+ * reverted: it blocked live candidates whose real Aadhaar had a single
+ * mistyped digit, with an error message that gave them no way to understand
+ * why a 12-digit number was rejected. Length is the rule that stops the
+ * gibberish this validation exists to catch.
+ *
+ * verhoeffCheck remains exported for the OCR pipeline, which uses it to flag
+ * low-confidence extractions for review rather than to block a submission.
+ */
 export function isValidAadhaar(value: unknown): boolean {
   const digits = str(value).replace(/\D/g, '');
-  return digits.length === 12 && verhoeffCheck(digits);
+  if (!/^\d{12}$/.test(digits)) return false;
+  // Reject all-same-digit placeholders ("111111111111"), which are dummy input
+  // rather than a mistyped real number.
+  if (/^(\d)\1{11}$/.test(digits)) return false;
+  return true;
 }
 
 /** PAN: 5 letters + 4 digits + 1 letter. Case-insensitive. */
@@ -377,22 +392,24 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
       set(`personalInfo.addresses.${i}.address`, MESSAGES.text);
     }
 
-    const years = Number(addr.durationYears) || 0;
-    const months = Number(addr.durationMonths) || 0;
-    // Legacy records carry only free-text `duration`; accept those unchanged.
-    if (years === 0 && months === 0 && !has(addr.duration)) {
+    // Duration is NOT required. Candidates who began the form before the
+    // structured duration fields existed have neither `durationYears` nor the
+    // old free-text `duration`, and blocking them strands an in-flight
+    // submission on a field that did not exist when they started. Only the
+    // value's shape is checked, when a value is actually present.
+    const years = addr.durationYears;
+    const months = addr.durationMonths;
+    if (years != null && (Number.isNaN(Number(years)) || Number(years) < 0)) {
       set(`personalInfo.addresses.${i}.durationYears`, MESSAGES.addressDuration);
+    }
+    if (months != null && (Number.isNaN(Number(months)) || Number(months) < 0 || Number(months) > 11)) {
+      set(`personalInfo.addresses.${i}.durationMonths`, MESSAGES.addressDuration);
     }
   });
 
-  if (addresses.length > 0) {
-    const types = addresses.map((a: any) => str(a.addressType));
-    // Only enforced once any address carries a type — legacy untyped records pass.
-    if (types.some(Boolean)) {
-      if (!types.includes('current')) set('personalInfo.addresses.type', MESSAGES.addressType);
-      if (!types.includes('permanent')) set('personalInfo.addresses.type', MESSAGES.addressType);
-    }
-  }
+  // Address type is likewise not required — it is new, optional metadata that
+  // feeds later routing work. Requiring a current/permanent pair would block
+  // every candidate mid-form and every legacy record.
 
   // --- Education -----------------------------------------------------------
   if (stepOn('education')) {
@@ -487,7 +504,7 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
   return errors;
 }
 
-export default {
+const bgvFieldValidators = {
   verhoeffCheck,
   isValidMobile,
   isValidAadhaar,
@@ -501,3 +518,5 @@ export default {
   MESSAGES,
   normalise
 };
+
+export default bgvFieldValidators;
