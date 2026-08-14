@@ -66,6 +66,10 @@ const AddressVerificationPage = () => {
     longitude: undefined as number | undefined,
   });
 
+  // Per-file rejection messages, keyed by document field.
+  const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
+  const [uploadProgress, setUploadProgress] = useState('');
+  const [submitError, setSubmitError] = useState('');
   const [documents, setDocuments] = useState({
     idProofOne: null as File | null,
     idProofTwo: null as File | null,
@@ -181,7 +185,28 @@ const AddressVerificationPage = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // Must match the multer limit in routes/addressVerification.js.
+  const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
   const handleFileChange = (field: keyof typeof documents, file: File | null) => {
+    // Reject too-large files at selection time. Without this the file is
+    // accepted with a green tick and only fails at submit, after the agent has
+    // filled in the whole form.
+    if (file && file.size > MAX_UPLOAD_BYTES) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      setFileErrors(prev => ({
+        ...prev,
+        [field]: `This photo is ${sizeMb}MB — the limit is 5MB. Please retake it at a lower resolution or choose a smaller file.`
+      }));
+      setDocuments(prev => ({ ...prev, [field]: null }));
+      return;
+    }
+
+    setFileErrors(prev => {
+      const next = { ...prev };
+      delete next[field as string];
+      return next;
+    });
     setDocuments(prev => ({ ...prev, [field]: file }));
   };
 
@@ -267,17 +292,34 @@ const AddressVerificationPage = () => {
     setSubmitting(true);
 
     try {
-      // 1. Upload all documents first
-      const uploadPromises = [
-        apiService.uploadVerificationDocument(token!, documents.idProofOne!, 'id_proof_one'),
-        apiService.uploadVerificationDocument(token!, documents.idProofTwo!, 'id_proof_two'),
-        apiService.uploadVerificationDocument(token!, documents.houseImageOne!, 'house_image_one'),
-        apiService.uploadVerificationDocument(token!, documents.houseImageTwo!, 'house_image_two'),
-        apiService.uploadVerificationDocument(token!, documents.signature!, 'signature'),
-        apiService.uploadVerificationDocument(token!, documents.selfie!, 'selfie'),
+      // 1. Upload documents ONE AT A TIME.
+      //
+      // These were previously fired together via Promise.all. Six full-size
+      // phone photos uploading simultaneously over mobile data routinely
+      // exhausted the connection, and a single failure rejected the whole
+      // batch with the browser's opaque "Failed to fetch" — after which every
+      // upload had to be redone. Sequential is slower but survives weak
+      // signal, and a failure names the exact file.
+      const uploads: Array<{ file: File; docType: string; label: string }> = [
+        { file: documents.idProofOne!, docType: 'id_proof_one', label: 'ID Proof One' },
+        { file: documents.idProofTwo!, docType: 'id_proof_two', label: 'ID Proof Two' },
+        { file: documents.houseImageOne!, docType: 'house_image_one', label: 'House Image One' },
+        { file: documents.houseImageTwo!, docType: 'house_image_two', label: 'House Image Two' },
+        { file: documents.signature!, docType: 'signature', label: 'Signature' },
+        { file: documents.selfie!, docType: 'selfie', label: 'Selfie' },
       ];
 
-      await Promise.all(uploadPromises);
+      for (let i = 0; i < uploads.length; i++) {
+        const { file, docType, label } = uploads[i];
+        setUploadProgress(`Uploading ${label} (${i + 1} of ${uploads.length})…`);
+        try {
+          await apiService.uploadVerificationDocument(token!, file, docType);
+        } catch (uploadError: any) {
+          throw new Error(`${label}: ${uploadError.message || 'upload failed'}`);
+        }
+      }
+
+      setUploadProgress('Submitting verification…');
 
       // 2. Submit form data
       const submitData = {
@@ -305,9 +347,14 @@ const AddressVerificationPage = () => {
       setSubmitted(true);
     } catch (error: any) {
       console.error('Submit error:', error);
-      alert(error.message || 'Failed to submit verification');
+      // Uploads already completed are kept server-side, so a retry resumes
+      // rather than starting over — say so, or the agent assumes total loss.
+      setSubmitError(
+        `${error.message || 'Failed to submit verification'}\n\nYour details have not been lost. Please tap Submit again — already-uploaded files do not need to be re-selected.`
+      );
     } finally {
       setSubmitting(false);
+      setUploadProgress('');
     }
   };
 
@@ -858,6 +905,9 @@ const AddressVerificationPage = () => {
                         {documents.idProofOne && (
                           <p className="text-xs text-brand-green font-medium mt-2">✓ {documents.idProofOne.name}</p>
                         )}
+                        {fileErrors['idProofOne'] && (
+                          <p className="text-xs text-red-600 font-medium mt-2">{fileErrors['idProofOne']}</p>
+                        )}
                       </div>
 
                       {/* ID Proof Two */}
@@ -875,6 +925,9 @@ const AddressVerificationPage = () => {
                         />
                         {documents.idProofTwo && (
                           <p className="text-xs text-brand-green font-medium mt-2">✓ {documents.idProofTwo.name}</p>
+                        )}
+                        {fileErrors['idProofTwo'] && (
+                          <p className="text-xs text-red-600 font-medium mt-2">{fileErrors['idProofTwo']}</p>
                         )}
                       </div>
 
@@ -894,6 +947,9 @@ const AddressVerificationPage = () => {
                         {documents.houseImageOne && (
                           <p className="text-xs text-brand-green font-medium mt-2">✓ {documents.houseImageOne.name}</p>
                         )}
+                        {fileErrors['houseImageOne'] && (
+                          <p className="text-xs text-red-600 font-medium mt-2">{fileErrors['houseImageOne']}</p>
+                        )}
                       </div>
 
                       {/* House Image Two */}
@@ -911,6 +967,9 @@ const AddressVerificationPage = () => {
                         />
                         {documents.houseImageTwo && (
                           <p className="text-xs text-brand-green font-medium mt-2">✓ {documents.houseImageTwo.name}</p>
+                        )}
+                        {fileErrors['houseImageTwo'] && (
+                          <p className="text-xs text-red-600 font-medium mt-2">{fileErrors['houseImageTwo']}</p>
                         )}
                       </div>
 
@@ -930,6 +989,9 @@ const AddressVerificationPage = () => {
                         {documents.signature && (
                           <p className="text-xs text-brand-green font-medium mt-2">✓ {documents.signature.name}</p>
                         )}
+                        {fileErrors['signature'] && (
+                          <p className="text-xs text-red-600 font-medium mt-2">{fileErrors['signature']}</p>
+                        )}
                       </div>
 
                       {/* Selfie */}
@@ -947,6 +1009,9 @@ const AddressVerificationPage = () => {
                         />
                         {documents.selfie && (
                           <p className="text-xs text-brand-green font-medium mt-2">✓ {documents.selfie.name}</p>
+                        )}
+                        {fileErrors['selfie'] && (
+                          <p className="text-xs text-red-600 font-medium mt-2">{fileErrors['selfie']}</p>
                         )}
                       </div>
                     </div>
@@ -969,9 +1034,19 @@ const AddressVerificationPage = () => {
                       className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8"
                       size="lg"
                     >
-                      {submitting ? 'Submitting...' : 'Submit Verification'}
+                      {submitting ? (uploadProgress || 'Submitting...') : 'Submit Verification'}
                     </Button>
                   </div>
+
+                  {uploadProgress && (
+                    <p className="mt-3 text-sm text-gray-600 text-center">{uploadProgress}</p>
+                  )}
+
+                  {submitError && (
+                    <div className="mt-4 p-3 border border-red-300 bg-red-50 rounded-lg">
+                      <p className="text-sm text-red-800 whitespace-pre-line">{submitError}</p>
+                    </div>
+                  )}
                 </div>
               )}
             </form>

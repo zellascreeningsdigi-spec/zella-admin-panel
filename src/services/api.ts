@@ -1294,10 +1294,33 @@ class ApiService {
     formData.append('document', file);
     formData.append('docType', docType);
 
-    return fetch(`${API_BASE_URL}/address-verifications/public/${token}/upload-document`, {
-      method: 'POST',
-      body: formData,
-    }).then(res => res.json());
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE_URL}/address-verifications/public/${token}/upload-document`, {
+        method: 'POST',
+        body: formData,
+      });
+    } catch {
+      // fetch() only rejects on a network-layer failure. The browser's own
+      // message is "Failed to fetch", which tells the user nothing.
+      throw new Error(
+        `Could not upload "${file.name}". Check your internet connection and try again — if you are on mobile data, moving to a stronger signal usually helps.`
+      );
+    }
+
+    // A proxy or error page can return HTML; parsing it as JSON would throw a
+    // SyntaxError that reads as a generic failure.
+    const body = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const message = body?.message
+        || (res.status === 413
+          ? `"${file.name}" is too large to upload. Please use a smaller photo.`
+          : `Upload of "${file.name}" failed (error ${res.status}). Please try again.`);
+      throw new Error(message);
+    }
+
+    return body as ApiResponse<any>;
   }
 
   // ========== Document Collection API methods ==========
@@ -1502,10 +1525,31 @@ class ApiService {
     formData.append('document', file);
     formData.append('docType', docType);
 
-    return fetch(`${API_BASE_URL}/document-collections/public/${token}/upload-document`, {
-      method: 'POST',
-      body: formData,
-    }).then(res => res.json());
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE_URL}/document-collections/public/${token}/upload-document`, {
+        method: 'POST',
+        body: formData,
+      });
+    } catch {
+      // fetch() only rejects on a network-layer failure; the browser's own
+      // message is "Failed to fetch", which tells the candidate nothing.
+      throw new Error(
+        `Could not upload "${file.name}". Check your internet connection and try again — if you are on mobile data, moving to a stronger signal usually helps.`
+      );
+    }
+
+    const body = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const message = body?.message
+        || (res.status === 413
+          ? `"${file.name}" is too large to upload. Please use a smaller photo (limit 5MB).`
+          : `Upload of "${file.name}" failed (error ${res.status}). Please try again.`);
+      throw new Error(message);
+    }
+
+    return body as ApiResponse<any>;
   }
 
   // ========== Document Scanner (OCR) API methods ==========
