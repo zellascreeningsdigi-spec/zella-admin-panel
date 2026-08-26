@@ -246,11 +246,22 @@ function hasImplausibleConsonantRun(word: string): boolean {
  * and repeated-unit rules do the real work.
  */
 function hasImplausibleVowelRatio(word: string): boolean {
-  const letters = word.replace(/[^a-z]/g, '');
+  const letters = foldConsonantalY(word.replace(/[^a-z]/g, ''));
   if (letters.length < 5) return false;
   const vowels = letters.split('').filter((c: string) => VOWELS.includes(c)).length;
   const ratio = vowels / letters.length;
   return ratio < 0.12 || ratio > 0.85;
+}
+
+/**
+ * In "ayya", "iyya", "ayyub" the doubled y is a consonant, not a vowel. This is
+ * pervasive in transliterated Indian names — Miyya, Ayyappan, Krishnayya,
+ * Ramayya, Subbayya, Sayyad, Ayyub — and counting it as a vowel made every one
+ * of them look like a four-vowel run. Collapse "yy" to a consonant marker
+ * before the run and ratio checks so those names read normally.
+ */
+function foldConsonantalY(letters: string): string {
+  return letters.replace(/yy/g, 'j');
 }
 
 /**
@@ -262,7 +273,7 @@ function hasImplausibleVowelRatio(word: string): boolean {
  * are three ("beau", "aayi").
  */
 function hasImplausibleVowelRun(word: string): boolean {
-  const letters = word.replace(/[^a-z]/g, '');
+  const letters = foldConsonantalY(word.replace(/[^a-z]/g, ''));
   return new RegExp(`[${VOWELS}]{4,}`).test(letters);
 }
 
@@ -310,9 +321,6 @@ export function isMeaningfulText(value: unknown, opts: { minLength?: number; all
 
   const lower = v.toLowerCase();
 
-  // Must contain at least one letter — "1234" and "...." are not names.
-  if (!/[a-z]/.test(lower)) return false;
-
   // 3+ identical LETTERS in a row: "xxxx", "aaaa". Digits are exempt —
   // PIN codes and house numbers legitimately repeat ("560001", "700016").
   if (/([a-z])\1{2,}/.test(lower)) return false;
@@ -320,12 +328,18 @@ export function isMeaningfulText(value: unknown, opts: { minLength?: number; all
   const tokens = lower.split(/[^a-z0-9']+/).filter(Boolean);
 
   if (allowCode) {
-    // Identifiers ("1RV18CS045", "20BCE1234") legitimately contain digit runs
-    // like "1234" and have no phonetic structure, so only the length and
-    // wholly-repeated checks apply.
+    // Identifiers are alphanumeric: "1RV18CS045" and "20BCE1234" mix letters
+    // and digits, but plenty of universities issue all-digit roll numbers
+    // ("202112345678"), so a letter is NOT required here — only that the value
+    // is made of digits/letters and is not a repeated placeholder ("000000").
+    if (!/[a-z0-9]/.test(lower)) return false;
     if (tokens.some((t: string) => isWhollyRepeatedUnit(t))) return false;
     return v.length >= Math.max(minLength, 4);
   }
+
+  // Must contain at least one letter — "1234" and "...." are not names.
+  // Identifiers are exempt and returned above.
+  if (!/[a-z]/.test(lower)) return false;
 
   if (hasKeyboardRun(lower)) return false;
   if (tokens.some((t: string) => isWhollyRepeatedUnit(t))) return false;
@@ -360,6 +374,22 @@ export function isMeaningfulText(value: unknown, opts: { minLength?: number; all
 // ---------------------------------------------------------------------------
 // Whole-form validation
 // ---------------------------------------------------------------------------
+
+/**
+ * Date the education period-of-study and course-type fields became mandatory.
+ * Collections created on or after this date must supply them; earlier records
+ * are grandfathered so in-flight candidates are never blocked on fields that
+ * were optional when they filled the form.
+ */
+export const EDUCATION_PERIOD_REQUIRED_FROM = new Date('2026-08-26T00:00:00Z');
+
+/** True when a collection created at `createdAt` must supply the new fields. */
+export function requiresEducationPeriod(createdAt?: string | Date | null): boolean {
+  if (!createdAt) return false;
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) return false;
+  return created >= EDUCATION_PERIOD_REQUIRED_FROM;
+}
 
 export const MESSAGES = {
   mobile: 'Enter a valid 10-digit mobile number',
@@ -490,6 +520,19 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
       set('education.universityLocation', textError(ed.universityLocation));
     }
 
+    // Period of study and course type are required, but only for records that
+    // began after the fields became mandatory. A candidate who already saved
+    // Education without them — and every legacy record — would otherwise be
+    // stranded on a step they had already completed. `enforceEducationPeriod`
+    // is set by the caller from the collection's creation date.
+    if (config.enforceEducationPeriod) {
+      if (!has(ed.periodOfStudyFrom)) set('education.periodOfStudyFrom', MESSAGES.required);
+      if (!has(ed.periodOfStudyTo)) set('education.periodOfStudyTo', MESSAGES.required);
+      if (!has(ed.courseType)) set('education.courseType', MESSAGES.required);
+    }
+
+    // The ordering check applies to everyone: whenever both dates are present,
+    // they must be in order, regardless of when the record was created.
     if (!isAfter(ed.periodOfStudyTo, ed.periodOfStudyFrom)) {
       set('education.periodOfStudyTo', MESSAGES.periodOrder);
     }
@@ -573,6 +616,8 @@ const bgvFieldValidators = {
   isAfter,
   isMeaningfulText,
   validateBGVFormData,
+  requiresEducationPeriod,
+  EDUCATION_PERIOD_REQUIRED_FROM,
   MESSAGES,
   normalise
 };

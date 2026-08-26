@@ -788,17 +788,34 @@ const DocumentCollectionPage = () => {
                     {renderField('Year of Passing', 'yearOfPassing', formData.education.yearOfPassing, v => updateEducation('yearOfPassing', v), { required: true, path: 'education.yearOfPassing' })}
                     {renderField('University / Board Name', 'universityName', formData.education.universityName, v => updateEducation('universityName', v), { required: true, path: 'education.universityName' })}
                     {renderField('University Location', 'universityLocation', formData.education.universityLocation, v => updateEducation('universityLocation', v), { path: 'education.universityLocation' })}
-                    {renderField('Period of Study From', 'periodOfStudyFrom', formData.education.periodOfStudyFrom, v => updateEducation('periodOfStudyFrom', v), { type: 'date' })}
-                    {renderField('Period of Study To', 'periodOfStudyTo', formData.education.periodOfStudyTo, v => updateEducation('periodOfStudyTo', v), { type: 'date', path: 'education.periodOfStudyTo' })}
-                    <div>
-                      <Label className="text-gray-700 font-medium">Course Type</Label>
-                      <select className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" value={formData.education.courseType} onChange={e => updateEducation('courseType', e.target.value)}>
-                        <option value="">Select</option>
-                        <option value="regular">Regular</option>
-                        <option value="part_time">Part Time</option>
-                        <option value="correspondence">Correspondence</option>
-                      </select>
-                    </div>
+                    {renderField('Period of Study From', 'periodOfStudyFrom', formData.education.periodOfStudyFrom, v => updateEducation('periodOfStudyFrom', v), { type: 'date', required: true, path: 'education.periodOfStudyFrom' })}
+                    {renderField('Period of Study To', 'periodOfStudyTo', formData.education.periodOfStudyTo, v => updateEducation('periodOfStudyTo', v), { type: 'date', required: true, path: 'education.periodOfStudyTo' })}
+                    {(() => {
+                      const courseTypePath = 'education.courseType';
+                      const showCourseTypeError = touched[courseTypePath] && fieldErrors[courseTypePath];
+                      return (
+                        <div>
+                          <Label className="text-gray-700 font-medium">Course Type <span className="text-red-500">*</span></Label>
+                          <select
+                            className={`mt-1 w-full px-3 py-2 border rounded-md ${showCourseTypeError ? 'border-red-500 focus-visible:ring-red-500' : 'border-gray-300'}`}
+                            value={formData.education.courseType}
+                            onChange={e => updateEducation('courseType', e.target.value)}
+                            onBlur={() => revalidateField(courseTypePath)}
+                            aria-invalid={showCourseTypeError ? true : undefined}
+                          >
+                            <option value="">Select</option>
+                            <option value="regular">Regular</option>
+                            <option value="part_time">Part Time</option>
+                            <option value="correspondence">Correspondence</option>
+                          </select>
+                          {showCourseTypeError && (
+                            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {fieldErrors[courseTypePath]}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="flex justify-between pt-4">

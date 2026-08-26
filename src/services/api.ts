@@ -400,6 +400,12 @@ class ApiService {
     return this.put(`/customers/${customerId}`, customerData);
   }
 
+  async updateCustomerBgvFormConfig(customerId: string, bgvFormConfig: any): Promise<ApiResponse<{
+    customer: any;
+  }>> {
+    return this.put(`/customers/${customerId}/bgv-form-config`, { bgvFormConfig });
+  }
+
   async deleteCustomer(customerId: string): Promise<ApiResponse<{
     customer: any;
   }>> {

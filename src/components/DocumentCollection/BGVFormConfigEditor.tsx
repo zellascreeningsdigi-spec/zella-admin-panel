@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { apiService } from '@/services/api';
 import { BGVFormConfig, DEFAULT_BGV_FORM_CONFIG, CustomDocumentType } from '@/types/customer';
-import { Settings, Save, Plus, Trash2 } from 'lucide-react';
+import { Settings, Save, Plus, Trash2, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface BGVFormConfigEditorProps {
   customerId: string;
@@ -51,6 +51,9 @@ const BGVFormConfigEditor: React.FC<BGVFormConfigEditorProps> = ({
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [newCustomLabel, setNewCustomLabel] = useState('');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchCustomer = async () => {
@@ -78,7 +81,11 @@ const BGVFormConfigEditor: React.FC<BGVFormConfigEditorProps> = ({
     fetchCustomer();
   }, [customerId]);
 
+  // Any edit invalidates the previous save result.
+  const clearSaveState = () => { setSaveSuccess(false); setSaveError(null); };
+
   const handleStepChange = (key: keyof BGVFormConfig['steps'], checked: boolean) => {
+    clearSaveState();
     setConfig(prev => {
       const newSteps = { ...prev.steps, [key]: checked };
       // Auto-disable gapDetails when employment is off
@@ -90,6 +97,7 @@ const BGVFormConfigEditor: React.FC<BGVFormConfigEditorProps> = ({
   };
 
   const handleDocTypeChange = (key: keyof BGVFormConfig['documentTypes'], checked: boolean) => {
+    clearSaveState();
     setConfig(prev => ({
       ...prev,
       documentTypes: { ...prev.documentTypes, [key]: checked },
@@ -97,6 +105,7 @@ const BGVFormConfigEditor: React.FC<BGVFormConfigEditorProps> = ({
   };
 
   const handleAddCustomDocType = () => {
+    clearSaveState();
     const label = newCustomLabel.trim();
     if (!label) return;
     const key = toCamelCaseKey(label);
@@ -104,9 +113,10 @@ const BGVFormConfigEditor: React.FC<BGVFormConfigEditorProps> = ({
     // Check for duplicates against built-in and existing custom keys
     const existingCustomKeys = (config.customDocumentTypes || []).map(ct => ct.key);
     if (BUILT_IN_DOC_KEYS.includes(key) || existingCustomKeys.includes(key)) {
-      alert(`A document type with key "${key}" already exists.`);
+      setDuplicateError(`"${label}" already exists as a document type.`);
       return;
     }
+    setDuplicateError(null);
     setConfig(prev => ({
       ...prev,
       customDocumentTypes: [...(prev.customDocumentTypes || []), { key, label, enabled: true }],
@@ -115,6 +125,8 @@ const BGVFormConfigEditor: React.FC<BGVFormConfigEditorProps> = ({
   };
 
   const handleRemoveCustomDocType = (key: string) => {
+    clearSaveState();
+    setDuplicateError(null);
     setConfig(prev => ({
       ...prev,
       customDocumentTypes: (prev.customDocumentTypes || []).filter(ct => ct.key !== key),
@@ -122,6 +134,7 @@ const BGVFormConfigEditor: React.FC<BGVFormConfigEditorProps> = ({
   };
 
   const handleCustomDocTypeToggle = (key: string, checked: boolean) => {
+    clearSaveState();
     setConfig(prev => ({
       ...prev,
       customDocumentTypes: (prev.customDocumentTypes || []).map(ct =>
@@ -132,17 +145,21 @@ const BGVFormConfigEditor: React.FC<BGVFormConfigEditorProps> = ({
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
     try {
-      const response = await apiService.updateCustomer(customerId, { bgvFormConfig: config });
+      const response = await apiService.updateCustomerBgvFormConfig(customerId, config);
       if (response.success) {
-        alert('BGV form configuration saved successfully!');
+        setSaveSuccess(true);
         onConfigUpdated?.();
       } else {
-        alert('Failed to save configuration');
+        setSaveError(response.message || 'The configuration could not be saved.');
       }
     } catch (error: any) {
       console.error('Save config error:', error);
-      alert(error.message || 'Failed to save configuration');
+      // The API client rethrows the server's own message, so show that rather
+      // than a generic string — the admin needs to know what to fix.
+      setSaveError(error?.message || 'The configuration could not be saved. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -267,7 +284,33 @@ const BGVFormConfigEditor: React.FC<BGVFormConfigEditorProps> = ({
               Add
             </Button>
           </div>
+          {duplicateError && (
+            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {duplicateError}
+            </p>
+          )}
         </div>
+
+        {/* Save result */}
+        {saveError && (
+          <div className="rounded-md border border-red-300 bg-red-50 p-3" role="alert">
+            <p className="text-sm text-red-700 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>
+                <span className="font-medium">Configuration not saved.</span>{' '}
+                {saveError}
+              </span>
+            </p>
+          </div>
+        )}
+        {saveSuccess && !saveError && (
+          <div className="rounded-md border border-green-300 bg-green-50 p-3" role="status">
+            <p className="text-sm text-green-700 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              BGV form configuration saved.
+            </p>
+          </div>
+        )}
 
         {/* Save Button */}
         <div className="flex justify-end pt-2">

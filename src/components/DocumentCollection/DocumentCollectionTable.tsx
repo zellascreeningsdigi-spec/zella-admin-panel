@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/table';
 import { DocumentCollection } from '@/types/documentCollection';
 import apiService from '@/services/api';
+import { buildRequirementList } from '@/lib/bgvRequirements';
 
 interface DocumentCollectionTableProps {
   collections: DocumentCollection[];
@@ -57,6 +58,9 @@ const DocumentCollectionTable = ({
       phoneNumber = '91' + phoneNumber;
     }
 
+    const { items } = buildRequirementList(collection.formConfig);
+    const requirementLines = items.map((item, i) => `${i + 1}. ${item}`).join('\n');
+
     const message = `Dear ${collection.name},
 
 Greetings from Zella Screenings!
@@ -67,13 +71,7 @@ Please click the link below to complete the form:
 ${verificationLink}
 
 *You will need to provide:*
-1. Personal Information & Address History
-2. Education Details
-3. Employment History
-4. Professional References
-5. Gap Period Details
-6. Letter of Authorization
-7. Supporting Documents
+${requirementLines}
 
 ⏰ *Important:* This link will expire in 30 days.
 
