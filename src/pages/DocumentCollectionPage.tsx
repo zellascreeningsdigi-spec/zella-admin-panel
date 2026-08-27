@@ -196,6 +196,16 @@ const DocumentCollectionPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.employmentHistory.length, formData.employmentHistory.map(e => e.companyName).join('|')]);
 
+  // Period fields moved from <input type="date"> to type="month". A month input
+  // renders nothing for a full "YYYY-MM-DD" value, so a candidate reopening a
+  // saved form would see their dates vanish — and now be blocked, since these
+  // fields are required. Truncate stored day-precision values to "YYYY-MM".
+  const toMonthValue = (v: unknown): string => {
+    if (typeof v !== 'string') return '';
+    const m = v.match(/^(\d{4}-\d{2})/);
+    return m ? m[1] : '';
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -233,8 +243,18 @@ const DocumentCollectionPage = () => {
                   ? serverData.personalInfo.addresses
                   : prev.personalInfo.addresses,
               },
+              education: {
+                ...prev.education,
+                ...serverData.education,
+                periodOfStudyFrom: toMonthValue(serverData.education?.periodOfStudyFrom),
+                periodOfStudyTo: toMonthValue(serverData.education?.periodOfStudyTo),
+              },
               employmentHistory: serverData.employmentHistory?.length > 0
-                ? serverData.employmentHistory
+                ? serverData.employmentHistory.map((emp: any) => ({
+                    ...emp,
+                    periodFrom: toMonthValue(emp?.periodFrom),
+                    periodTo: toMonthValue(emp?.periodTo),
+                  }))
                 : prev.employmentHistory,
               references: serverData.references?.length > 0
                 ? serverData.references
@@ -535,6 +555,22 @@ const DocumentCollectionPage = () => {
   ) => {
     const path = opts?.path;
     const showError = path ? touched[path] && fieldErrors[path] : undefined;
+    const isPicker = opts?.type === 'date' || opts?.type === 'month';
+
+    // Date/month inputs normally open the calendar only from the small icon,
+    // which is an easy target to miss on a phone. showPicker() opens it from a
+    // tap anywhere in the box. It is not supported everywhere and throws if the
+    // input is not user-activated, so it is guarded and failure is harmless —
+    // the icon still works.
+    const openPicker = (el: HTMLInputElement | null) => {
+      if (!el) return;
+      try {
+        (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
+      } catch {
+        /* unsupported or blocked — the native icon remains available */
+      }
+    };
+
     return (
       <div>
         <Label htmlFor={id} className="text-gray-700 font-medium">
@@ -546,9 +582,11 @@ const DocumentCollectionPage = () => {
           value={value}
           onChange={e => onChange(e.target.value)}
           onBlur={path ? () => revalidateField(path) : undefined}
+          onClick={isPicker ? e => openPicker(e.currentTarget) : undefined}
+          onFocus={isPicker ? e => openPicker(e.currentTarget) : undefined}
           placeholder={opts?.placeholder || ''}
           aria-invalid={showError ? true : undefined}
-          className={`mt-1 ${showError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+          className={`mt-1 ${isPicker ? 'cursor-pointer' : ''} ${showError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
         />
         {showError && (
           <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
@@ -788,8 +826,8 @@ const DocumentCollectionPage = () => {
                     {renderField('Year of Passing', 'yearOfPassing', formData.education.yearOfPassing, v => updateEducation('yearOfPassing', v), { required: true, path: 'education.yearOfPassing' })}
                     {renderField('University / Board Name', 'universityName', formData.education.universityName, v => updateEducation('universityName', v), { required: true, path: 'education.universityName' })}
                     {renderField('University Location', 'universityLocation', formData.education.universityLocation, v => updateEducation('universityLocation', v), { path: 'education.universityLocation' })}
-                    {renderField('Period of Study From', 'periodOfStudyFrom', formData.education.periodOfStudyFrom, v => updateEducation('periodOfStudyFrom', v), { type: 'date', required: true, path: 'education.periodOfStudyFrom' })}
-                    {renderField('Period of Study To', 'periodOfStudyTo', formData.education.periodOfStudyTo, v => updateEducation('periodOfStudyTo', v), { type: 'date', required: true, path: 'education.periodOfStudyTo' })}
+                    {renderField('Period of Study From', 'periodOfStudyFrom', formData.education.periodOfStudyFrom, v => updateEducation('periodOfStudyFrom', v), { type: 'month', required: true, path: 'education.periodOfStudyFrom' })}
+                    {renderField('Period of Study To', 'periodOfStudyTo', formData.education.periodOfStudyTo, v => updateEducation('periodOfStudyTo', v), { type: 'month', required: true, path: 'education.periodOfStudyTo' })}
                     {(() => {
                       const courseTypePath = 'education.courseType';
                       const showCourseTypeError = touched[courseTypePath] && fieldErrors[courseTypePath];
@@ -860,18 +898,18 @@ const DocumentCollectionPage = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {renderField('Company Name', `emp-${i}-company`, emp.companyName, v => updateEmployment(i, 'companyName', v), { required: true, path: `employmentHistory.${i}.companyName` })}
                         {renderField('Designation', `emp-${i}-designation`, emp.designation, v => updateEmployment(i, 'designation', v), { path: `employmentHistory.${i}.designation` })}
-                        {renderField('Period From', `emp-${i}-from`, emp.periodFrom, v => updateEmployment(i, 'periodFrom', v), { type: 'date' })}
-                        {renderField('Period To', `emp-${i}-to`, emp.periodTo, v => updateEmployment(i, 'periodTo', v), { type: 'date', path: `employmentHistory.${i}.periodTo` })}
-                        {renderField('CTC', `emp-${i}-ctc`, emp.ctc, v => updateEmployment(i, 'ctc', v), { path: `employmentHistory.${i}.ctc` })}
-                        {renderField('Employee ID', `emp-${i}-empId`, emp.employeeId, v => updateEmployment(i, 'employeeId', v))}
+                        {renderField('Period From', `emp-${i}-from`, emp.periodFrom, v => updateEmployment(i, 'periodFrom', v), { type: 'month', required: true, path: `employmentHistory.${i}.periodFrom` })}
+                        {renderField('Period To', `emp-${i}-to`, emp.periodTo, v => updateEmployment(i, 'periodTo', v), { type: 'month', required: true, path: `employmentHistory.${i}.periodTo` })}
+                        {renderField('CTC', `emp-${i}-ctc`, emp.ctc, v => updateEmployment(i, 'ctc', v), { required: true, path: `employmentHistory.${i}.ctc` })}
+                        {renderField('Employee ID', `emp-${i}-empId`, emp.employeeId, v => updateEmployment(i, 'employeeId', v), { required: true, path: `employmentHistory.${i}.employeeId` })}
                         {renderField('Supervisor Name', `emp-${i}-supName`, emp.supervisorName, v => updateEmployment(i, 'supervisorName', v), { path: `employmentHistory.${i}.supervisorName` })}
                         {renderField('Supervisor Designation', `emp-${i}-supDesg`, emp.supervisorDesignation, v => updateEmployment(i, 'supervisorDesignation', v))}
                         {renderField('Supervisor Contact', `emp-${i}-supContact`, emp.supervisorContact, v => updateEmployment(i, 'supervisorContact', v), { path: `employmentHistory.${i}.supervisorContact` })}
                         {renderField('Supervisor Email', `emp-${i}-supEmail`, emp.supervisorEmail, v => updateEmployment(i, 'supervisorEmail', v), { type: 'email', path: `employmentHistory.${i}.supervisorEmail` })}
-                        {renderField('HR Name', `emp-${i}-hrName`, emp.hrName, v => updateEmployment(i, 'hrName', v), { path: `employmentHistory.${i}.hrName` })}
-                        {renderField('HR Contact', `emp-${i}-hrContact`, emp.hrContact, v => updateEmployment(i, 'hrContact', v), { path: `employmentHistory.${i}.hrContact` })}
-                        {renderField('HR Email', `emp-${i}-hrEmail`, emp.hrEmail, v => updateEmployment(i, 'hrEmail', v), { type: 'email', path: `employmentHistory.${i}.hrEmail` })}
-                        {renderField('Reason for Leaving', `emp-${i}-reason`, emp.reasonForLeaving, v => updateEmployment(i, 'reasonForLeaving', v), { path: `employmentHistory.${i}.reasonForLeaving` })}
+                        {renderField('HR Name', `emp-${i}-hrName`, emp.hrName, v => updateEmployment(i, 'hrName', v), { required: true, path: `employmentHistory.${i}.hrName` })}
+                        {renderField('HR Contact', `emp-${i}-hrContact`, emp.hrContact, v => updateEmployment(i, 'hrContact', v), { required: true, path: `employmentHistory.${i}.hrContact` })}
+                        {renderField('HR Email', `emp-${i}-hrEmail`, emp.hrEmail, v => updateEmployment(i, 'hrEmail', v), { type: 'email', required: true, path: `employmentHistory.${i}.hrEmail` })}
+                        {renderField('Reason for Leaving', `emp-${i}-reason`, emp.reasonForLeaving, v => updateEmployment(i, 'reasonForLeaving', v), { required: true, path: `employmentHistory.${i}.reasonForLeaving` })}
                         <div>
                           <Label className="text-gray-700 font-medium">Nature of Employment</Label>
                           <select className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" value={emp.natureOfEmployment} onChange={e => updateEmployment(i, 'natureOfEmployment', e.target.value)}>

@@ -376,7 +376,8 @@ export function isMeaningfulText(value: unknown, opts: { minLength?: number; all
 // ---------------------------------------------------------------------------
 
 /**
- * Date the education period-of-study and course-type fields became mandatory.
+ * Date the newer mandatory fields came into force — education period of study
+ * and course type, and the employment period/CTC/employee-ID/HR/reason fields.
  * Collections created on or after this date must supply them; earlier records
  * are grandfathered so in-flight candidates are never blocked on fields that
  * were optional when they filled the form.
@@ -547,9 +548,26 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
       const filled = Object.values(emp || {}).some((val: unknown) => has(val));
       if (!filled) return;
 
+      // Fields required on a filled employment row. The Supervisor block is
+      // deliberately absent: candidates often cannot reach a former supervisor,
+      // so those four stay optional and are only format-checked when supplied.
+      if (config.enforceEmploymentDetails) {
+        if (!has(emp.periodFrom)) set(p('periodFrom'), MESSAGES.required);
+        if (!has(emp.periodTo)) set(p('periodTo'), MESSAGES.required);
+        if (!has(emp.ctc)) set(p('ctc'), MESSAGES.required);
+        if (!has(emp.employeeId)) set(p('employeeId'), MESSAGES.required);
+        if (!has(emp.hrName)) set(p('hrName'), MESSAGES.required);
+        if (!has(emp.hrContact)) set(p('hrContact'), MESSAGES.required);
+        if (!has(emp.hrEmail)) set(p('hrEmail'), MESSAGES.required);
+        if (!has(emp.reasonForLeaving)) set(p('reasonForLeaving'), MESSAGES.required);
+      }
+
       if (has(emp.companyName) && !isMeaningfulText(emp.companyName)) set(p('companyName'), textError(emp.companyName));
       if (has(emp.designation) && !isMeaningfulText(emp.designation)) set(p('designation'), textError(emp.designation));
       if (has(emp.ctc) && !isValidCtc(emp.ctc)) set(p('ctc'), MESSAGES.ctc);
+      if (has(emp.employeeId) && !isMeaningfulText(emp.employeeId, { allowCode: true })) {
+        set(p('employeeId'), textError(emp.employeeId));
+      }
 
       if (has(emp.supervisorName) && !isMeaningfulText(emp.supervisorName)) set(p('supervisorName'), textError(emp.supervisorName));
       if (has(emp.supervisorContact) && !isValidMobile(emp.supervisorContact)) set(p('supervisorContact'), MESSAGES.mobile);
