@@ -406,6 +406,47 @@ class ApiService {
     return this.put(`/customers/${customerId}/bgv-form-config`, { bgvFormConfig });
   }
 
+  // ===== BGV config groups =====
+  // A group is a named BGV config preset belonging to one company. Candidates
+  // assigned to a group resolve their form config from it until they submit.
+
+  async getBgvGroups(customerId: string): Promise<ApiResponse<any>> {
+    return this.get(`/bgv-groups?customerId=${encodeURIComponent(customerId)}`);
+  }
+
+  async getBgvGroupById(groupId: string): Promise<ApiResponse<any>> {
+    return this.get(`/bgv-groups/${groupId}`);
+  }
+
+  async createBgvGroup(payload: {
+    customerId: string;
+    name: string;
+    description?: string;
+    config?: any;
+  }): Promise<ApiResponse<any>> {
+    return this.post('/bgv-groups', payload);
+  }
+
+  async updateBgvGroup(groupId: string, payload: {
+    name?: string;
+    description?: string;
+    config?: any;
+  }): Promise<ApiResponse<any>> {
+    return this.put(`/bgv-groups/${groupId}`, payload);
+  }
+
+  /**
+   * Preview what saving `config` would do to this group's pending candidates.
+   * Read-only despite being a POST -- the proposed config travels in the body.
+   */
+  async getBgvGroupImpact(groupId: string, config: any): Promise<ApiResponse<any>> {
+    return this.post(`/bgv-groups/${groupId}/impact`, { config });
+  }
+
+  async deleteBgvGroup(groupId: string): Promise<ApiResponse<any>> {
+    return this.delete(`/bgv-groups/${groupId}`);
+  }
+
   async deleteCustomer(customerId: string): Promise<ApiResponse<{
     customer: any;
   }>> {

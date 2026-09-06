@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiService } from '@/services/api';
 import { DocumentCollection } from '@/types/documentCollection';
+import { BgvGroup } from '@/types/bgvGroup';
 
 interface AddDocumentCollectionDialogProps {
   open: boolean;
@@ -22,6 +23,7 @@ interface FormData {
   email: string;
   customerId: string;
   companyName: string;
+  bgvGroupId: string;
 }
 
 interface FormErrors {
@@ -43,12 +45,15 @@ const AddDocumentCollectionDialog = ({
     email: '',
     customerId: '',
     companyName: '',
+    bgvGroupId: '',
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [bgvGroups, setBgvGroups] = useState<BgvGroup[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -65,6 +70,11 @@ const AddDocumentCollectionDialog = ({
         email: editCollection.email || '',
         customerId: editCollection.customerId || '',
         companyName: editCollection.companyName || '',
+        // The list endpoint populates this to an object; other endpoints return
+        // the bare id. Normalise to an id for the select.
+        bgvGroupId: typeof editCollection.bgvGroupId === 'object' && editCollection.bgvGroupId
+          ? editCollection.bgvGroupId._id
+          : (editCollection.bgvGroupId || ''),
       });
     } else if (!editCollection && open) {
       setFormData({
@@ -74,10 +84,35 @@ const AddDocumentCollectionDialog = ({
         email: '',
         customerId: preselectedCustomerId || '',
         companyName: preselectedCompanyName || '',
+        bgvGroupId: '',
       });
       setErrors({});
     }
   }, [editCollection, open, preselectedCustomerId, preselectedCompanyName]);
+
+  // Groups are per-company, so the list reloads whenever the company changes.
+  useEffect(() => {
+    if (!open || !formData.customerId) {
+      setBgvGroups([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingGroups(true);
+        const response = await apiService.getBgvGroups(formData.customerId);
+        if (!cancelled && response.success) {
+          setBgvGroups((response.data as BgvGroup[]) || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch BGV groups:', error);
+        if (!cancelled) setBgvGroups([]);
+      } finally {
+        if (!cancelled) setLoadingGroups(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, formData.customerId]);
 
   const fetchCustomers = async () => {
     try {
@@ -106,6 +141,9 @@ const AddDocumentCollectionDialog = ({
       ...prev,
       customerId,
       companyName: customer ? customer.companyName : '',
+      // A group belongs to one company, so a stale selection would be rejected
+      // by the server. Clear it whenever the company changes.
+      bgvGroupId: prev.customerId === customerId ? prev.bgvGroupId : '',
     }));
     if (errors.customerId) {
       setErrors((prev) => ({ ...prev, customerId: '' }));
@@ -143,11 +181,17 @@ const AddDocumentCollectionDialog = ({
       if (editCollection?._id) {
         response = await apiService.updateDocumentCollection(editCollection._id, formData);
       } else {
-        // Snapshot BGV form config from the selected customer
+        // When a group is chosen the server resolves config from it. Otherwise
+        // fall back to the company's config, as before. Resolving server-side
+        // means a stale customer list in this dialog can no longer produce a
+        // candidate with the wrong config.
         const selectedCustomer = customers.find(c => c._id === formData.customerId);
-        const payload = {
+        const payload: any = {
           ...formData,
-          formConfig: selectedCustomer?.bgvFormConfig || undefined,
+          bgvGroupId: formData.bgvGroupId || null,
+          formConfig: formData.bgvGroupId
+            ? undefined
+            : (selectedCustomer?.bgvFormConfig || undefined),
         };
         response = await apiService.createDocumentCollection(payload);
       }
@@ -264,6 +308,39 @@ const AddDocumentCollectionDialog = ({
               <p className="text-sm text-red-500 mt-1">{errors.customerId}</p>
             )}
           </div>
+
+          {/* BGV group: optional. Selecting one applies that group's config to
+              this candidate's link instead of the company-wide default. */}
+          {!editCollection && (
+            <div>
+              <Label htmlFor="dc-bgv-group">BGV Group</Label>
+              <select
+                id="dc-bgv-group"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                value={formData.bgvGroupId}
+                onChange={(e) => handleInputChange('bgvGroupId', e.target.value)}
+                disabled={!formData.customerId || loadingGroups}
+              >
+                <option value="">
+                  {!formData.customerId
+                    ? 'Select a company first'
+                    : loadingGroups
+                      ? 'Loading groups...'
+                      : 'Company default config'}
+                </option>
+                {bgvGroups.map((group) => (
+                  <option key={group._id} value={group._id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {formData.customerId && !loadingGroups && bgvGroups.length === 0
+                  ? 'No groups defined for this company. The company default config will be used.'
+                  : 'Optional. Leave blank to use the company default config.'}
+              </p>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>

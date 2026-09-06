@@ -135,6 +135,19 @@ SECURE | AUTHENTICATE`;
         header: 'Phone',
       },
       {
+        id: 'bgvGroup',
+        header: 'BGV Group',
+        cell: ({ row }) => {
+          // Populated to { _id, name } by the list endpoint; a bare id or null
+          // otherwise. No group means the company default config.
+          const group = row.original.bgvGroupId;
+          const name = typeof group === 'object' && group ? group.name : null;
+          return name
+            ? <span className="text-sm text-gray-700">{name}</span>
+            : <span className="text-sm text-gray-400">Company default</span>;
+        },
+      },
+      {
         accessorKey: 'status',
         header: 'Status',
         cell: ({ row }) => {

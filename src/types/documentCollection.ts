@@ -128,6 +128,11 @@ export interface DocumentCollection {
   email: string;
   customerId: string;
   companyName: string;
+  /** Optional BGV config group. When set, config resolves live from the group
+   *  until the candidate submits. Null/absent means the frozen formConfig.
+   *  The list endpoint populates this to { _id, name }; other endpoints return
+   *  the bare id, so consumers must handle both shapes. */
+  bgvGroupId?: string | { _id: string; name: string } | null;
   formConfig?: BGVFormConfig;
   status: 'pending' | 'approved' | 'rejected';
   verificationStatus: 'not_initiated' | 'link_sent' | 'in_progress' | 'completed' | 'expired';
