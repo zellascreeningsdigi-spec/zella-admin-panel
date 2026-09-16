@@ -556,11 +556,23 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
         if (!has(emp.periodTo)) set(p('periodTo'), MESSAGES.required);
         if (!has(emp.ctc)) set(p('ctc'), MESSAGES.required);
         if (!has(emp.employeeId)) set(p('employeeId'), MESSAGES.required);
-        if (!has(emp.hrName)) set(p('hrName'), MESSAGES.required);
-        if (!has(emp.hrContact)) set(p('hrContact'), MESSAGES.required);
-        if (!has(emp.hrEmail)) set(p('hrEmail'), MESSAGES.required);
-        if (!has(emp.reasonForLeaving)) set(p('reasonForLeaving'), MESSAGES.required);
       }
+
+      // The HR block and Reason for Leaving are NOT required.
+      //
+      // They were made mandatory on 2026-08-26 and caused sustained candidate
+      // escalations: a candidate whose previous employer has shut down, or who
+      // simply has no HR contact, cannot supply them and has no way past the
+      // step. The workaround people reached for -- typing "Not Applicable" into
+      // HR Email and "0000000000" into HR Contact -- then hit the format rules
+      // below, so the form rejected both the honest answer and the workaround.
+      //
+      // Leaving them blank is now accepted. hrName and reasonForLeaving take
+      // free text as-is (including "Not Applicable"), because a wrong-looking
+      // name costs the verification team nothing. hrContact and hrEmail keep
+      // their format checks when a value IS supplied: those two are dialled and
+      // emailed by the verification team, and "0000000000" in a report is worse
+      // than an empty box -- the candidate should leave them blank instead.
 
       if (has(emp.companyName) && !isMeaningfulText(emp.companyName)) set(p('companyName'), textError(emp.companyName));
       if (has(emp.designation) && !isMeaningfulText(emp.designation)) set(p('designation'), textError(emp.designation));
@@ -573,13 +585,21 @@ export function validateBGVFormData(formData: any = {}, config: any = {}): Recor
       if (has(emp.supervisorContact) && !isValidMobile(emp.supervisorContact)) set(p('supervisorContact'), MESSAGES.mobile);
       if (has(emp.supervisorEmail) && !isValidEmail(emp.supervisorEmail)) set(p('supervisorEmail'), MESSAGES.email);
 
-      if (has(emp.hrName) && !isMeaningfulText(emp.hrName)) set(p('hrName'), textError(emp.hrName));
-      if (has(emp.hrContact) && !isValidMobile(emp.hrContact)) set(p('hrContact'), MESSAGES.mobile);
-      if (has(emp.hrEmail) && !isValidEmail(emp.hrEmail)) set(p('hrEmail'), MESSAGES.email);
-
-      if (has(emp.reasonForLeaving) && !isMeaningfulText(emp.reasonForLeaving)) {
-        set(p('reasonForLeaving'), textError(emp.reasonForLeaving));
-      }
+      // The entire HR block is stored verbatim with NO format or quality check:
+      // hrName, hrContact, hrEmail and reasonForLeaving.
+      //
+      // Format checks on hrContact/hrEmail were dropped deliberately (product
+      // decision, Hexaware escalations). Candidates whose employer has shut
+      // down answer "Not Applicable" / "0000000000", and rejecting that is what
+      // generated the escalations -- the check blocked the honest answer and
+      // the workaround alike, with no third option the candidate could give.
+      //
+      // Consequence for downstream consumers: these four fields are FREE TEXT
+      // and may contain placeholders. Do not assume hrContact is dialable or
+      // hrEmail is deliverable -- verification tooling and report generation
+      // must treat a non-conforming value as "not supplied" rather than
+      // attempting contact. Supervisor contact/email keep their format checks
+      // and remain the reliable channel.
 
       if (!isAfter(emp.periodTo, emp.periodFrom)) set(p('periodTo'), MESSAGES.periodOrder);
     });

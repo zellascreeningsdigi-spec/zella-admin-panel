@@ -906,10 +906,10 @@ const DocumentCollectionPage = () => {
                         {renderField('Supervisor Designation', `emp-${i}-supDesg`, emp.supervisorDesignation, v => updateEmployment(i, 'supervisorDesignation', v))}
                         {renderField('Supervisor Contact', `emp-${i}-supContact`, emp.supervisorContact, v => updateEmployment(i, 'supervisorContact', v), { path: `employmentHistory.${i}.supervisorContact` })}
                         {renderField('Supervisor Email', `emp-${i}-supEmail`, emp.supervisorEmail, v => updateEmployment(i, 'supervisorEmail', v), { type: 'email', path: `employmentHistory.${i}.supervisorEmail` })}
-                        {renderField('HR Name', `emp-${i}-hrName`, emp.hrName, v => updateEmployment(i, 'hrName', v), { required: true, path: `employmentHistory.${i}.hrName` })}
-                        {renderField('HR Contact', `emp-${i}-hrContact`, emp.hrContact, v => updateEmployment(i, 'hrContact', v), { required: true, path: `employmentHistory.${i}.hrContact` })}
-                        {renderField('HR Email', `emp-${i}-hrEmail`, emp.hrEmail, v => updateEmployment(i, 'hrEmail', v), { type: 'email', required: true, path: `employmentHistory.${i}.hrEmail` })}
-                        {renderField('Reason for Leaving', `emp-${i}-reason`, emp.reasonForLeaving, v => updateEmployment(i, 'reasonForLeaving', v), { required: true, path: `employmentHistory.${i}.reasonForLeaving` })}
+                        {renderField('HR Name', `emp-${i}-hrName`, emp.hrName, v => updateEmployment(i, 'hrName', v), { path: `employmentHistory.${i}.hrName` })}
+                        {renderField('HR Contact', `emp-${i}-hrContact`, emp.hrContact, v => updateEmployment(i, 'hrContact', v), { path: `employmentHistory.${i}.hrContact` })}
+                        {renderField('HR Email', `emp-${i}-hrEmail`, emp.hrEmail, v => updateEmployment(i, 'hrEmail', v), { type: 'email', path: `employmentHistory.${i}.hrEmail` })}
+                        {renderField('Reason for Leaving', `emp-${i}-reason`, emp.reasonForLeaving, v => updateEmployment(i, 'reasonForLeaving', v), { path: `employmentHistory.${i}.reasonForLeaving` })}
                         <div>
                           <Label className="text-gray-700 font-medium">Nature of Employment</Label>
                           <select className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" value={emp.natureOfEmployment} onChange={e => updateEmployment(i, 'natureOfEmployment', e.target.value)}>
