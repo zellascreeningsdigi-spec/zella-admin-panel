@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { evaluateProximity, AddressLocation } from '@/lib/geoProximity';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +17,13 @@ interface CaseData {
   phone: string;
   formSubmitDate: string;
   presentAddress: string;
+  address?: string;
+  /**
+   * Reference point for this case's address. When present the form may only be
+   * opened and submitted from within `radiusMeters` of it. Absent on legacy
+   * cases and any case with no pin, where the gate does not apply.
+   */
+  addressLocation?: AddressLocation;
 }
 
 const steps: Step[] = [
@@ -64,6 +72,7 @@ const AddressVerificationPage = () => {
     // Geolocation (will be captured automatically)
     latitude: undefined as number | undefined,
     longitude: undefined as number | undefined,
+    gpsAccuracy: undefined as number | undefined,
   });
 
   // Per-file rejection messages, keyed by document field.
@@ -113,6 +122,9 @@ const AddressVerificationPage = () => {
       ...prev,
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
+      // Sent to the server so a borderline distance can be judged against the
+      // quality of the fix rather than treated as exact.
+      gpsAccuracy: position.coords.accuracy,
     }));
     setGeolocationStatus('granted');
   };
@@ -173,13 +185,106 @@ const AddressVerificationPage = () => {
     }
   };
 
-  const getMobileOS = (): 'ios' | 'android' | 'other' => {
+  const getMobileOS = (): 'ios' | 'android' | 'windows' | 'mac' | 'other' => {
     if (typeof navigator === 'undefined') return 'other';
     const ua = navigator.userAgent || '';
     if (/iPad|iPhone|iPod/.test(ua)) return 'ios';
+    // iPadOS 13+ reports a desktop Safari UA; the touch-point count is the
+    // documented way to tell an iPad from a Mac.
+    if (/Macintosh/.test(ua) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1) return 'ios';
     if (/Android/i.test(ua)) return 'android';
+    if (/Windows/i.test(ua)) return 'windows';
+    if (/Macintosh|Mac OS X/i.test(ua)) return 'mac';
     return 'other';
   };
+
+  /**
+   * Per-platform steps for re-enabling location after a hard block. Covers all
+   * four target platforms: a candidate who denied permission must be able to
+   * recover without leaving the page guessing.
+   */
+  const locationHelpSteps = (): { title: string; steps: string[] } => {
+    switch (getMobileOS()) {
+      case 'ios':
+        return {
+          title: 'To allow location on iPhone/iPad:',
+          steps: [
+            'Open the Settings app.',
+            "Go to Privacy & Security → Location Services and make sure it's On.",
+            'Scroll down, tap your browser (Safari Websites or Chrome), and choose Ask or Allow.',
+            'Return to this page and tap Try Again.'
+          ]
+        };
+      case 'android':
+        return {
+          title: 'To allow location on Android:',
+          steps: [
+            'Tap the lock icon (or ⓘ) in the address bar.',
+            'Tap Permissions and set Location to Allow.',
+            "Also ensure your phone's Location is on (Settings → Location).",
+            'Return here and tap Try Again.'
+          ]
+        };
+      case 'windows':
+        return {
+          title: 'To allow location on Windows:',
+          steps: [
+            'Click the lock icon (or ⓘ) at the left of the address bar.',
+            'Set Location to Allow, then reload the page.',
+            'If it stays blocked, open Windows Settings → Privacy & security → Location and turn on "Let apps access your location" and "Let desktop apps access your location".',
+            'Return here and click Try Again.'
+          ]
+        };
+      case 'mac':
+        return {
+          title: 'To allow location on Mac:',
+          steps: [
+            'Click the lock icon (or ⓘ) at the left of the address bar and set Location to Allow.',
+            'In Safari you can also use Safari → Settings → Websites → Location and set this site to Allow.',
+            'Open System Settings → Privacy & Security → Location Services and make sure it is on for your browser.',
+            'Return here and click Try Again.'
+          ]
+        };
+      default:
+        return {
+          title: 'To allow location:',
+          steps: [
+            "Open your browser's site settings for this page.",
+            'Set Location to Allow.',
+            "Make sure your device's location/GPS is turned on.",
+            'Return here and tap Try Again.'
+          ]
+        };
+    }
+  };
+
+  // --- Form-open proximity gate -----------------------------------------
+  // The form is only rendered when the candidate is inside the case's radius.
+  // Location permission is therefore mandatory: without a fix there is nothing
+  // to measure, so the gate stays closed and shows the recovery instructions.
+  //
+  // Cases with no pinned reference are unaffected -- evaluateProximity returns
+  // allowed for them -- so legacy links keep working exactly as before.
+  const proximity = evaluateProximity(caseData?.addressLocation, {
+    latitude: formData.latitude,
+    longitude: formData.longitude,
+    accuracyMeters: formData.gpsAccuracy,
+  });
+
+  const hasAddressPin = !!caseData?.addressLocation &&
+    caseData.addressLocation.latitude != null &&
+    caseData.addressLocation.longitude != null;
+
+  // Gate applies only to pinned cases, and only once we know where we are.
+  const blockedByProximity = hasAddressPin && !proximity.allowed;
+
+  // While the very first fix is still being acquired we do not yet know whether
+  // the candidate is inside the radius. Showing the red "Only on this location"
+  // blocker during those seconds reads as a rejection to someone standing at
+  // the correct address, so a neutral "checking" screen is shown instead.
+  const awaitingFirstFix = hasAddressPin &&
+    proximity.reason === 'no_captured_location' &&
+    (geolocationStatus === 'idle' || geolocationStatus === 'requesting');
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -187,6 +292,17 @@ const AddressVerificationPage = () => {
 
   // Must match the multer limit in routes/addressVerification.js.
   const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+  // Fields that must be captured with the camera rather than chosen from the
+  // gallery. `capture` on the input drives the OS to open the camera directly;
+  // this list is used for the labels and the freshness check below.
+  const CAMERA_ONLY_FIELDS = ['houseImageOne', 'houseImageTwo', 'signature', 'selfie'];
+
+  // A photo taken for this form is seconds old. A gallery image is typically
+  // not -- so on a camera-only field a file whose lastModified is well in the
+  // past indicates a gallery pick on a browser that ignored `capture`.
+  // Deliberately generous (15 min) so a slow form fill is never penalised.
+  const STALE_PHOTO_MS = 15 * 60 * 1000;
 
   const handleFileChange = (field: keyof typeof documents, file: File | null) => {
     // Reject too-large files at selection time. Without this the file is
@@ -200,6 +316,21 @@ const AddressVerificationPage = () => {
       }));
       setDocuments(prev => ({ ...prev, [field]: null }));
       return;
+    }
+
+    // Camera-only fields: reject an obviously pre-existing image. Desktop
+    // browsers ignore `capture` entirely, so this is the only signal available
+    // there; it is a deterrent, not a guarantee, and the value is advisory.
+    if (file && CAMERA_ONLY_FIELDS.includes(field as string)) {
+      const age = Date.now() - file.lastModified;
+      if (Number.isFinite(age) && age > STALE_PHOTO_MS) {
+        setFileErrors(prev => ({
+          ...prev,
+          [field]: 'Please take a new photo with your camera. Existing photos from your gallery are not accepted for this field.'
+        }));
+        setDocuments(prev => ({ ...prev, [field]: null }));
+        return;
+      }
     }
 
     setFileErrors(prev => {
@@ -336,12 +467,17 @@ const AddressVerificationPage = () => {
         remarks: formData.remarks,
         latitude: formData.latitude,
         longitude: formData.longitude,
+        gpsAccuracy: formData.gpsAccuracy,
       };
 
       const submitResponse = await apiService.submitVerification(token!, submitData);
 
       if (!submitResponse.success) {
-        throw new Error(submitResponse.message || 'Failed to submit verification');
+        const err: any = new Error(submitResponse.message || 'Failed to submit verification');
+        // A proximity rejection is not retryable from where the candidate is
+        // standing, so it must not carry the "tap Submit again" advice.
+        err.isProximityBlock = Boolean((submitResponse as any).proximity);
+        throw err;
       }
 
       setSubmitted(true);
@@ -350,7 +486,9 @@ const AddressVerificationPage = () => {
       // Uploads already completed are kept server-side, so a retry resumes
       // rather than starting over — say so, or the agent assumes total loss.
       setSubmitError(
-        `${error.message || 'Failed to submit verification'}\n\nYour details have not been lost. Please tap Submit again — already-uploaded files do not need to be re-selected.`
+        error.isProximityBlock
+          ? `${error.message}\n\nYour details have not been lost. Please move to the address being verified and tap Submit again — already-uploaded files do not need to be re-selected.`
+          : `${error.message || 'Failed to submit verification'}\n\nYour details have not been lost. Please tap Submit again — already-uploaded files do not need to be re-selected.`
       );
     } finally {
       setSubmitting(false);
@@ -400,6 +538,148 @@ const AddressVerificationPage = () => {
             <div className="bg-brand-green-50 p-4 rounded-lg border border-brand-green-200">
               <p className="text-sm text-gray-700">
                 A confirmation email will be sent to you shortly.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // --- Location gate: the form is not rendered until the candidate is at the
+  // address. Shown for pinned cases only; legacy cases fall straight through.
+  if (awaitingFirstFix) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-brand-green-50 to-white flex items-center justify-center px-4">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-brand-green mx-auto mb-4" />
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Checking your location…</h2>
+          <p className="text-sm text-gray-600">
+            If your device asks for permission, please choose <span className="font-semibold">Allow</span>.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (blockedByProximity) {
+    const help = locationHelpSteps();
+    const needsPermission = proximity.reason === 'no_captured_location';
+    const isRequesting = geolocationStatus === 'requesting';
+    const isHardDenied = geolocationStatus === 'denied_hard';
+    const isInsecure = geolocationStatus === 'insecure_context';
+    const isUnsupported = geolocationStatus === 'unsupported';
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-brand-green-50 to-white flex items-center justify-center px-4 py-8">
+        <Card className="w-full max-w-lg shadow-xl">
+          <CardContent className="pt-8 pb-8 px-6">
+            <div className="text-center mb-6">
+              <div className="mx-auto w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                <MapPin className="w-8 h-8 text-red-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">
+                Only on this location this form can be opened and submitted
+              </h2>
+              <p className="text-sm text-gray-600">
+                This verification must be completed at the address being verified.
+              </p>
+            </div>
+
+            {caseData?.presentAddress && (
+              <div className="bg-gray-50 border rounded-lg p-3 mb-5">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Address to verify</p>
+                <p className="text-sm text-gray-800">{caseData.presentAddress}</p>
+              </div>
+            )}
+
+            {/* Out of radius: we know where they are, and it is not here. */}
+            {!needsPermission && proximity.reason === 'outside_radius' && (
+              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-5">
+                <p className="text-sm text-red-800">
+                  You are currently about{' '}
+                  <span className="font-bold">
+                    {proximity.distanceMeters !== null && proximity.distanceMeters >= 1000
+                      ? `${(proximity.distanceMeters / 1000).toFixed(1)}km`
+                      : `${proximity.distanceMeters}m`}
+                  </span>{' '}
+                  away. Please go to the address above and reopen this page.
+                </p>
+                {proximity.accuracyExceedsRadius && (
+                  <p className="text-xs text-red-700 mt-2">
+                    Your device's location signal is weak right now. Step outside or near a
+                    window and tap Check My Location again.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Permission missing: location is mandatory to open the form. */}
+            {needsPermission && !isInsecure && !isUnsupported && (
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-5">
+                <p className="text-sm text-blue-900 font-medium mb-1">Location access is required</p>
+                <p className="text-sm text-blue-800">
+                  We need your location to confirm you are at the address. This form cannot be
+                  opened without it.
+                </p>
+              </div>
+            )}
+
+            {/* Hard denial: per-platform recovery steps (iOS/Android/Windows/Mac). */}
+            {isHardDenied && (
+              <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-5">
+                <p className="text-sm font-semibold text-yellow-900 mb-2">{help.title}</p>
+                <ol className="list-decimal list-inside space-y-1 text-sm text-yellow-900">
+                  {help.steps.map((step, i) => <li key={i}>{step}</li>)}
+                </ol>
+              </div>
+            )}
+
+            {isInsecure && (
+              <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-5">
+                <p className="text-sm text-red-800">
+                  This page must be opened over a secure (<span className="font-mono">https://</span>)
+                  link. Please reopen the link from your email or SMS.
+                </p>
+              </div>
+            )}
+
+            {isUnsupported && (
+              <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-5">
+                <p className="text-sm text-red-800">
+                  This browser cannot share your location. Please open this link in Chrome
+                  (Android/Windows) or Safari (iPhone/Mac).
+                </p>
+              </div>
+            )}
+
+            {/* The retry button. Present on every platform and every failure
+                state that a retry can clear -- this is the "allow it again"
+                affordance for a candidate who denied permission. */}
+            {!isInsecure && !isUnsupported && (
+              <Button
+                type="button"
+                onClick={captureGeolocation}
+                disabled={isRequesting}
+                className="w-full bg-brand-green hover:bg-brand-green-600 text-white"
+              >
+                {isRequesting ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Checking your location…</>
+                ) : (
+                  <><MapPin className="w-4 h-4 mr-2" /> {needsPermission ? 'Allow Location Access' : 'Check My Location'}</>
+                )}
+              </Button>
+            )}
+
+            {!isHardDenied && !isInsecure && !isUnsupported && (
+              <p className="text-xs text-gray-500 text-center mt-4">
+                When your browser asks, choose <span className="font-semibold">Allow</span>.
+              </p>
+            )}
+
+            <div className="mt-6 pt-4 border-t text-center">
+              <p className="text-xs text-gray-500">
+                Need help? Call +91 7982938489 / +91 9871967859
               </p>
             </div>
           </CardContent>
@@ -897,7 +1177,7 @@ const AddressVerificationPage = () => {
                         <input
                           type="file"
                           id="idProofOne"
-                          accept=".pdf,.jpg,.jpeg,.png"
+                          accept="image/*,.heic,.heif,application/pdf,.pdf"
                           onChange={(e) => handleFileChange('idProofOne', e.target.files?.[0] || null)}
                           className="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-brand-green-50 file:text-brand-green hover:file:bg-brand-green-100"
                           required
@@ -918,7 +1198,7 @@ const AddressVerificationPage = () => {
                         <input
                           type="file"
                           id="idProofTwo"
-                          accept=".pdf,.jpg,.jpeg,.png"
+                          accept="image/*,.heic,.heif,application/pdf,.pdf"
                           onChange={(e) => handleFileChange('idProofTwo', e.target.files?.[0] || null)}
                           className="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-brand-green-50 file:text-brand-green hover:file:bg-brand-green-100"
                           required
@@ -935,11 +1215,12 @@ const AddressVerificationPage = () => {
                       <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-brand-green transition-colors">
                         <Label htmlFor="houseImageOne" className="text-gray-700 font-medium">
                           House Image One <span className="text-red-500">*</span>
+                          <span className="block text-xs font-normal text-gray-500">Take a photo now — gallery uploads are not accepted</span>
                         </Label>
                         <input
                           type="file"
                           id="houseImageOne"
-                          accept=".pdf,.jpg,.jpeg,.png"
+                          accept="image/*" capture="environment"
                           onChange={(e) => handleFileChange('houseImageOne', e.target.files?.[0] || null)}
                           className="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-brand-green-50 file:text-brand-green hover:file:bg-brand-green-100"
                           required
@@ -956,11 +1237,12 @@ const AddressVerificationPage = () => {
                       <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-brand-green transition-colors">
                         <Label htmlFor="houseImageTwo" className="text-gray-700 font-medium">
                           House Image Two <span className="text-red-500">*</span>
+                          <span className="block text-xs font-normal text-gray-500">Take a photo now — gallery uploads are not accepted</span>
                         </Label>
                         <input
                           type="file"
                           id="houseImageTwo"
-                          accept=".pdf,.jpg,.jpeg,.png"
+                          accept="image/*" capture="environment"
                           onChange={(e) => handleFileChange('houseImageTwo', e.target.files?.[0] || null)}
                           className="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-brand-green-50 file:text-brand-green hover:file:bg-brand-green-100"
                           required
@@ -977,11 +1259,12 @@ const AddressVerificationPage = () => {
                       <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-brand-green transition-colors">
                         <Label htmlFor="signature" className="text-gray-700 font-medium">
                           Signature <span className="text-red-500">*</span>
+                          <span className="block text-xs font-normal text-gray-500">Take a photo now — gallery uploads are not accepted</span>
                         </Label>
                         <input
                           type="file"
                           id="signature"
-                          accept=".pdf,.jpg,.jpeg,.png"
+                          accept="image/*" capture="environment"
                           onChange={(e) => handleFileChange('signature', e.target.files?.[0] || null)}
                           className="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-brand-green-50 file:text-brand-green hover:file:bg-brand-green-100"
                           required
@@ -998,11 +1281,12 @@ const AddressVerificationPage = () => {
                       <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-brand-green transition-colors">
                         <Label htmlFor="selfie" className="text-gray-700 font-medium">
                           Selfie (Candidate Image) <span className="text-red-500">*</span>
+                          <span className="block text-xs font-normal text-gray-500">Take a photo now — gallery uploads are not accepted</span>
                         </Label>
                         <input
                           type="file"
                           id="selfie"
-                          accept=".jpg,.jpeg,.png"
+                          accept="image/*" capture="user"
                           onChange={(e) => handleFileChange('selfie', e.target.files?.[0] || null)}
                           className="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-brand-green-50 file:text-brand-green hover:file:bg-brand-green-100"
                           required

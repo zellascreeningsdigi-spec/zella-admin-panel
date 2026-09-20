@@ -35,6 +35,10 @@ interface FormData {
   pin: string;
   landmark: string;
   addressType: 'current' | 'permanent' | 'office';
+  // Reference point the candidate must be near to submit. Blank => gate off.
+  addressLatitude: string;
+  addressLongitude: string;
+  addressRadiusMeters: string;
   verificationMethod: 'self' | 'physical' | 'document';
   vendor: string;
   vendorWorkPrice: string;
@@ -85,12 +89,45 @@ const AddAddressVerificationDialog = ({
     pin: '',
     landmark: '',
     addressType: 'current',
+    addressLatitude: '',
+    addressLongitude: '',
+    addressRadiusMeters: '100',
     verificationMethod: 'self',
     vendor: '',
     vendorWorkPrice: '',
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
+  const [pinningLocation, setPinningLocation] = useState(false);
+  const [pinError, setPinError] = useState('');
+
+  /**
+   * Fill the pin from the device's current position. Useful when the case is
+   * raised on-site; otherwise the coordinates are typed or pasted from a map.
+   */
+  const handleUseCurrentLocation = () => {
+    setPinError('');
+    if (!('geolocation' in navigator)) {
+      setPinError('This browser does not support location access.');
+      return;
+    }
+    setPinningLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setFormData((prev) => ({
+          ...prev,
+          addressLatitude: String(pos.coords.latitude),
+          addressLongitude: String(pos.coords.longitude),
+        }));
+        setPinningLocation(false);
+      },
+      (err) => {
+        setPinError(err.message || 'Could not get current location.');
+        setPinningLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 20000 }
+    );
+  };
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [vendors, setVendors] = useState<VendorOption[]>([]);
   const [vendorLocationFilter, setVendorLocationFilter] = useState('');
@@ -146,6 +183,9 @@ const AddAddressVerificationDialog = ({
         pin: editVerification.pin || '',
         landmark: editVerification.landmark || '',
         addressType: editVerification.addressType || 'current',
+        addressLatitude: editVerification.addressLocation?.latitude != null ? String(editVerification.addressLocation.latitude) : '',
+        addressLongitude: editVerification.addressLocation?.longitude != null ? String(editVerification.addressLocation.longitude) : '',
+        addressRadiusMeters: editVerification.addressLocation?.radiusMeters != null ? String(editVerification.addressLocation.radiusMeters) : '100',
         verificationMethod: editVerification.verificationMethod || 'self',
         vendor: extractVendorId((editVerification as any).vendor),
         vendorWorkPrice:
@@ -171,6 +211,9 @@ const AddAddressVerificationDialog = ({
         pin: '',
         landmark: '',
         addressType: 'current',
+        addressLatitude: '',
+        addressLongitude: '',
+        addressRadiusMeters: '100',
         verificationMethod: 'self',
         vendor: '',
         vendorWorkPrice: '',
@@ -233,11 +276,29 @@ const AddAddressVerificationDialog = ({
     setIsSubmitting(true);
 
     try {
-      const { vendor, vendorWorkPrice, ...rest } = formData;
+      const {
+        vendor, vendorWorkPrice,
+        addressLatitude, addressLongitude, addressRadiusMeters,
+        ...rest
+      } = formData;
       const submitData: any = {
         ...rest,
         formSubmitDate: new Date(formData.date).toISOString(),
       };
+
+      // Fold the three pin inputs into the nested shape the API expects. Both
+      // coordinates must be present and numeric, otherwise the pin is sent as
+      // null so the proximity gate stays off rather than half-configured.
+      const pinLat = parseFloat(addressLatitude);
+      const pinLng = parseFloat(addressLongitude);
+      submitData.addressLocation =
+        Number.isFinite(pinLat) && Number.isFinite(pinLng)
+          ? {
+              latitude: pinLat,
+              longitude: pinLng,
+              radiusMeters: Number(addressRadiusMeters) || 100,
+            }
+          : null;
       if (isVendorMode) {
         // Vendor tab: attach vendor; only super-admin sends a per-case price.
         submitData.vendor = vendor || null;
@@ -509,6 +570,62 @@ const AddAddressVerificationDialog = ({
                 <option value="permanent">Permanent Address</option>
                 <option value="office">Office Address</option>
               </select>
+            </div>
+
+            {/* Address GPS pin — drives the candidate's proximity gate */}
+            <div className="col-span-2 border rounded-md p-3 bg-gray-50">
+              <Label className="font-medium">Address GPS Location (optional)</Label>
+              <p className="text-xs text-gray-600 mt-1 mb-2">
+                Pin the coordinates of the address above. When set, the candidate can only
+                submit the verification form from within the radius below. Leave blank to
+                allow submission from anywhere.
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label htmlFor="addressLatitude" className="text-xs">Latitude</Label>
+                  <Input
+                    id="addressLatitude"
+                    type="number"
+                    step="any"
+                    placeholder="12.971599"
+                    value={formData.addressLatitude}
+                    onChange={(e) => handleInputChange('addressLatitude', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="addressLongitude" className="text-xs">Longitude</Label>
+                  <Input
+                    id="addressLongitude"
+                    type="number"
+                    step="any"
+                    placeholder="77.594566"
+                    value={formData.addressLongitude}
+                    onChange={(e) => handleInputChange('addressLongitude', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="addressRadiusMeters" className="text-xs">Radius (m)</Label>
+                  <select
+                    id="addressRadiusMeters"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={formData.addressRadiusMeters}
+                    onChange={(e) => handleInputChange('addressRadiusMeters', e.target.value)}
+                  >
+                    <option value="50">50 m</option>
+                    <option value="75">75 m</option>
+                    <option value="100">100 m</option>
+                  </select>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="mt-2 text-xs text-blue-600 hover:underline disabled:text-gray-400"
+                disabled={pinningLocation}
+                onClick={handleUseCurrentLocation}
+              >
+                {pinningLocation ? 'Getting current location…' : 'Use my current location'}
+              </button>
+              {pinError && <p className="text-xs text-red-600 mt-1">{pinError}</p>}
             </div>
 
             {/* Verification Method */}

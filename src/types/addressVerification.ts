@@ -15,6 +15,18 @@ export interface AddressVerification {
   pin?: string;
   landmark?: string;
   addressType: 'current' | 'permanent' | 'office';
+  /**
+   * Reference coordinates for `address`, pinned when the case is created. The
+   * candidate must submit from within `radiusMeters` of this point. Absent on
+   * legacy cases and wherever no pin was captured, in which case the proximity
+   * gate is skipped rather than blocking the candidate.
+   */
+  addressLocation?: {
+    latitude?: number;
+    longitude?: number;
+    radiusMeters?: number;
+    pinnedAt?: string;
+  };
   status: 'pending' | 'verified' | 'failed' | 'insufficiency';
   verificationStatus: 'not_initiated' | 'link_sent' | 'in_progress' | 'completed' | 'expired';
   verificationMethod: 'self' | 'physical' | 'document';
@@ -101,6 +113,10 @@ export interface VerificationData {
   latitude?: number;
   longitude?: number;
   gpsAddress?: string;
+  /** Metres between the captured fix and the case's pinned address, if pinned. */
+  distanceFromAddressMeters?: number;
+  /** Device-reported accuracy of the captured fix, in metres. */
+  gpsAccuracyMeters?: number;
 
   // Document Uploads (6 specific documents)
   idProofOne?: DocumentUpload;
