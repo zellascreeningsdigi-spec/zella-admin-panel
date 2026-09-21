@@ -25,6 +25,10 @@ export interface AddressVerification {
     latitude?: number;
     longitude?: number;
     radiusMeters?: number;
+    /** Google's formatted address for the picked place. */
+    formattedAddress?: string;
+    /** How the pin was set. */
+    source?: 'places' | 'map' | 'device' | 'manual';
     pinnedAt?: string;
   };
   status: 'pending' | 'verified' | 'failed' | 'insufficiency';

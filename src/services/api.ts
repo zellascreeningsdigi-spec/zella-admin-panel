@@ -1031,6 +1031,25 @@ class ApiService {
     return this.post('/address-verifications', data);
   }
 
+  /** Address suggestions for the case-creation search box (Places proxy). */
+  async searchAddresses(query: string, session?: string): Promise<ApiResponse<Array<{
+    placeId: string; description: string; mainText: string; secondaryText: string;
+  }>>> {
+    const params = new URLSearchParams({ q: query });
+    if (session) params.set('session', session);
+    return this.get(`/address-verifications/places/search?${params.toString()}`);
+  }
+
+  /** Resolve a picked suggestion to its formatted address and coordinates. */
+  async getPlaceDetails(placeId: string, session?: string): Promise<ApiResponse<{
+    formattedAddress: string; latitude?: number; longitude?: number;
+    city?: string; state?: string; pin?: string;
+  }>> {
+    const params = new URLSearchParams({ placeId });
+    if (session) params.set('session', session);
+    return this.get(`/address-verifications/places/details?${params.toString()}`);
+  }
+
   async updateAddressVerification(id: string, data: any): Promise<ApiResponse<any>> {
     return this.put(`/address-verifications/${id}`, data);
   }

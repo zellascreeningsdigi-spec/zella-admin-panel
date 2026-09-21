@@ -7,6 +7,8 @@ import SearchableSelect from '@/components/ui/searchable-select';
 import { INDIAN_STATES } from '@/data/indianCities';
 import { apiService } from '@/services/api';
 import { AddressVerification } from '@/types/addressVerification';
+import AddressSearchField, { PickedPlace } from './AddressSearchField';
+import MapPinPicker from './MapPinPicker';
 
 interface AddAddressVerificationDialogProps {
   open: boolean;
@@ -39,6 +41,10 @@ interface FormData {
   addressLatitude: string;
   addressLongitude: string;
   addressRadiusMeters: string;
+  // Google's formatted address for the picked place, stored with the pin.
+  addressFormatted: string;
+  // How the pin was set — see AddressVerification.addressLocation.source.
+  addressSource: '' | 'places' | 'map' | 'device' | 'manual';
   verificationMethod: 'self' | 'physical' | 'document';
   vendor: string;
   vendorWorkPrice: string;
@@ -92,6 +98,8 @@ const AddAddressVerificationDialog = ({
     addressLatitude: '',
     addressLongitude: '',
     addressRadiusMeters: '100',
+    addressFormatted: '',
+    addressSource: '' as '' | 'places' | 'map' | 'device' | 'manual',
     verificationMethod: 'self',
     vendor: '',
     vendorWorkPrice: '',
@@ -100,6 +108,75 @@ const AddAddressVerificationDialog = ({
   const [errors, setErrors] = useState<FormErrors>({});
   const [pinningLocation, setPinningLocation] = useState(false);
   const [pinError, setPinError] = useState('');
+  const [showMap, setShowMap] = useState(false);
+  // Manual coordinate entry is kept as a fallback: when neither the Places key
+  // (backend) nor the Maps key (browser) is configured, search and map are both
+  // unavailable and this is the only way left to pin a case's address.
+  const [showManualCoords, setShowManualCoords] = useState(false);
+
+  /** Typed coordinates: the pin no longer corresponds to a searched place. */
+  const handleManualCoordChange = (field: 'addressLatitude' | 'addressLongitude', value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+      addressFormatted: '',
+      addressSource: 'manual',
+    }));
+  };
+
+  /**
+   * An address was picked from the search box. Stores the formatted address
+   * together with the coordinates it came from, so the two can never disagree.
+   *
+   * The case's own `address` field is filled only when empty — an operator who
+   * already typed a door/flat number should not lose it to Google's version,
+   * which usually drops that detail. City/state/pin fill the same way.
+   */
+  const handlePlacePicked = (place: PickedPlace) => {
+    setPinError('');
+    setFormData((prev) => ({
+      ...prev,
+      addressLatitude: place.latitude != null ? String(place.latitude) : '',
+      addressLongitude: place.longitude != null ? String(place.longitude) : '',
+      addressFormatted: place.formattedAddress || '',
+      addressSource: 'places',
+      address: prev.address.trim() ? prev.address : (place.formattedAddress || ''),
+      city: prev.city.trim() ? prev.city : (place.city || ''),
+      state: prev.state.trim() ? prev.state : (place.state || ''),
+      pin: prev.pin.trim() ? prev.pin : (place.pin || ''),
+    }));
+  };
+
+  /**
+   * Pin moved on the map.
+   *
+   * `addressFormatted` is CLEARED rather than kept: it describes the place that
+   * was searched for, and once the pin is dragged elsewhere it no longer
+   * describes where the pin is. Keeping it would store a formatted address
+   * that contradicts its own coordinates -- e.g. search "MG Road", drag 3km to
+   * the real house, and the record would still claim MG Road. The operator's
+   * own `address` text is left untouched; only the pin's own label is dropped.
+   */
+  const handleMapPinChange = (lat: number, lng: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      addressLatitude: String(lat),
+      addressLongitude: String(lng),
+      addressFormatted: '',
+      addressSource: 'map',
+    }));
+  };
+
+  const handleClearPin = () => {
+    setPinError('');
+    setFormData((prev) => ({
+      ...prev,
+      addressLatitude: '',
+      addressLongitude: '',
+      addressFormatted: '',
+      addressSource: '',
+    }));
+  };
 
   /**
    * Fill the pin from the device's current position. Useful when the case is
@@ -118,6 +195,7 @@ const AddAddressVerificationDialog = ({
           ...prev,
           addressLatitude: String(pos.coords.latitude),
           addressLongitude: String(pos.coords.longitude),
+          addressSource: 'device',
         }));
         setPinningLocation(false);
       },
@@ -186,6 +264,8 @@ const AddAddressVerificationDialog = ({
         addressLatitude: editVerification.addressLocation?.latitude != null ? String(editVerification.addressLocation.latitude) : '',
         addressLongitude: editVerification.addressLocation?.longitude != null ? String(editVerification.addressLocation.longitude) : '',
         addressRadiusMeters: editVerification.addressLocation?.radiusMeters != null ? String(editVerification.addressLocation.radiusMeters) : '100',
+        addressFormatted: editVerification.addressLocation?.formattedAddress || '',
+        addressSource: (editVerification.addressLocation?.source as any) || '',
         verificationMethod: editVerification.verificationMethod || 'self',
         vendor: extractVendorId((editVerification as any).vendor),
         vendorWorkPrice:
@@ -214,6 +294,8 @@ const AddAddressVerificationDialog = ({
         addressLatitude: '',
         addressLongitude: '',
         addressRadiusMeters: '100',
+        addressFormatted: '',
+        addressSource: '',
         verificationMethod: 'self',
         vendor: '',
         vendorWorkPrice: '',
@@ -279,6 +361,7 @@ const AddAddressVerificationDialog = ({
       const {
         vendor, vendorWorkPrice,
         addressLatitude, addressLongitude, addressRadiusMeters,
+        addressFormatted, addressSource,
         ...rest
       } = formData;
       const submitData: any = {
@@ -297,6 +380,11 @@ const AddAddressVerificationDialog = ({
               latitude: pinLat,
               longitude: pinLng,
               radiusMeters: Number(addressRadiusMeters) || 100,
+              formattedAddress: addressFormatted || undefined,
+              // Left undefined when genuinely unknown (a legacy case pinned
+              // before this field existed). Coercing to 'manual' here would
+              // falsify the audit trail on any unrelated edit of that case.
+              source: addressSource || undefined,
             }
           : null;
       if (isVendorMode) {
@@ -573,37 +661,32 @@ const AddAddressVerificationDialog = ({
             </div>
 
             {/* Address GPS pin — drives the candidate's proximity gate */}
-            <div className="col-span-2 border rounded-md p-3 bg-gray-50">
-              <Label className="font-medium">Address GPS Location (optional)</Label>
-              <p className="text-xs text-gray-600 mt-1 mb-2">
-                Pin the coordinates of the address above. When set, the candidate can only
-                submit the verification form from within the radius below. Leave blank to
-                allow submission from anywhere.
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label htmlFor="addressLatitude" className="text-xs">Latitude</Label>
-                  <Input
-                    id="addressLatitude"
-                    type="number"
-                    step="any"
-                    placeholder="12.971599"
-                    value={formData.addressLatitude}
-                    onChange={(e) => handleInputChange('addressLatitude', e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="addressLongitude" className="text-xs">Longitude</Label>
-                  <Input
-                    id="addressLongitude"
-                    type="number"
-                    step="any"
-                    placeholder="77.594566"
-                    value={formData.addressLongitude}
-                    onChange={(e) => handleInputChange('addressLongitude', e.target.value)}
-                  />
-                </div>
-                <div>
+            <div className="col-span-2 border rounded-md p-3 bg-gray-50 space-y-3">
+              <div>
+                <Label className="font-medium">Address Location (optional)</Label>
+                <p className="text-xs text-gray-600 mt-1">
+                  Search for the address to store its exact location. When set, the candidate
+                  can only open and submit the form within the radius below. Leave blank to
+                  allow submission from anywhere.
+                </p>
+              </div>
+
+              <AddressSearchField
+                onPick={handlePlacePicked}
+                pinnedLabel={
+                  // Mirrors the submit-time Number.isFinite guard: a
+                  // non-numeric value must not render "Pinned (NaN, NaN)"
+                  // while submit correctly sends no pin at all.
+                  Number.isFinite(Number(formData.addressLatitude)) &&
+                  Number.isFinite(Number(formData.addressLongitude)) &&
+                  formData.addressLatitude !== '' && formData.addressLongitude !== ''
+                    ? `Pinned${formData.addressFormatted ? `: ${formData.addressFormatted}` : ''} (${Number(formData.addressLatitude).toFixed(6)}, ${Number(formData.addressLongitude).toFixed(6)})`
+                    : undefined
+                }
+              />
+
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="w-32">
                   <Label htmlFor="addressRadiusMeters" className="text-xs">Radius (m)</Label>
                   <select
                     id="addressRadiusMeters"
@@ -616,16 +699,76 @@ const AddAddressVerificationDialog = ({
                     <option value="100">100 m</option>
                   </select>
                 </div>
+                <button
+                  type="button"
+                  className="text-xs text-blue-600 hover:underline disabled:text-gray-400 pb-2"
+                  onClick={() => setShowMap((v) => !v)}
+                >
+                  {showMap ? 'Hide map' : 'Adjust pin on map'}
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-blue-600 hover:underline pb-2"
+                  onClick={() => setShowManualCoords((v) => !v)}
+                >
+                  {showManualCoords ? 'Hide coordinates' : 'Enter coordinates'}
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-blue-600 hover:underline disabled:text-gray-400 pb-2"
+                  disabled={pinningLocation}
+                  onClick={handleUseCurrentLocation}
+                >
+                  {pinningLocation ? 'Getting current location…' : 'Use my current location'}
+                </button>
+                {(formData.addressLatitude || formData.addressLongitude) && (
+                  <button
+                    type="button"
+                    className="text-xs text-red-600 hover:underline pb-2"
+                    onClick={handleClearPin}
+                  >
+                    Clear pin
+                  </button>
+                )}
               </div>
-              <button
-                type="button"
-                className="mt-2 text-xs text-blue-600 hover:underline disabled:text-gray-400"
-                disabled={pinningLocation}
-                onClick={handleUseCurrentLocation}
-              >
-                {pinningLocation ? 'Getting current location…' : 'Use my current location'}
-              </button>
-              {pinError && <p className="text-xs text-red-600 mt-1">{pinError}</p>}
+
+              {showManualCoords && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label htmlFor="addressLatitude" className="text-xs">Latitude</Label>
+                    <Input
+                      id="addressLatitude"
+                      type="number"
+                      step="any"
+                      placeholder="12.971599"
+                      value={formData.addressLatitude}
+                      onChange={(e) => handleManualCoordChange('addressLatitude', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="addressLongitude" className="text-xs">Longitude</Label>
+                    <Input
+                      id="addressLongitude"
+                      type="number"
+                      step="any"
+                      placeholder="77.594566"
+                      value={formData.addressLongitude}
+                      onChange={(e) => handleManualCoordChange('addressLongitude', e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {showMap && (
+                <MapPinPicker
+                  latitude={formData.addressLatitude ? Number(formData.addressLatitude) : undefined}
+                  longitude={formData.addressLongitude ? Number(formData.addressLongitude) : undefined}
+                  radiusMeters={Number(formData.addressRadiusMeters) || 100}
+                  onChange={handleMapPinChange}
+                />
+              )}
+
+              {pinError && <p className="text-xs text-red-600">{pinError}</p>}
             </div>
 
             {/* Verification Method */}
