@@ -82,6 +82,23 @@ const buildGapEntries = (employments: Employment[]): GapDetailEntry[] => {
   return entries;
 };
 
+const getEnabledSteps = (formConfig?: BGVFormConfig) =>
+  ALL_STEPS.filter(step => {
+    if (step.alwaysEnabled) return true;
+    const key = step.configKey as keyof NonNullable<BGVFormConfig['steps']>;
+    return formConfig?.steps?.[key] !== false;
+  }).map((step, i) => ({ ...step, id: i + 1 }));
+
+// Opening the camera or gallery backgrounds the browser, and low-memory
+// Android phones discard the tab — it reloads from scratch on return. The
+// step is kept per-tab so that reload lands back where the candidate was
+// instead of on page 1 (reported by many candidates as "redirected to the
+// first page while uploading pictures").
+const stepStorageKey = (token?: string) => `bgv-step:${token}`;
+const readSavedStep = (token?: string): string | null => {
+  try { return sessionStorage.getItem(stepStorageKey(token)); } catch { return null; }
+};
+
 const DocumentCollectionPage = () => {
   const { token } = useParams<{ token: string }>();
   const [currentStep, setCurrentStep] = useState(1);
@@ -100,14 +117,7 @@ const DocumentCollectionPage = () => {
   // can see which earlier step needs attention instead of a blank page.
   const [errorSummary, setErrorSummary] = useState<string[]>([]);
 
-  const enabledSteps = useMemo(() => {
-    const steps = formConfig?.steps;
-    return ALL_STEPS.filter(step => {
-      if (step.alwaysEnabled) return true;
-      const key = step.configKey as keyof NonNullable<BGVFormConfig['steps']>;
-      return steps?.[key] !== false;
-    }).map((step, i) => ({ ...step, id: i + 1 }));
-  }, [formConfig]);
+  const enabledSteps = useMemo(() => getEnabledSteps(formConfig), [formConfig]);
 
   const stepperSteps: Step[] = useMemo(() =>
     enabledSteps.map(s => ({ id: s.id, title: s.title, description: s.description })),
@@ -144,6 +154,9 @@ const DocumentCollectionPage = () => {
   // Upload status tracking per document type
   const [uploadStatus, setUploadStatus] = useState<Record<string, 'idle' | 'uploading' | 'success' | 'error'>>({});
   const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
+  // docType -> file name already stored on the server. Restored on load so a
+  // reload does not make finished uploads look missing and block Submit.
+  const [serverDocNames, setServerDocNames] = useState<Record<string, string>>({});
 
   const enabledDocTypes = useMemo(() => {
     const docTypes = formConfig?.documentTypes;
@@ -179,6 +192,14 @@ const DocumentCollectionPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  useEffect(() => {
+    if (loading || !currentStepConfig) return;
+    try {
+      if (submitted) sessionStorage.removeItem(stepStorageKey(token));
+      else sessionStorage.setItem(stepStorageKey(token), currentStepConfig);
+    } catch { /* storage unavailable (private mode) — reload just starts at page 1 */ }
+  }, [loading, submitted, currentStepConfig, token]);
+
   // Sync gap entries whenever employment count or company names change
   useEffect(() => {
     setFormData(prev => {
@@ -213,6 +234,19 @@ const DocumentCollectionPage = () => {
       if (response.success && response.data) {
         setCaseData(response.data);
         setFormConfig(response.data.formConfig);
+
+        const onServer: Record<string, string> = {};
+        for (const group of [response.data.documents, response.data.customDocuments]) {
+          for (const [key, doc] of Object.entries<any>(group || {})) {
+            if (doc?.s3Key) onServer[key] = doc.docName || 'Uploaded';
+          }
+        }
+        setServerDocNames(onServer);
+        setUploadStatus(Object.fromEntries(Object.keys(onServer).map(k => [k, 'success' as const])));
+
+        const savedStep = readSavedStep(token);
+        const savedIndex = getEnabledSteps(response.data.formConfig).findIndex(s => s.configKey === savedStep);
+        if (savedIndex > 0) setCurrentStep(savedIndex + 1);
         // Restore form data with deep merge to preserve pre-initialized defaults for empty arrays
         setFormData(prev => {
           const serverData = response.data.formData;
@@ -1117,9 +1151,9 @@ const DocumentCollectionPage = () => {
                               <Loader2 className="w-3 h-3 animate-spin" /> Uploading...
                             </p>
                           )}
-                          {status === 'success' && documents[key] && (
+                          {status === 'success' && (documents[key] || serverDocNames[key]) && (
                             <p className="text-xs text-green-700 font-medium mt-2 flex items-center gap-1">
-                              <CheckCircle className="w-3 h-3" /> {documents[key]!.name}
+                              <CheckCircle className="w-3 h-3" /> {documents[key]?.name || serverDocNames[key]}
                             </p>
                           )}
                           {status === 'error' && errorMsg && (
@@ -1172,9 +1206,9 @@ const DocumentCollectionPage = () => {
                                         <Loader2 className="w-3 h-3 animate-spin" /> Uploading...
                                       </p>
                                     )}
-                                    {status === 'success' && documents[sd.key] && (
+                                    {status === 'success' && (documents[sd.key] || serverDocNames[sd.key]) && (
                                       <p className="text-xs text-green-700 font-medium mt-1 flex items-center gap-1">
-                                        <CheckCircle className="w-3 h-3" /> {documents[sd.key]!.name}
+                                        <CheckCircle className="w-3 h-3" /> {documents[sd.key]?.name || serverDocNames[sd.key]}
                                       </p>
                                     )}
                                     {status === 'error' && errorMsg && (
