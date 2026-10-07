@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { evaluateProximity, AddressLocation } from '@/lib/geoProximity';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -87,6 +87,12 @@ const AddressVerificationPage = () => {
     signature: null as File | null,
     selfie: null as File | null,
   });
+  // docType -> the exact File already accepted by the server, so a retry after
+  // a failed submit skips it instead of re-uploading all six.
+  const uploadedRef = useRef<Record<string, File>>({});
+  // field -> the most recent selection, so a slow read of an earlier pick
+  // cannot overwrite a newer one.
+  const latestPickRef = useRef<Record<string, File | null>>({});
 
   useEffect(() => {
     if (token) {
@@ -304,7 +310,9 @@ const AddressVerificationPage = () => {
   // Deliberately generous (15 min) so a slow form fill is never penalised.
   const STALE_PHOTO_MS = 15 * 60 * 1000;
 
-  const handleFileChange = (field: keyof typeof documents, file: File | null) => {
+  const handleFileChange = async (field: keyof typeof documents, file: File | null) => {
+    latestPickRef.current[field] = file;
+
     // Reject too-large files at selection time. Without this the file is
     // accepted with a green tick and only fails at submit, after the agent has
     // filled in the whole form.
@@ -333,12 +341,34 @@ const AddressVerificationPage = () => {
       }
     }
 
+    // Copy the bytes into memory NOW. On Android a picked file is a content://
+    // grant that is revoked once the browser is backgrounded — which every
+    // camera field after this one does — and Drive/WhatsApp files can vanish.
+    // The file was then unreadable at submit, fetch() rejected, and the agent
+    // was told to "check your internet connection" on every retry, forever.
+    let snapshot = file;
+    if (file) {
+      try {
+        const bytes = await file.arrayBuffer();
+        snapshot = new File([bytes], file.name, { type: file.type, lastModified: file.lastModified });
+      } catch {
+        if (latestPickRef.current[field] !== file) return;
+        setFileErrors(prev => ({
+          ...prev,
+          [field]: 'This file could not be read from your phone. If it is in Google Drive, WhatsApp or another app, save it to your phone first, then choose it again.'
+        }));
+        setDocuments(prev => ({ ...prev, [field]: null }));
+        return;
+      }
+      if (latestPickRef.current[field] !== file) return;
+    }
+
     setFileErrors(prev => {
       const next = { ...prev };
       delete next[field as string];
       return next;
     });
-    setDocuments(prev => ({ ...prev, [field]: file }));
+    setDocuments(prev => ({ ...prev, [field]: snapshot }));
   };
 
   // Real-time validation for Step 1
@@ -442,9 +472,11 @@ const AddressVerificationPage = () => {
 
       for (let i = 0; i < uploads.length; i++) {
         const { file, docType, label } = uploads[i];
+        if (uploadedRef.current[docType] === file) continue;
         setUploadProgress(`Uploading ${label} (${i + 1} of ${uploads.length})…`);
         try {
           await apiService.uploadVerificationDocument(token!, file, docType);
+          uploadedRef.current[docType] = file;
         } catch (uploadError: any) {
           throw new Error(`${label}: ${uploadError.message || 'upload failed'}`);
         }

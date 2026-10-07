@@ -259,9 +259,17 @@ function hasImplausibleVowelRatio(word: string): boolean {
  * Ramayya, Subbayya, Sayyad, Ayyub — and counting it as a vowel made every one
  * of them look like a four-vowel run. Collapse "yy" to a consonant marker
  * before the run and ratio checks so those names read normally.
+ *
+ * A single y between two different vowels is a glide consonant too —
+ * Vaiyapuri, Kaiyum, Saiyed, Raiyan, Bhuiyan — and "aiya" was being rejected
+ * as a four-vowel run, blocking a live candidate's father's name. A y between
+ * the SAME vowel ("eeye" in "rheeye5") is left alone so mashing is still caught.
  */
 function foldConsonantalY(letters: string): string {
-  return letters.replace(/yy/g, 'j');
+  return letters
+    .replace(/yy/g, 'j')
+    .replace(/([aeiou])y(?=[aeiou])/g, (m, before, offset, all) =>
+      before === all[offset + 2] ? m : `${before}j`);
 }
 
 /**
