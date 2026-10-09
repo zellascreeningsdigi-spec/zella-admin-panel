@@ -55,7 +55,7 @@ export const FieldError: React.FC<{ message?: string }> = ({ message }) =>
   ) : null;
 
 const RequiredMark: React.FC<{ field: TemplateField }> = ({ field }) =>
-  field.required || field.displayRequired ? <span className="text-red-500">*</span> : null;
+  (field.required || field.displayRequired) && !field.hideRequiredMark ? <span className="text-red-500">*</span> : null;
 
 const FieldInput: React.FC<FieldInputProps> = ({
   field, domId, value, onChange, onBlur, error, upload, compact, disabled,

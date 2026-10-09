@@ -852,7 +852,7 @@ const WIDTHS = new Set(['full', 'half', 'third']);
 
 const FIELD_PROPS = [
   'id', 'path', 'type', 'label', 'placeholder', 'helpText', 'reportLabel', 'required',
-  'requiredFrom', 'requiredMessage', 'displayRequired', 'clientOnly', 'hidden', 'builtIn', 'locked',
+  'requiredFrom', 'requiredMessage', 'displayRequired', 'hideRequiredMark', 'clientOnly', 'hidden', 'builtIn', 'locked',
   'width', 'options', 'validations', 'showIf', 'defaultValue', 'widget', 'itemLabel',
   'addLabel', 'emptyText', 'minItems', 'maxItems', 'initialItems', 'minFilled',
   'minFilledMessage', 'skipBlankRows', 'itemFields'

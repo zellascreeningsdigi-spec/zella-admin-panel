@@ -17,6 +17,7 @@ import VendorsTab from '@/components/Vendors/VendorsTab';
 import VendorCasesTab from '@/components/Vendors/VendorCasesTab';
 import VendorTeamTab from '@/components/Vendors/VendorTeamTab';
 import VendorAnalyticsTab from '@/components/Vendors/VendorAnalyticsTab';
+import TrackerTab from '@/components/Tracker/TrackerTab';
 
 const Dashboard: React.FC = () => {
   const { user, loading } = useAuth();
@@ -80,6 +81,8 @@ const Dashboard: React.FC = () => {
         );
       case 'document-scanner':
         return <DocumentScannerTab />;
+      case 'tracker':
+        return <TrackerTab />;
       case 'reports':
         return <ReportsTab />;
       case 'audit-logs':

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, FileText, Home, Users, BarChart3, UserCog, MapPin, FileCheck, ShieldCheck, ScanLine, Store, ClipboardList, UsersRound } from 'lucide-react';
+import { LogOut, FileText, Home, Users, BarChart3, UserCog, MapPin, FileCheck, ShieldCheck, ScanLine, Store, ClipboardList, UsersRound, Table2 } from 'lucide-react';
 import logo from "../../logo192.png";
 
 interface SidebarProps {
@@ -22,6 +22,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, open = false,
     { id: 'vendor-address-verification', label: 'Vendor Address Verification', icon: MapPin, roles: ['super-admin', 'admin'] },
     { id: 'document-collection', label: 'Documents Collection', icon: FileCheck, roles: ['super-admin', 'admin'] },
     { id: 'document-scanner', label: 'Document Scanner', icon: ScanLine, roles: ['super-admin', 'admin'] },
+    { id: 'tracker', label: 'BGV Tracker', icon: Table2, roles: ['super-admin', 'admin', 'operator', 'viewer', 'customer'] },
     { id: 'reports', label: 'Reports', icon: BarChart3, roles: ['super-admin', 'admin', 'customer'] },
     { id: 'vendors', label: 'Vendors', icon: Store, roles: ['super-admin'] },
     { id: 'vendor-analytics', label: 'Vendor Analytics', icon: BarChart3, roles: ['super-admin'] },

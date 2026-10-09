@@ -454,6 +454,110 @@ class ApiService {
     return this.delete(`/bgv-groups/${groupId}`);
   }
 
+  // ===== BGV tracker =====
+  // See Zella-Screenings-backend/routes/tracker.js. Company logins get only
+  // their own cases (read-only) from the same endpoints.
+
+  private trackerQuery(params: Record<string, any> = {}): string {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) continue;
+      q.set(k, Array.isArray(v) ? v.join(',') : String(v));
+    }
+    const s = q.toString();
+    return s ? `?${s}` : '';
+  }
+
+  async getTrackerMeta(): Promise<ApiResponse<any>> {
+    return this.get('/tracker/meta');
+  }
+
+  async getTrackerCases(params: Record<string, any>): Promise<ApiResponse<any>> {
+    return this.get(`/tracker/cases${this.trackerQuery(params)}`);
+  }
+
+  async getTrackerCase(id: string): Promise<ApiResponse<any>> {
+    return this.get(`/tracker/cases/${id}`);
+  }
+
+  async createTrackerCase(data: any): Promise<ApiResponse<any>> {
+    return this.post('/tracker/cases', data);
+  }
+
+  async updateTrackerCase(id: string, data: any): Promise<ApiResponse<any>> {
+    return this.put(`/tracker/cases/${id}`, data);
+  }
+
+  async deleteTrackerCase(id: string): Promise<ApiResponse<any>> {
+    return this.delete(`/tracker/cases/${id}`);
+  }
+
+  async restoreTrackerCase(id: string): Promise<ApiResponse<any>> {
+    return this.post(`/tracker/cases/${id}/restore`);
+  }
+
+  async bulkTrackerCases(payload: { ids: string[]; action: 'update' | 'delete'; values?: any }): Promise<ApiResponse<any>> {
+    return this.post('/tracker/cases/bulk', payload);
+  }
+
+  async getTrackerAnalytics(params: Record<string, any>): Promise<ApiResponse<any>> {
+    return this.get(`/tracker/analytics${this.trackerQuery(params)}`);
+  }
+
+  /** Add a company from the tracker. Creates no logins (those are created when the company is emailed from Datahub). */
+  async createTrackerCompany(data: { companyName: string; emails: string[] }): Promise<ApiResponse<any>> {
+    return this.post('/tracker/companies', data);
+  }
+
+  async saveTrackerSettings(customerId: string, data: { trackerTatDays?: number; trackerVisibleFields?: string[] }): Promise<ApiResponse<any>> {
+    return this.put(`/tracker/settings/${customerId}`, data);
+  }
+
+  /** Download the Excel export for the given filters. */
+  async downloadTrackerExport(params: Record<string, any>): Promise<void> {
+    const token = this.getAuthToken();
+    const res = await fetch(`${API_BASE_URL}/tracker/export${this.trackerQuery(params)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.message || `Export failed (${res.status})`);
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const name = disposition.match(/filename="([^"]+)"/)?.[1] || 'BGV_Tracker.xlsx';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  async trackerImportAnalyze(file: File): Promise<ApiResponse<any>> {
+    const token = this.getAuthToken();
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API_BASE_URL}/tracker/import/analyze`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(body?.message || `Upload failed (${res.status})`);
+    return body;
+  }
+
+  async trackerImportPreview(payload: { token: string; sheets: any[] }): Promise<ApiResponse<any>> {
+    return this.post('/tracker/import/preview', payload);
+  }
+
+  async trackerImportApply(payload: { token: string; sheets: any[] }): Promise<ApiResponse<any>> {
+    return this.post('/tracker/import/apply', payload);
+  }
+
   // ===== BGV form builder =====
   // A company or group form is a template; every save writes a new immutable
   // version. See Zella-Screenings-backend/routes/bgvFormTemplates.js.
