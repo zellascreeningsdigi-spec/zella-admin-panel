@@ -89,7 +89,12 @@ class ApiService {
           throw new Error(data.message || 'Agreement not signed');
         }
 
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+        // Keep the body: some endpoints return a list of problems (e.g. the
+        // form builder's `errors`) that the caller needs to show.
+        const httpError = new Error(data.message || `HTTP error! status: ${response.status}`) as Error & { data?: any; status?: number };
+        httpError.data = data;
+        httpError.status = response.status;
+        throw httpError;
       }
 
       return data;
@@ -423,6 +428,8 @@ class ApiService {
     name: string;
     description?: string;
     config?: any;
+    /** 'inherit': the group uses the company form until its own is edited. */
+    formTemplateMode?: 'inherit';
   }): Promise<ApiResponse<any>> {
     return this.post('/bgv-groups', payload);
   }
@@ -445,6 +452,51 @@ class ApiService {
 
   async deleteBgvGroup(groupId: string): Promise<ApiResponse<any>> {
     return this.delete(`/bgv-groups/${groupId}`);
+  }
+
+  // ===== BGV form builder =====
+  // A company or group form is a template; every save writes a new immutable
+  // version. See Zella-Screenings-backend/routes/bgvFormTemplates.js.
+
+  async getBgvFormTemplate(ownerType: 'company' | 'group', ownerId: string): Promise<ApiResponse<any>> {
+    return this.get(`/bgv-form-templates/${ownerType}/${ownerId}`);
+  }
+
+  async getBgvFormTemplateVersion(versionId: string): Promise<ApiResponse<any>> {
+    return this.get(`/bgv-form-templates/versions/${versionId}`);
+  }
+
+  async getBgvFormTemplateImpact(ownerType: 'company' | 'group', ownerId: string, definition: any): Promise<ApiResponse<any>> {
+    return this.post(`/bgv-form-templates/${ownerType}/${ownerId}/impact`, { definition });
+  }
+
+  async saveBgvFormTemplate(ownerType: 'company' | 'group', ownerId: string, payload: {
+    definition: any;
+    note?: string;
+    applyToNotStarted?: boolean;
+    reissueStarted?: boolean;
+    batchId?: string;
+    restoredFrom?: string;
+  }): Promise<ApiResponse<any>> {
+    return this.post(`/bgv-form-templates/${ownerType}/${ownerId}`, payload);
+  }
+
+  async setBgvGroupFormMode(groupId: string, mode: 'inherit' | 'custom'): Promise<ApiResponse<any>> {
+    return this.put(`/bgv-form-templates/group/${groupId}/mode`, { mode });
+  }
+
+  /**
+   * Archive progress, expire the current link and email a new one on the
+   * latest form. Unlike send-link, this always issues a new token.
+   * `batchId` must be generated once per click so a duplicated request is a no-op.
+   */
+  async reissueDocumentCollectionLinks(payload: {
+    ids?: string[];
+    customerId?: string;
+    bgvGroupId?: string;
+    batchId: string;
+  }): Promise<ApiResponse<any>> {
+    return this.post('/document-collections/reissue-links', payload);
   }
 
   async deleteCustomer(customerId: string): Promise<ApiResponse<{

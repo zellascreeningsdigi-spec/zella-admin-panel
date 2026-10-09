@@ -119,6 +119,7 @@ export interface GeneratedDocx {
 }
 
 import type { BGVFormConfig } from './customer';
+import type { FormTemplate, OrphanedAnswer } from '@/lib/bgvForm/types';
 
 export interface DocumentCollection {
   _id?: string;
@@ -134,6 +135,13 @@ export interface DocumentCollection {
    *  the bare id, so consumers must handle both shapes. */
   bgvGroupId?: string | { _id: string; name: string } | null;
   formConfig?: BGVFormConfig;
+  /** Form builder: the template this candidate sees (or submitted against).
+   *  Returned by the detail endpoint only. */
+  formTemplate?: FormTemplate;
+  formTemplateVersion?: number | null;
+  /** Stored answers whose fields are no longer on the form (detail endpoint). */
+  orphanedAnswers?: OrphanedAnswer[];
+  archivedProgress?: { archivedAt: string; reason: string }[];
   status: 'pending' | 'approved' | 'rejected';
   verificationStatus: 'not_initiated' | 'link_sent' | 'in_progress' | 'completed' | 'expired';
   verificationLink?: string;

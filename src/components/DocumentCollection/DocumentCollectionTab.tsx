@@ -10,7 +10,7 @@ import CompanyListTable from './CompanyListTable';
 import AddDocumentCollectionDialog from './AddDocumentCollectionDialog';
 import BulkUploadDialog from './BulkUploadDialog';
 import DocumentCollectionFilters from './DocumentCollectionFilters';
-import BGVFormConfigEditor from './BGVFormConfigEditor';
+import BgvFormCard from '@/components/BgvFormBuilder/BgvFormCard';
 import BGVGroupManager from './BGVGroupManager';
 
 interface DocumentCollectionTabProps {
@@ -395,7 +395,7 @@ const DocumentCollectionTab = ({
 
       {renderStats()}
 
-      <BGVFormConfigEditor
+      <BgvFormCard
         customerId={selectedCompany.customerId}
         companyName={selectedCompany.companyName}
       />
@@ -415,6 +415,7 @@ const DocumentCollectionTab = ({
         onEdit={handleEdit}
         onDelete={handleDelete}
         onSendLink={handleSendLink}
+        onReissued={fetchCollections}
         loading={loading}
         selectedCompanyId={selectedCompany.customerId}
         selectedCompanyName={selectedCompany.companyName}

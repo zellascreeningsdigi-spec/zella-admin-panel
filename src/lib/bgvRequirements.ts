@@ -1,4 +1,5 @@
 import { BGVFormConfig } from '@/types/customer';
+import { FormTemplate, buildRequirementListFromTemplate } from '@/lib/bgvForm/types';
 
 // Labels must match BGVFormConfigEditor and the backend's documentCollectionService
 // so the message reads the same as the form the candidate actually sees.
@@ -28,13 +29,18 @@ const isEnabled = (value?: boolean) => value !== false;
  * Build the "You will need to provide" checklist from the checks selected for
  * this candidate. Returns the numbered sections and the enabled document labels.
  */
-export function buildRequirementList(formConfig?: BGVFormConfig): {
+export function buildRequirementList(formConfig?: BGVFormConfig | FormTemplate): {
   items: string[];
   documents: string[];
 } {
-  const steps = (formConfig?.steps ?? {}) as Partial<BGVFormConfig['steps']>;
-  const documentTypes = (formConfig?.documentTypes ?? {}) as Partial<BGVFormConfig['documentTypes']>;
-  const customDocumentTypes = formConfig?.customDocumentTypes ?? [];
+  // A form-builder template carries its own step and document names.
+  if (formConfig && Array.isArray((formConfig as FormTemplate).steps)) {
+    return buildRequirementListFromTemplate(formConfig as FormTemplate);
+  }
+  const legacy = formConfig as BGVFormConfig | undefined;
+  const steps = (legacy?.steps ?? {}) as Partial<BGVFormConfig['steps']>;
+  const documentTypes = (legacy?.documentTypes ?? {}) as Partial<BGVFormConfig['documentTypes']>;
+  const customDocumentTypes = legacy?.customDocumentTypes ?? [];
 
   // Personal info and the Letter of Authorization are always collected.
   const items: string[] = ['Personal Information & Address History'];

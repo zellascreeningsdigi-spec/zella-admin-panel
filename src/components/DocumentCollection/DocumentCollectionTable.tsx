@@ -8,7 +8,7 @@ import {
   flexRender,
   ColumnDef,
 } from '@tanstack/react-table';
-import { Edit, Trash2, Send, Eye, MessageCircle, Download, FileText } from 'lucide-react';
+import { Edit, Trash2, Send, Eye, MessageCircle, Download, FileText, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -27,6 +27,8 @@ interface DocumentCollectionTableProps {
   onEdit: (collection: DocumentCollection) => void;
   onDelete: (id: string) => void;
   onSendLink: (collection: DocumentCollection) => void;
+  /** Called after a link was reissued, so the list can refresh. */
+  onReissued?: () => void;
   loading: boolean;
   selectedCompanyId?: string;
   selectedCompanyName?: string;
@@ -41,6 +43,7 @@ const DocumentCollectionTable = ({
   onEdit,
   onDelete,
   onSendLink,
+  onReissued,
   loading,
   selectedCompanyId,
   selectedCompanyName,
@@ -87,6 +90,27 @@ SECURE | AUTHENTICATE`;
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
     window.open(whatsappUrl, '_blank');
   }, []);
+
+  // New link on the latest form: archives progress, expires the old link.
+  const handleReissue = useCallback(async (collection: DocumentCollection) => {
+    if (!collection._id) return;
+    if (!window.confirm(
+      `Send ${collection.name} a new link on the latest form?\n\n` +
+      'Their current link will stop working and they will fill the form from the beginning. ' +
+      'Anything they entered so far is archived, not deleted.'
+    )) return;
+    try {
+      const batchId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const response = await apiService.reissueDocumentCollectionLinks({ ids: [collection._id], batchId });
+      const r = response.data || {};
+      if (r.reissued) alert(r.emailFailures?.length ? 'New link created, but the email failed. Use Send Link to email it.' : 'New link sent.');
+      else if (r.skippedRecentlySent) alert('A link was sent to this candidate moments ago. Try again in a minute.');
+      else alert('No new link was sent (the candidate may have already submitted).');
+      onReissued?.();
+    } catch (error: any) {
+      alert(error.message || 'Failed to send a new link');
+    }
+  }, [onReissued]);
 
   const handleDownloadDocx = useCallback(async (collection: DocumentCollection) => {
     if (!collection._id) return;
@@ -248,6 +272,17 @@ SECURE | AUTHENTICATE`;
             >
               <Send className="w-4 h-4" />
             </Button>
+            {['link_sent', 'in_progress', 'expired'].includes(row.original.verificationStatus) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleReissue(row.original)}
+                title="New link on latest form (expires the current link)"
+                className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            )}
             {row.original.verificationLink && (
               <Button
                 variant="ghost"
@@ -282,7 +317,7 @@ SECURE | AUTHENTICATE`;
         ),
       },
     ],
-    [onEdit, onDelete, onSendLink, navigate, handleSendWhatsApp, handleDownloadDocx, selectedCompanyId, selectedCompanyName]
+    [onEdit, onDelete, onSendLink, navigate, handleSendWhatsApp, handleReissue, handleDownloadDocx, selectedCompanyId, selectedCompanyName]
   );
 
   const _pageSize = pageSize ?? 10;
