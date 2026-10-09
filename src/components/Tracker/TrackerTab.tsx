@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { BarChart3, CheckCircle2, Download, FileSpreadsheet, List, Loader2, Plus, Settings2, Trash2, X } from 'lucide-react';
+import { BarChart3, CheckCircle2, Download, FileSpreadsheet, FilePen, List, Loader2, Plus, Settings2, Trash2, X } from 'lucide-react';
 import { apiService } from '@/services/api';
 import TrackerFilterBar from './TrackerFilterBar';
 import TrackerTable from './TrackerTable';
@@ -24,7 +24,9 @@ const loadFilters = (): TrackerFilters => {
 const TrackerTab: React.FC = () => {
   const [meta, setMeta] = useState<TrackerMeta | null>(null);
   const [metaError, setMetaError] = useState<string | null>(null);
-  const [view, setView] = useState<'cases' | 'analytics'>('cases');
+  const [view, setView] = useState<'cases' | 'drafts' | 'analytics'>('cases');
+  const [draftCount, setDraftCount] = useState(0);
+  const [mineOnly, setMineOnly] = useState(false);
   const [filters, setFilters] = useState<TrackerFilters>(loadFilters);
   const [rows, setRows] = useState<TrackerCase[]>([]);
   const [total, setTotal] = useState(0);
@@ -69,7 +71,8 @@ const TrackerTab: React.FC = () => {
     if (!meta) return;
     setLoading(true);
     try {
-      const r = await apiService.getTrackerCases({ ...toParams(filters), page, limit, sortBy, sortDir });
+      const drafts = view === 'drafts' ? { draft: 'only', mine: mineOnly ? 'true' : undefined } : {};
+      const r = await apiService.getTrackerCases({ ...toParams(filters), ...drafts, page, limit, sortBy: view === 'drafts' ? 'updatedAt' : sortBy, sortDir: view === 'drafts' ? 'desc' : sortDir });
       setRows(r.data.rows);
       setTotal(r.data.total);
     } catch (e: any) {
@@ -77,7 +80,16 @@ const TrackerTab: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [meta, filters, page, limit, sortBy, sortDir]);
+  }, [meta, filters, page, limit, sortBy, sortDir, view, mineOnly]);
+
+  const loadDraftCount = useCallback(async () => {
+    if (!meta || !meta.canEdit) return;
+    try {
+      const r = await apiService.getTrackerCases({ draft: 'only', limit: 1 });
+      setDraftCount(r.data.total);
+    } catch { /* the count is a convenience */ }
+  }, [meta]);
+  useEffect(() => { loadDraftCount(); }, [loadDraftCount]);
 
   const loadAnalytics = useCallback(async () => {
     if (!meta) return;
@@ -92,11 +104,11 @@ const TrackerTab: React.FC = () => {
     }
   }, [meta, filters]);
 
-  useEffect(() => { if (view === 'cases') loadCases(); }, [view, loadCases]);
+  useEffect(() => { if (view === 'cases' || view === 'drafts') loadCases(); }, [view, loadCases]);
   useEffect(() => { if (view === 'analytics') loadAnalytics(); }, [view, loadAnalytics]);
 
   const changeFilters = (f: TrackerFilters) => { setFilters(f); setPage(1); setSelected([]); };
-  const refreshAll = () => { loadCases(); loadMeta(); if (view === 'analytics') loadAnalytics(); };
+  const refreshAll = () => { loadCases(); loadMeta(); loadDraftCount(); if (view === 'analytics') loadAnalytics(); };
 
   // ---- row actions ----
   const openCase = (c: TrackerCase) => { setFormInitial(null); setFormCaseId(c._id); setFormOpen(true); };
@@ -113,16 +125,18 @@ const TrackerTab: React.FC = () => {
   };
 
   const deleteCase = async (c: TrackerCase) => {
-    if (!window.confirm(`Remove the case of ${c.name}${c.bgvId ? ` (${c.bgvId})` : ''}?`)) return;
+    if (!window.confirm(c.isDraft ? `Remove this draft${c.name ? ` (${c.name})` : ''}?` : `Remove the case of ${c.name}${c.bgvId ? ` (${c.bgvId})` : ''}?`)) return;
     try {
       await apiService.deleteTrackerCase(c._id);
       setRows((list) => list.filter((x) => x._id !== c._id));
       setTotal((t) => t - 1);
-      flash(`Removed ${c.name}`, {
+      if (c.isDraft) setDraftCount((n) => Math.max(0, n - 1));
+      flash(`Removed ${c.name || 'draft'}`, {
         undo: async () => {
           await apiService.restoreTrackerCase(c._id);
           setNotice(null);
           loadCases();
+          loadDraftCount();
         },
       });
     } catch (e: any) {
@@ -158,7 +172,13 @@ const TrackerTab: React.FC = () => {
         <div className="flex flex-wrap gap-2">
           <div className="flex rounded-md border overflow-hidden">
             <button type="button" onClick={() => setView('cases')} className={`px-3 h-9 text-sm flex items-center gap-1 ${view === 'cases' ? 'bg-brand-green text-white' : 'bg-white text-gray-700'}`}><List className="w-4 h-4" /> Cases</button>
-            <button type="button" onClick={() => setView('analytics')} className={`px-3 h-9 text-sm flex items-center gap-1 ${view === 'analytics' ? 'bg-brand-green text-white' : 'bg-white text-gray-700'}`}><BarChart3 className="w-4 h-4" /> Analytics</button>
+            {meta.canEdit && (
+              <button type="button" onClick={() => { setView('drafts'); setPage(1); setSelected([]); }} className={`px-3 h-9 text-sm flex items-center gap-1 border-l ${view === 'drafts' ? 'bg-brand-green text-white' : 'bg-white text-gray-700'}`}>
+                <FilePen className="w-4 h-4" /> Drafts
+                {draftCount > 0 && <span className={`ml-0.5 text-[11px] px-1.5 rounded-full ${view === 'drafts' ? 'bg-white/25' : 'bg-amber-100 text-amber-800'}`}>{draftCount}</span>}
+              </button>
+            )}
+            <button type="button" onClick={() => setView('analytics')} className={`px-3 h-9 text-sm flex items-center gap-1 border-l ${view === 'analytics' ? 'bg-brand-green text-white' : 'bg-white text-gray-700'}`}><BarChart3 className="w-4 h-4" /> Analytics</button>
           </div>
           <Button type="button" variant="outline" onClick={() => setExportOpen(true)}><Download className="w-4 h-4 mr-1" /> Export</Button>
           {meta.canEdit && (
@@ -183,7 +203,16 @@ const TrackerTab: React.FC = () => {
 
       <TrackerFilterBar meta={meta} filters={filters} onChange={changeFilters} />
 
-      {view === 'cases' && meta.canEdit && selected.length > 0 && (
+      {view === 'drafts' && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-900">
+          <span>Drafts are half-filled cases saved for later. They are not in the case list, analytics or exports until added to the tracker.</span>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={mineOnly} onChange={(e) => { setMineOnly(e.target.checked); setPage(1); }} /> Only my drafts
+          </label>
+        </div>
+      )}
+
+      {(view === 'cases' || view === 'drafts') && meta.canEdit && selected.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-brand-green bg-brand-green-50 p-2 text-sm">
           <strong>{selected.length} selected</strong>
           <select value={bulk.status} onChange={(e) => setBulk({ ...bulk, status: e.target.value })} className="h-8 px-2 border border-gray-300 rounded text-sm bg-white">
@@ -204,7 +233,7 @@ const TrackerTab: React.FC = () => {
         </div>
       )}
 
-      {view === 'cases' ? (
+      {view !== 'analytics' ? (
         <TrackerTable
           meta={meta}
           rows={rows}
@@ -240,7 +269,10 @@ const TrackerTab: React.FC = () => {
         initial={formInitial}
         defaultCustomerId={filters.customerIds?.length === 1 ? filters.customerIds[0] : undefined}
         onClose={() => setFormOpen(false)}
-        onSaved={(c) => { flash(formCaseId ? `Saved ${c.name}` : `Added ${c.name}`); refreshAll(); }}
+        onSaved={(c) => {
+          flash(c.isDraft ? `Draft saved${c.name ? `: ${c.name}` : ''}` : formCaseId ? `Saved ${c.name}` : `Added ${c.name}`);
+          refreshAll();
+        }}
       />
       {meta.canEdit && <ImportDialog meta={meta} open={importOpen} onClose={() => setImportOpen(false)} onImported={refreshAll} />}
       <ExportDialog meta={meta} open={exportOpen} filters={filters} onClose={() => setExportOpen(false)} />

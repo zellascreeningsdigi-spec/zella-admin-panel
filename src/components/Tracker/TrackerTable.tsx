@@ -97,7 +97,7 @@ const TrackerTable: React.FC<TableProps> = (p) => {
   const allColumns: Column[] = useMemo(() => {
     const cols: Column[] = [];
     const add = (col: Column) => cols.push(col);
-    if (!meta.isClient) add({ key: 'companyName', label: 'Company', sortKey: 'companyName', render: (c) => <span className="whitespace-nowrap">{c.companyName}</span> });
+    if (!meta.isClient) add({ key: 'companyName', label: 'Company', sortKey: 'companyName', render: (c) => <span className="whitespace-nowrap">{c.companyName || <span className="text-gray-400 italic">Not chosen</span>}</span> });
     for (const f of meta.fields) {
       if (f.key === 'status') {
         add({
@@ -170,7 +170,14 @@ const TrackerTable: React.FC<TableProps> = (p) => {
           if (f.type === 'date') return <span className="whitespace-nowrap">{fmtDate(v)}</span>;
           if (f.type === 'month') return <span className="whitespace-nowrap">{fmtMonth(v)}</span>;
           if (f.type === 'longtext') return <p className="max-w-[260px] truncate text-xs" title={v}>{v}</p>;
-          if (f.key === 'name') return <span className="font-medium text-gray-900 whitespace-nowrap">{v}</span>;
+          if (f.key === 'name') {
+            return (
+              <span className="font-medium text-gray-900 whitespace-nowrap">
+                {v || <span className="text-gray-400 italic font-normal">No name yet</span>}
+                {c.isDraft && <span className="ml-1.5 text-[10px] font-semibold px-1 py-0.5 rounded bg-amber-100 text-amber-800 align-middle">DRAFT</span>}
+              </span>
+            );
+          }
           if (f.key === 'bgvId') return <span className="font-mono text-xs whitespace-nowrap">{v}</span>;
           return v ?? '';
         },

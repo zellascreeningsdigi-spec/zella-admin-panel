@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 import { apiService } from '@/services/api';
+import SearchPick from './SearchPick';
 import { TrackerMeta } from './trackerTypes';
 
 // Import cases from Excel: upload -> link tabs to companies -> preview -> import.
@@ -39,6 +40,7 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported }) => {
   const close = () => { if (!busy) { reset(); onClose(); } };
 
   const companies = meta.customers;
+  const companyOptions = useMemo(() => companies.map((co) => ({ value: co._id, label: co.companyName })), [companies]);
 
   const upload = async (file: File) => {
     setError(null); setBusy(true);
@@ -151,16 +153,16 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported }) => {
                     <span className="text-xs text-gray-500">{s.rowCount} cases{s.warnings ? ` · ${s.warnings} values to check` : ''}</span>
                     <div className="flex items-center gap-2 ml-auto">
                       <span className="text-xs text-gray-500">Company:</span>
-                      <select
+                      <SearchPick
+                        className="w-72"
                         disabled={!c.include}
                         value={c.target}
-                        onChange={(e) => setChoice(s.name, { target: e.target.value })}
-                        className={`h-8 px-2 border rounded-md text-sm bg-white max-w-[280px] ${c.include && !c.target ? 'border-red-400' : 'border-gray-300'}`}
-                      >
-                        <option value="">Choose…</option>
-                        {s.clients.filter((x: any) => x.name).length > 0 && <option value={BY_CLIENT}>Use the client name on each row</option>}
-                        {companies.map((co) => <option key={co._id} value={co._id}>{co.companyName}</option>)}
-                      </select>
+                        onChange={(v) => setChoice(s.name, { target: v })}
+                        placeholder="Choose a company…"
+                        warn={c.include && !c.target}
+                        pinned={s.clients.filter((x: any) => x.name).length > 0 ? [{ value: BY_CLIENT, label: 'Use the client name on each row' }] : []}
+                        options={companyOptions}
+                      />
                     </div>
                   </div>
 
@@ -169,14 +171,15 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported }) => {
                       {s.clients.filter((x: any) => x.name).map((cl: any) => (
                         <div key={cl.name} className="flex items-center gap-2 text-sm">
                           <span className="flex-1 truncate" title={cl.name}>{cl.name} <span className="text-xs text-gray-400">×{cl.count}</span></span>
-                          <select
+                          <SearchPick
+                            className="w-56 shrink-0"
+                            size="sm"
                             value={c.clientMap[cl.name] || ''}
-                            onChange={(e) => setChoice(s.name, { clientMap: { ...c.clientMap, [cl.name]: e.target.value } })}
-                            className={`h-7 px-1 border rounded text-xs bg-white w-48 ${c.clientMap[cl.name] ? 'border-gray-300' : 'border-amber-400'}`}
-                          >
-                            <option value="">Skip these rows</option>
-                            {companies.map((co) => <option key={co._id} value={co._id}>{co.companyName}</option>)}
-                          </select>
+                            onChange={(v) => setChoice(s.name, { clientMap: { ...c.clientMap, [cl.name]: v } })}
+                            warn={!c.clientMap[cl.name]}
+                            pinned={[{ value: '', label: 'Skip these rows' }]}
+                            options={companyOptions}
+                          />
                         </div>
                       ))}
                     </div>

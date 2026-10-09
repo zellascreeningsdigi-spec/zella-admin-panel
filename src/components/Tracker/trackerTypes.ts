@@ -33,6 +33,8 @@ export interface TrackerCase {
   insuffOpen?: boolean;
   insuffDays?: number | null;
   isOpen?: boolean;
+  isDraft?: boolean;
+  createdByName?: string;
   requiredChecks?: string;
   hasDiscrepancy?: boolean;
   history?: { at: string; byName?: string; action: string; changes: { field: string; from: any; to: any }[] }[];

@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { apiService } from '@/services/api';
+import SearchPick from './SearchPick';
 import { TrackerMeta } from './trackerTypes';
 
 // Per-company tracker settings: default TAT, and which fields that company's
@@ -67,9 +68,12 @@ const ClientViewDialog: React.FC<Props> = ({ meta, open, initialCustomerId, onCl
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="sm:col-span-2">
             <p className="text-xs text-gray-500 mb-1">Company</p>
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className="h-9 w-full px-2 border border-gray-300 rounded-md text-sm bg-white">
-              {meta.customers.map((c) => <option key={c._id} value={c._id}>{c.companyName}</option>)}
-            </select>
+            <SearchPick
+              value={customerId}
+              onChange={setCustomerId}
+              placeholder="Choose a company…"
+              options={meta.customers.map((c) => ({ value: c._id, label: c.companyName }))}
+            />
           </div>
           <div>
             <p className="text-xs text-gray-500 mb-1">Default TAT (days)</p>

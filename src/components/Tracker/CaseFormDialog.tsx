@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
 import { apiService } from '@/services/api';
+import SearchPick from './SearchPick';
 import {
   TrackerCase,
   TrackerCheck,
@@ -86,10 +87,19 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
     return out;
   }, [meta]);
 
-  const save = async () => {
+  const editingDraft = !!original?.isDraft;
+
+  /**
+   * mode: 'draft'   save as / keep as a draft (nothing required but one detail)
+   *       'publish' add to the tracker (company + name required)
+   *       'save'    save changes to a case already in the tracker
+   */
+  const save = async (mode: 'draft' | 'publish' | 'save') => {
     setError(null);
-    if (!form.customerId) { setError('Choose a company'); return; }
-    if (!String(form.name || '').trim()) { setError('Candidate name is required'); return; }
+    if (mode !== 'draft') {
+      if (!form.customerId) { setError('Choose a company'); return; }
+      if (!String(form.name || '').trim()) { setError('Candidate name is required'); return; }
+    }
     const payload: any = {};
     for (const f of meta.fields) {
       if (f.computed || f.key === 'billing') continue;
@@ -99,7 +109,9 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
     payload.billedMonth = form.billingStatus === 'Billed' ? (form.billedMonth || '') : '';
     payload.checks = (form.checks || []).map((c) => ({ type: c.type, status: c.status, variant: c.variant || '', note: c.note || '' }));
     payload.extras = form.extras || {};
-    payload.customerId = form.customerId;
+    payload.customerId = form.customerId || undefined;
+    if (mode === 'draft' && !caseId) payload.isDraft = true;
+    if (mode === 'publish') payload.isDraft = false;
     // A new start date / TAT moves the due date unless it was edited by hand.
     if (original) {
       const moved = toInputDate(form.startDate) !== toInputDate(original.startDate) || (form.tatDays ?? null) !== (original.tatDays ?? null);
@@ -180,7 +192,8 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
       <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {caseId ? (readOnly ? 'Case details' : 'Edit case') : 'Add case'}
+            {caseId ? (readOnly ? 'Case details' : editingDraft ? 'Draft case' : 'Edit case') : 'Add case'}
+            {editingDraft && <span className="ml-2 align-middle text-[11px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">DRAFT</span>}
             {original && <span className="ml-2 text-sm font-normal text-gray-500">{original.bgvId || ''} · {original.companyName}</span>}
           </DialogTitle>
         </DialogHeader>
@@ -189,7 +202,13 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
           <div className="py-10 text-center text-gray-500"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
         ) : (
           <div className="space-y-4">
-            {original && (
+            {editingDraft && (
+              <p className="text-xs text-amber-800 bg-amber-50 rounded-md p-2">
+                This case is a draft{original?.createdByName ? ` started by ${original.createdByName}` : ''}. It is not in the tracker,
+                analytics or exports yet. Fill in what you have and save, or add it to the tracker once the company and name are in.
+              </p>
+            )}
+            {original && !editingDraft && (
               <div className="flex flex-wrap gap-4 text-sm bg-gray-50 rounded-md p-3">
                 <span>Aging: <strong>{original.agingDays ?? '—'}{original.agingDays != null ? ' days' : ''}</strong></span>
                 {original.tatStatus && <span>TAT: <strong className={TAT_STYLE[original.tatStatus] || ''}>{original.tatStatus}</strong></span>}
@@ -211,10 +230,14 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
                 {!meta.isClient && (
                   <div className="max-w-md">
                     <Label className="text-xs text-gray-600">Company <span className="text-red-500">*</span></Label>
-                    <select disabled={readOnly} className="mt-1 h-9 w-full px-2 border border-gray-300 rounded-md text-sm bg-white" value={form.customerId || ''} onChange={(e) => set('customerId', e.target.value)}>
-                      <option value="">Choose a company…</option>
-                      {meta.customers.map((c) => <option key={c._id} value={c._id}>{c.companyName}</option>)}
-                    </select>
+                    <SearchPick
+                      className="mt-1"
+                      disabled={readOnly}
+                      value={form.customerId || ''}
+                      onChange={(v) => set('customerId', v)}
+                      placeholder="Choose a company…"
+                      options={meta.customers.map((c) => ({ value: c._id, label: c.companyName }))}
+                    />
                   </div>
                 )}
                 {meta.groups.filter((g) => fieldsByGroup[g.key]?.length).map((g) => (
@@ -333,7 +356,16 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
 
             <div className="flex justify-end gap-2 pt-2 border-t">
               <Button type="button" variant="outline" onClick={onClose} disabled={saving}>{readOnly ? 'Close' : 'Cancel'}</Button>
-              {!readOnly && <Button type="button" onClick={save} disabled={saving}>{saving ? 'Saving…' : caseId ? 'Save changes' : 'Add case'}</Button>}
+              {!readOnly && (!caseId || editingDraft) && (
+                <Button type="button" variant="outline" onClick={() => save('draft')} disabled={saving}>
+                  {saving ? 'Saving…' : editingDraft ? 'Save draft' : 'Save as draft'}
+                </Button>
+              )}
+              {!readOnly && (
+                <Button type="button" onClick={() => save(caseId && !editingDraft ? 'save' : 'publish')} disabled={saving}>
+                  {saving ? 'Saving…' : !caseId ? 'Add case' : editingDraft ? 'Add to tracker' : 'Save changes'}
+                </Button>
+              )}
             </div>
           </div>
         )}
