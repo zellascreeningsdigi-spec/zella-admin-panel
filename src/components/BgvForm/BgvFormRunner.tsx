@@ -266,7 +266,8 @@ const BgvFormRunner: React.FC<BgvFormRunnerProps> = ({
     return <p className="text-sm text-gray-500">This form has no steps.</p>;
   }
 
-  const stepperSteps: Step[] = steps.map((s, i) => ({ id: i + 1, title: s.title, description: s.description }));
+  // A non-breaking space keeps steps without a subtitle aligned with the rest.
+  const stepperSteps: Step[] = steps.map((s, i) => ({ id: i + 1, title: s.title, description: s.description || '\u00A0' }));
   const errorsShown = Object.fromEntries(Object.entries(fieldErrors).filter(([p]) => touched[p]));
 
   const nextButton = (
@@ -305,6 +306,8 @@ const BgvFormRunner: React.FC<BgvFormRunnerProps> = ({
               )}
 
               {(step.fields || []).length > 0 && (
+                // The authorization step sits in a grey panel, as it always has.
+                <div className={step.id === 'loa' ? 'bg-gray-50 p-4 sm:p-6 rounded-lg' : ''}>
                 <StepFields
                   template={template}
                   step={step}
@@ -315,6 +318,7 @@ const BgvFormRunner: React.FC<BgvFormRunnerProps> = ({
                   onBlurPath={revalidateField}
                   uploadFor={uploadFor}
                 />
+                </div>
               )}
 
               {step.type === 'documents' && (

@@ -111,7 +111,17 @@ const StepEditor: React.FC<StepEditorProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <Label className="text-xs text-gray-600">Step name (progress bar)</Label>
-          <Input className="mt-1 h-8 text-sm" maxLength={60} value={step.title} onChange={(e) => onStepChange({ title: e.target.value })} />
+          <Input
+            className="mt-1 h-8 text-sm"
+            maxLength={60}
+            value={step.title}
+            // The page heading follows the name until it has been set separately.
+            onChange={(e) => onStepChange(
+              !step.heading || step.heading === step.title
+                ? { title: e.target.value, heading: e.target.value }
+                : { title: e.target.value }
+            )}
+          />
         </div>
         <div>
           <Label className="text-xs text-gray-600">Subtitle (progress bar)</Label>
