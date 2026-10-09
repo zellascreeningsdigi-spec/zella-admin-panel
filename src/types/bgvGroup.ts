@@ -7,6 +7,12 @@ export interface BgvGroup {
   name: string;
   description?: string;
   config: BGVFormConfig;
+  /**
+   * Where the group's form comes from: 'inherit' = the company form,
+   * 'custom' = its own form-builder versions, null = classic settings
+   * (`config` above, from before the form builder).
+   */
+  formTemplateMode?: 'inherit' | 'custom' | null;
   isActive: boolean;
   createdBy?: string;
   createdAt?: string;

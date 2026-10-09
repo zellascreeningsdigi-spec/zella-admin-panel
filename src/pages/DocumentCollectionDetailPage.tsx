@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DocumentCollection } from '@/types/documentCollection';
 import apiService from '@/services/api';
+import { CustomAnswersCard, OrphanedAnswersCard } from '@/components/BgvForm/CustomAnswers';
+import { findStepVisible } from '@/components/BgvFormBuilder/builderUtils';
 
 const DocumentCollectionDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -104,6 +106,31 @@ const DocumentCollectionDetailPage = () => {
     }
   };
 
+  /**
+   * New link on the latest form: archives what the candidate entered, expires
+   * the old link and emails a new one. Unlike "Send Link", the old link stops
+   * working.
+   */
+  const handleReissue = async () => {
+    if (!id || !collection) return;
+    if (!window.confirm(
+      `Send ${collection.name} a new link on the latest form?\n\n` +
+      'Their current link will stop working and they will fill the form from the beginning. ' +
+      'Anything they entered so far is archived, not deleted.'
+    )) return;
+    try {
+      const batchId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const response = await apiService.reissueDocumentCollectionLinks({ ids: [id], batchId });
+      const r = response.data || {};
+      if (r.reissued) alert(r.emailFailures?.length ? 'New link created, but the email failed. Use Send Link to email it.' : 'New link sent.');
+      else if (r.skippedRecentlySent) alert('A link was sent to this candidate moments ago. Try again in a minute.');
+      else alert('No new link was sent (the candidate may have already submitted).');
+      fetchCollection();
+    } catch (error: any) {
+      alert(error.message || 'Failed to send a new link');
+    }
+  };
+
   const handleSendWhatsApp = () => {
     if (!collection) return;
     const verificationLink = collection.verificationLink || '';
@@ -187,6 +214,9 @@ const DocumentCollectionDetailPage = () => {
 
   const fd = collection.formData;
   const config = collection.formConfig;
+  const template = collection.formTemplate;
+  // With a template, sections follow the candidate's form; otherwise the old toggles.
+  const stepShown = (id: string) => (template ? findStepVisible(template, id) : (config?.steps as any)?.[id] !== false);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -238,6 +268,11 @@ const DocumentCollectionDetailPage = () => {
                     {collection.verificationLink && (
                       <Button onClick={handleSendWhatsApp} className="bg-green-600 hover:bg-green-700 text-white">
                         <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp
+                      </Button>
+                    )}
+                    {collection.verificationStatus !== 'not_initiated' && (
+                      <Button onClick={handleReissue} variant="outline" className="border-yellow-600 text-yellow-800 hover:bg-yellow-100" title="Expire the current link and email a new one on the latest form">
+                        <RefreshCw className="w-4 h-4 mr-2" /> New link on latest form
                       </Button>
                     )}
                   </div>
@@ -305,7 +340,7 @@ const DocumentCollectionDetailPage = () => {
                 </Card>
 
                 {/* Education */}
-                {config?.steps?.education !== false && (
+                {stepShown('education') && (
                 <Card>
                   <CardHeader className="bg-green-50 border-b border-green-200">
                     <CardTitle className="flex items-center gap-2"><GraduationCap className="w-5 h-5 text-green-600" /> Education</CardTitle>
@@ -325,7 +360,7 @@ const DocumentCollectionDetailPage = () => {
                 )}
 
                 {/* Employment History */}
-                {config?.steps?.employment !== false && fd.employmentHistory && fd.employmentHistory.length > 0 && (
+                {stepShown('employment') && fd.employmentHistory && fd.employmentHistory.length > 0 && (
                   <Card>
                     <CardHeader className="bg-purple-50 border-b border-purple-200">
                       <CardTitle className="flex items-center gap-2"><Briefcase className="w-5 h-5 text-purple-600" /> Employment History</CardTitle>
@@ -353,7 +388,7 @@ const DocumentCollectionDetailPage = () => {
                 )}
 
                 {/* References */}
-                {config?.steps?.references !== false && fd.references && fd.references.length > 0 && (
+                {stepShown('references') && fd.references && fd.references.length > 0 && (
                   <Card>
                     <CardHeader className="bg-orange-50 border-b border-orange-200">
                       <CardTitle className="flex items-center gap-2"><Users className="w-5 h-5 text-orange-600" /> References</CardTitle>
@@ -379,7 +414,7 @@ const DocumentCollectionDetailPage = () => {
                 )}
 
                 {/* Gap Details */}
-                {config?.steps?.gapDetails !== false && fd.gapDetails && Array.isArray(fd.gapDetails) && fd.gapDetails.length > 0 && (
+                {stepShown('gapDetails') && fd.gapDetails && Array.isArray(fd.gapDetails) && fd.gapDetails.length > 0 && (
                   <Card>
                     <CardHeader className="bg-yellow-50 border-b border-yellow-200">
                       <CardTitle className="flex items-center gap-2"><Clock className="w-5 h-5 text-yellow-600" /> Gap Details</CardTitle>
@@ -426,6 +461,8 @@ const DocumentCollectionDetailPage = () => {
                   </Card>
                 )}
 
+                {template && <CustomAnswersCard template={template} formData={fd as any} />}
+                <OrphanedAnswersCard answers={collection.orphanedAnswers} />
               </>
             )}
 

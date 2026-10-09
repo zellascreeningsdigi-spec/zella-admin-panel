@@ -1,93 +1,19 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { CheckCircle, ChevronRight, ChevronLeft, Mail, Phone, Plus, Trash2, Loader2, AlertCircle } from 'lucide-react';
-import { Stepper, Step } from '@/components/ui/stepper';
+import { CheckCircle, Mail, Phone, RefreshCw } from 'lucide-react';
 import { apiService } from '@/services/api';
-import type { BGVFormData, Employment, Reference, Address, GapDetailEntry } from '@/types/documentCollection';
-import type { BGVFormConfig } from '@/types/customer';
-import { validateBGVFormData } from '@/lib/bgvValidators';
+import BgvFormRunner, { SubmitResult } from '@/components/BgvForm/BgvFormRunner';
+import {
+  FormTemplate,
+  legacyTemplateFromFormConfig,
+  prepareForCandidate,
+} from '@/lib/bgvForm/types';
+import { FormValues, initialFormValues, mergeSavedProgress } from '@/lib/bgvForm/formState';
 
-const ALL_STEPS = [
-  { configKey: 'personalInfo', title: 'Personal Info', description: 'Basic Details', alwaysEnabled: true },
-  { configKey: 'education', title: 'Education', description: 'Academic Details' },
-  { configKey: 'employment', title: 'Employment', description: 'Work History' },
-  { configKey: 'references', title: 'References', description: 'Professional Refs' },
-  { configKey: 'gapDetails', title: 'Gap Details', description: 'Career Gaps' },
-  { configKey: 'loa', title: 'LOA', description: 'Authorization', alwaysEnabled: true },
-  { configKey: 'documents', title: 'Documents', description: 'Upload Files', alwaysEnabled: true },
-];
-
-const ALL_DOC_TYPES = [
-  { key: 'aadhaar', label: 'Aadhaar Card', required: true },
-  { key: 'pan', label: 'PAN Card', required: true },
-  { key: 'degreeMarksheet', label: 'Degree / Marksheet', required: true },
-  { key: 'addressProof', label: 'Address Proof', required: true },
-  { key: 'passport', label: 'Passport (if available)', required: true },
-  { key: 'passportDeclaration', label: 'Passport Declaration (if no passport)', required: true },
-  { key: 'cv', label: 'CV / Resume', required: true },
-  { key: 'signature', label: 'Signature', required: true },
-];
-
-const emptyEmployment: Employment = {
-  companyName: '', periodFrom: '', periodTo: '', designation: '', ctc: '',
-  employeeId: '', supervisorName: '', supervisorDesignation: '', supervisorContact: '',
-  supervisorEmail: '', hrName: '', hrContact: '', hrEmail: '',
-  reasonForLeaving: '', natureOfEmployment: '', typeOfEmployment: ''
-};
-
-const emptyReference: Reference = {
-  name: '', designation: '', organization: '', relationship: '', contact: '', email: ''
-};
-
-const emptyAddress: Address = { address: '', duration: '', addressType: '', durationYears: null, durationMonths: null };
-
-// Which field paths belong to which step, so Next only reports errors the
-// candidate can actually see and fix on the current screen.
-const STEP_ERROR_PREFIXES: Record<string, string[]> = {
-  personalInfo: ['personalInfo.'],
-  education: ['education.'],
-  employment: ['employmentHistory.'],
-  references: ['references.'],
-  gapDetails: ['gapDetails.'],
-};
-
-const buildGapEntries = (employments: Employment[]): GapDetailEntry[] => {
-  const entries: GapDetailEntry[] = [];
-  const count = employments.length;
-
-  if (count === 0) {
-    entries.push({ key: 'educationToCurrent', label: 'Gap between Education and Current', hasGap: '', duration: '', reason: '' });
-    return entries;
-  }
-
-  // Education to first employment
-  const emp1Name = employments[0].companyName || 'Employment 1';
-  entries.push({ key: 'educationToEmp1', label: `Gap between Education and ${emp1Name}`, hasGap: '', duration: '', reason: '' });
-
-  // Between each pair of employments
-  for (let i = 0; i < count - 1; i++) {
-    const fromName = employments[i].companyName || `Employment ${i + 1}`;
-    const toName = employments[i + 1].companyName || `Employment ${i + 2}`;
-    entries.push({ key: `emp${i + 1}ToEmp${i + 2}`, label: `Gap between ${fromName} and ${toName}`, hasGap: '', duration: '', reason: '' });
-  }
-
-  // Last employment to current
-  const lastEmpName = employments[count - 1].companyName || `Employment ${count}`;
-  entries.push({ key: `emp${count}ToCurrent`, label: `Gap between ${lastEmpName} and Current`, hasGap: '', duration: '', reason: '' });
-
-  return entries;
-};
-
-const getEnabledSteps = (formConfig?: BGVFormConfig) =>
-  ALL_STEPS.filter(step => {
-    if (step.alwaysEnabled) return true;
-    const key = step.configKey as keyof NonNullable<BGVFormConfig['steps']>;
-    return formConfig?.steps?.[key] !== false;
-  }).map((step, i) => ({ ...step, id: i + 1 }));
+// The candidate's BGV form. Everything about the form itself — steps, fields,
+// labels, validation, documents — comes from the template the server resolves
+// for this candidate (see Zella-Screenings-backend/services/bgvForm/).
 
 // Opening the camera or gallery backgrounds the browser, and low-memory
 // Android phones discard the tab — it reloads from scratch on return. The
@@ -99,566 +25,122 @@ const readSavedStep = (token?: string): string | null => {
   try { return sessionStorage.getItem(stepStorageKey(token)); } catch { return null; }
 };
 
+interface LoadedForm {
+  template: FormTemplate;
+  values: FormValues;
+  uploads: Record<string, string>;
+  companyName: string;
+}
+
+const PageShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-green-50 to-white">
+    {children}
+  </div>
+);
+
 const DocumentCollectionPage = () => {
   const { token } = useParams<{ token: string }>();
-  const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<{ title: string; message: string } | null>(null);
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState('');
-  const [caseData, setCaseData] = useState<any>(null);
-  const [formConfig, setFormConfig] = useState<BGVFormConfig | undefined>(undefined);
-  // field path -> message. Populated on a failed Next/Submit or on blur, so a
-  // candidate is not shown errors for fields they have not reached yet.
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [touched, setTouched] = useState<Record<string, boolean>>({});
-  // Step titles that currently hold errors, so a candidate on the final step
-  // can see which earlier step needs attention instead of a blank page.
-  const [errorSummary, setErrorSummary] = useState<string[]>([]);
-
-  const enabledSteps = useMemo(() => getEnabledSteps(formConfig), [formConfig]);
-
-  const stepperSteps: Step[] = useMemo(() =>
-    enabledSteps.map(s => ({ id: s.id, title: s.title, description: s.description })),
-    [enabledSteps]
-  );
-
-  const currentStepConfig = enabledSteps[currentStep - 1]?.configKey;
-
-  const [formData, setFormData] = useState<BGVFormData>({
-    personalInfo: {
-      fullName: '', dob: '', nationality: 'Indian', fathersName: '',
-      mobile: '', alternateNumber: '',
-      addresses: [{ ...emptyAddress }],
-      gender: '', email: '', aadhaarNumber: '', panNumber: ''
-    },
-    education: {
-      degree: '', enrollmentNo: '', yearOfPassing: '', universityName: '',
-      universityLocation: '', periodOfStudyFrom: '', periodOfStudyTo: '', courseType: ''
-    },
-    employmentHistory: [{ ...emptyEmployment }],
-    references: [{ ...emptyReference }],
-    gapDetails: buildGapEntries([{ ...emptyEmployment }]),
-    loa: {
-      authCheckbox1: false, authCheckbox2: false, authCheckbox3: false,
-      title: '', nameInCapitals: '', date: new Date().toISOString().split('T')[0]
-    }
-  });
-
-  const [documents, setDocuments] = useState<Record<string, File | null>>({
-    aadhaar: null, pan: null, degreeMarksheet: null, addressProof: null,
-    passport: null, passportDeclaration: null, cv: null, signature: null
-  });
-
-  // Upload status tracking per document type
-  const [uploadStatus, setUploadStatus] = useState<Record<string, 'idle' | 'uploading' | 'success' | 'error'>>({});
-  const [uploadErrors, setUploadErrors] = useState<Record<string, string>>({});
-  // docType -> file name already stored on the server. Restored on load so a
-  // reload does not make finished uploads look missing and block Submit.
-  const [serverDocNames, setServerDocNames] = useState<Record<string, string>>({});
-
-  const enabledDocTypes = useMemo(() => {
-    const docTypes = formConfig?.documentTypes;
-    const builtIn = ALL_DOC_TYPES.filter(dt => {
-      const key = dt.key as keyof NonNullable<BGVFormConfig['documentTypes']>;
-      return docTypes?.[key] !== false;
-    });
-
-    // Append enabled custom document types
-    const customTypes = (formConfig?.customDocumentTypes || [])
-      .filter(ct => ct.enabled)
-      .map(ct => ({ key: ct.key, label: ct.label, required: true as const }));
-
-    return [...builtIn, ...customTypes];
-  }, [formConfig]);
-
-  // Per-employment document groups (each employment has 3 sub-doc types shown as one card)
-  const employmentDocGroups = useMemo(() => {
-    if (formConfig?.steps?.employment === false) return [];
-    return formData.employmentHistory.map((emp, i) => ({
-      label: emp.companyName || `Employment ${i + 1}`,
-      index: i,
-      subDocs: [
-        { key: `relievingLetter_emp_${i}`, label: 'Relieving Letter' },
-        { key: `offerLetter_emp_${i}`, label: 'Offer Letter' },
-        { key: `paySlip_emp_${i}`, label: 'Pay Slip' },
-      ],
-    }));
-  }, [formConfig, formData.employmentHistory]);
+  const [form, setForm] = useState<LoadedForm | null>(null);
 
   useEffect(() => {
-    if (token) fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
-
-  useEffect(() => {
-    if (loading || !currentStepConfig) return;
-    try {
-      if (submitted) sessionStorage.removeItem(stepStorageKey(token));
-      else sessionStorage.setItem(stepStorageKey(token), currentStepConfig);
-    } catch { /* storage unavailable (private mode) — reload just starts at page 1 */ }
-  }, [loading, submitted, currentStepConfig, token]);
-
-  // Sync gap entries whenever employment count or company names change
-  useEffect(() => {
-    setFormData(prev => {
-      const newEntries = buildGapEntries(prev.employmentHistory);
-      // Merge: preserve user-entered data by matching on key
-      const merged = newEntries.map(entry => {
-        const existing = prev.gapDetails.find(g => g.key === entry.key);
-        if (existing) {
-          return { ...entry, hasGap: existing.hasGap, duration: existing.duration, reason: existing.reason };
-        }
-        return entry;
-      });
-      return { ...prev, gapDetails: merged };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.employmentHistory.length, formData.employmentHistory.map(e => e.companyName).join('|')]);
-
-  // Period fields moved from <input type="date"> to type="month". A month input
-  // renders nothing for a full "YYYY-MM-DD" value, so a candidate reopening a
-  // saved form would see their dates vanish — and now be blocked, since these
-  // fields are required. Truncate stored day-precision values to "YYYY-MM".
-  const toMonthValue = (v: unknown): string => {
-    if (typeof v !== 'string') return '';
-    const m = v.match(/^(\d{4}-\d{2})/);
-    return m ? m[1] : '';
-  };
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const response = await apiService.getDocumentCollectionByToken(token!);
-      if (response.success && response.data) {
-        setCaseData(response.data);
-        setFormConfig(response.data.formConfig);
-
-        const onServer: Record<string, string> = {};
-        for (const group of [response.data.documents, response.data.customDocuments]) {
-          for (const [key, doc] of Object.entries<any>(group || {})) {
-            if (doc?.s3Key) onServer[key] = doc.docName || 'Uploaded';
-          }
-        }
-        setServerDocNames(onServer);
-        setUploadStatus(Object.fromEntries(Object.keys(onServer).map(k => [k, 'success' as const])));
-
-        const savedStep = readSavedStep(token);
-        const savedIndex = getEnabledSteps(response.data.formConfig).findIndex(s => s.configKey === savedStep);
-        if (savedIndex > 0) setCurrentStep(savedIndex + 1);
-        // Restore form data with deep merge to preserve pre-initialized defaults for empty arrays
-        setFormData(prev => {
-          const serverData = response.data.formData;
-          const hasServerData = serverData?.personalInfo;
-
-          // Start with pre-filling from admin data
-          const personalInfo = {
-            ...prev.personalInfo,
-            fullName: response.data.name || '',
-            mobile: response.data.phone || '',
-            email: response.data.email || '',
-          };
-
-          // If server has form data, merge it in while preserving defaults for empty arrays
-          if (hasServerData) {
-            return {
-              ...prev,
-              ...serverData,
-              personalInfo: {
-                ...personalInfo,
-                ...serverData.personalInfo,
-                // Keep admin pre-fill for name/mobile/email if server values are empty
-                fullName: serverData.personalInfo?.fullName || personalInfo.fullName,
-                mobile: serverData.personalInfo?.mobile || personalInfo.mobile,
-                email: serverData.personalInfo?.email || personalInfo.email,
-                // Preserve default empty address objects when server returns empty array
-                addresses: serverData.personalInfo?.addresses?.length > 0
-                  ? serverData.personalInfo.addresses
-                  : prev.personalInfo.addresses,
-              },
-              education: {
-                ...prev.education,
-                ...serverData.education,
-                periodOfStudyFrom: toMonthValue(serverData.education?.periodOfStudyFrom),
-                periodOfStudyTo: toMonthValue(serverData.education?.periodOfStudyTo),
-              },
-              employmentHistory: serverData.employmentHistory?.length > 0
-                ? serverData.employmentHistory.map((emp: any) => ({
-                    ...emp,
-                    periodFrom: toMonthValue(emp?.periodFrom),
-                    periodTo: toMonthValue(emp?.periodTo),
-                  }))
-                : prev.employmentHistory,
-              references: serverData.references?.length > 0
-                ? serverData.references
-                : prev.references,
-              gapDetails: Array.isArray(serverData.gapDetails) && serverData.gapDetails.length > 0
-                ? serverData.gapDetails
-                : prev.gapDetails,
-              loa: { ...prev.loa, ...serverData.loa },
-            };
-          }
-
-          return { ...prev, personalInfo };
-        });
-      } else {
-        setError(response.message || 'Invalid or expired link');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Generic updaters
-  const updatePersonalInfo = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, personalInfo: { ...prev.personalInfo, [field]: value } }));
-  };
-
-  const updateAddress = (index: number, field: string, value: string) => {
-    setFormData(prev => {
-      const addresses = [...prev.personalInfo.addresses];
-      // Duration is stored numerically so routing rules can compare months
-      // directly; an empty box is null rather than 0.
-      const parsed = (field === 'durationYears' || field === 'durationMonths')
-        ? (value === '' ? null : Math.max(0, parseInt(value, 10) || 0))
-        : value;
-      addresses[index] = { ...addresses[index], [field]: parsed };
-      return { ...prev, personalInfo: { ...prev.personalInfo, addresses } };
-    });
-  };
-
-  const addAddress = () => {
-    setFormData(prev => ({
-      ...prev,
-      personalInfo: {
-        ...prev.personalInfo,
-        addresses: [...prev.personalInfo.addresses, { ...emptyAddress }]
-      }
-    }));
-  };
-
-  const removeAddress = (index: number) => {
-    if (formData.personalInfo.addresses.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        personalInfo: {
-          ...prev.personalInfo,
-          addresses: prev.personalInfo.addresses.filter((_, i) => i !== index)
-        }
-      }));
-    }
-  };
-
-  const updateEducation = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, education: { ...prev.education, [field]: value } }));
-  };
-
-  const updateEmployment = (index: number, field: string, value: string) => {
-    setFormData(prev => {
-      const employmentHistory = [...prev.employmentHistory];
-      employmentHistory[index] = { ...employmentHistory[index], [field]: value };
-      return { ...prev, employmentHistory };
-    });
-  };
-
-  const addEmployment = () => {
-    if (formData.employmentHistory.length < 10) {
-      setFormData(prev => ({ ...prev, employmentHistory: [...prev.employmentHistory, { ...emptyEmployment }] }));
-    }
-  };
-
-  const removeEmployment = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      employmentHistory: prev.employmentHistory.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateReference = (index: number, field: string, value: string) => {
-    setFormData(prev => {
-      const references = [...prev.references];
-      references[index] = { ...references[index], [field]: value };
-      return { ...prev, references };
-    });
-  };
-
-  const addReference = () => {
-    setFormData(prev => ({
-      ...prev,
-      references: [...prev.references, { ...emptyReference }]
-    }));
-  };
-
-  const removeReference = (index: number) => {
-    if (formData.references.length > 1) {
-      setFormData(prev => ({
-        ...prev,
-        references: prev.references.filter((_, i) => i !== index)
-      }));
-    }
-  };
-
-  const updateGapDetail = (index: number, field: string, value: string) => {
-    setFormData(prev => {
-      const gapDetails = [...prev.gapDetails];
-      gapDetails[index] = { ...gapDetails[index], [field]: value };
-      return { ...prev, gapDetails };
-    });
-  };
-
-  const updateLoa = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, loa: { ...prev.loa, [field]: value } }));
-  };
-
-  const handleFileChange = async (docType: string, file: File | null) => {
-    if (!file) {
-      setDocuments(prev => ({ ...prev, [docType]: null }));
-      setUploadStatus(prev => ({ ...prev, [docType]: 'idle' }));
-      setUploadErrors(prev => { const next = { ...prev }; delete next[docType]; return next; });
-      return;
-    }
-
-    // Set file and start uploading
-    setDocuments(prev => ({ ...prev, [docType]: file }));
-    setUploadStatus(prev => ({ ...prev, [docType]: 'uploading' }));
-    setUploadErrors(prev => { const next = { ...prev }; delete next[docType]; return next; });
-
-    try {
-      // Map built-in keys to snake_case for the API
-      const builtInDocTypeMap: Record<string, string> = {
-        aadhaar: 'aadhaar', pan: 'pan', degreeMarksheet: 'degree_marksheet',
-        addressProof: 'address_proof', passport: 'passport',
-        passportDeclaration: 'passport_declaration', cv: 'cv', signature: 'signature'
-      };
-      const apiDocType = builtInDocTypeMap[docType] || docType;
-      const response = await apiService.uploadDocumentCollectionDocument(token!, file, apiDocType);
-      if (response.success) {
-        setUploadStatus(prev => ({ ...prev, [docType]: 'success' }));
-      } else {
-        throw new Error(response.message || 'Upload failed');
-      }
-    } catch (err: any) {
-      setUploadStatus(prev => ({ ...prev, [docType]: 'error' }));
-      setUploadErrors(prev => ({ ...prev, [docType]: err.message || 'Upload failed' }));
-      setDocuments(prev => ({ ...prev, [docType]: null }));
-    }
-  };
-
-  const buildSubmissionData = () => {
-    const steps = formConfig?.steps;
-    const data: any = {
-      personalInfo: formData.personalInfo,
-      loa: formData.loa,
-    };
-    if (steps?.education !== false) data.education = formData.education;
-    if (steps?.employment !== false) data.employmentHistory = formData.employmentHistory;
-    if (steps?.references !== false) data.references = formData.references;
-    if (steps?.employment !== false && steps?.gapDetails !== false) data.gapDetails = formData.gapDetails;
-    return data;
-  };
-
-  /**
-   * Surface a validation failure so the candidate can actually act on it.
-   *
-   * Errors frequently belong to a step other than the one on screen (Submit
-   * lives on the last step, but a bad value may be on step 1). Showing only an
-   * alert there strands the candidate: nothing on the page is highlighted.
-   * So we jump to the first offending step and record a summary listing every
-   * affected step by name.
-   */
-  const showValidationErrors = (errors: Record<string, string>) => {
-    setFieldErrors(errors);
-    setTouched(prev => ({
-      ...prev,
-      ...Object.fromEntries(Object.keys(errors).map(k => [k, true]))
-    }));
-
-    const affected = enabledSteps.filter(s => {
-      const prefixes = STEP_ERROR_PREFIXES[s.configKey] || [];
-      return Object.keys(errors).some(path => prefixes.some(p => path.startsWith(p)));
-    });
-    setErrorSummary(affected.map(s => s.title));
-
-    if (affected.length > 0) setCurrentStep(affected[0].id);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  /** Errors for the step currently on screen. */
-  const validateCurrentStep = (): Record<string, string> => {
-    const all = validateBGVFormData(buildSubmissionData(), formConfig || {});
-    const prefixes = STEP_ERROR_PREFIXES[currentStepConfig || ''] || [];
-    if (prefixes.length === 0) return {};
-    return Object.fromEntries(
-      Object.entries(all).filter(([path]) => prefixes.some(p => path.startsWith(p)))
-    );
-  };
-
-  const handleNext = async () => {
-    const stepErrors = validateCurrentStep();
-    if (Object.keys(stepErrors).length > 0) {
-      showValidationErrors(stepErrors);
-      return;
-    }
-    setFieldErrors({});
-    setErrorSummary([]);
-
-    // Save progress to server before advancing
-    setSaving(true);
-    try {
-      await apiService.saveDocumentCollectionProgress(token!, { formData: buildSubmissionData() });
-    } catch (err) {
-      console.error('Auto-save error:', err);
-      // Don't block navigation — save is best-effort
-    } finally {
-      setSaving(false);
-    }
-    setCurrentStep(prev => Math.min(prev + 1, enabledSteps.length));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleBack = () => {
-    setCurrentStep(prev => Math.max(prev - 1, 1));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Documents are uploaded eagerly on file selection, so no batch upload needed here
-    const submissionData = buildSubmissionData();
-
-    // Final check across every step — a candidate can reach Submit with an
-    // earlier step still invalid (e.g. by editing after passing it).
-    const allErrors = validateBGVFormData(submissionData, formConfig || {});
-    if (Object.keys(allErrors).length > 0) {
-      showValidationErrors(allErrors);
-      return;
-    }
-
-    setSubmitting(true);
-
-    try {
-      // Submit form data
-      const submitResponse = await apiService.submitDocumentCollection(token!, { formData: submissionData });
-      if (!submitResponse.success) {
-        // The server re-validates and returns 422 with a field-path error map.
-        const serverErrors = (submitResponse as any).fieldErrors;
-        if (serverErrors && Object.keys(serverErrors).length > 0) {
-          showValidationErrors(serverErrors);
+    if (!token) return;
+    const load = async () => {
+      try {
+        setLoading(true);
+        const response: any = await apiService.getDocumentCollectionByToken(token);
+        if (!response.success || !response.data) {
+          setError(response.code === 'FORM_UPDATED'
+            ? { title: 'This form has been updated', message: response.message }
+            : { title: 'Link Error', message: response.message || 'Invalid or expired link' });
           return;
         }
-        throw new Error(submitResponse.message || 'Failed to submit');
-      }
+        const data = response.data;
+        // Older servers send only the toggle config; derive the same form.
+        const template: FormTemplate = data.formTemplate
+          || prepareForCandidate(legacyTemplateFromFormConfig(data.formConfig), {});
 
-      setSubmitted(true);
-    } catch (err: any) {
-      console.error('Submit error:', err);
-      // The server re-validates; surface its field errors rather than a generic alert.
-      if (err?.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
-        showValidationErrors(err.fieldErrors);
-      } else {
-        alert(err.message || 'Failed to submit form');
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
+        const uploads: Record<string, string> = {};
+        for (const group of [data.documents, data.customDocuments]) {
+          for (const [key, doc] of Object.entries<any>(group || {})) {
+            if (doc?.s3Key) uploads[key] = doc.docName || 'Uploaded';
+          }
+        }
 
-  // ---- Render helpers ----
-  /** Re-run validation for one field once it has been blurred. */
-  const revalidateField = (path: string) => {
-    setTouched(prev => ({ ...prev, [path]: true }));
-    const all = validateBGVFormData(buildSubmissionData(), formConfig || {});
-    setFieldErrors(prev => {
-      const next = { ...prev };
-      if (all[path]) next[path] = all[path];
-      else delete next[path];
-      return next;
-    });
-  };
-
-  const renderField = (
-    label: string,
-    id: string,
-    value: string,
-    onChange: (v: string) => void,
-    opts?: { type?: string; required?: boolean; placeholder?: string; path?: string }
-  ) => {
-    const path = opts?.path;
-    const showError = path ? touched[path] && fieldErrors[path] : undefined;
-    const isPicker = opts?.type === 'date' || opts?.type === 'month';
-
-    // Date/month inputs normally open the calendar only from the small icon,
-    // which is an easy target to miss on a phone. showPicker() opens it from a
-    // tap anywhere in the box. It is not supported everywhere and throws if the
-    // input is not user-activated, so it is guarded and failure is harmless —
-    // the icon still works.
-    const openPicker = (el: HTMLInputElement | null) => {
-      if (!el) return;
-      try {
-        (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
-      } catch {
-        /* unsupported or blocked — the native icon remains available */
+        setForm({
+          template,
+          values: mergeSavedProgress(template, initialFormValues(template), data.formData, {
+            name: data.name, phone: data.phone, email: data.email,
+          }),
+          uploads,
+          companyName: data.companyName,
+        });
+      } catch (err: any) {
+        setError({ title: 'Link Error', message: err?.message || 'Failed to load' });
+      } finally {
+        setLoading(false);
       }
     };
+    load();
+  }, [token]);
 
-    return (
-      <div>
-        <Label htmlFor={id} className="text-gray-700 font-medium">
-          {label} {opts?.required && <span className="text-red-500">*</span>}
-        </Label>
-        <Input
-          id={id}
-          type={opts?.type || 'text'}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          onBlur={path ? () => revalidateField(path) : undefined}
-          onClick={isPicker ? e => openPicker(e.currentTarget) : undefined}
-          onFocus={isPicker ? e => openPicker(e.currentTarget) : undefined}
-          placeholder={opts?.placeholder || ''}
-          aria-invalid={showError ? true : undefined}
-          className={`mt-1 ${isPicker ? 'cursor-pointer' : ''} ${showError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
-        />
-        {showError && (
-          <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {fieldErrors[path!]}
-          </p>
-        )}
-      </div>
-    );
-  };
+  const rememberStep = useCallback((stepId: string) => {
+    try { sessionStorage.setItem(stepStorageKey(token), stepId); } catch { /* private mode: reload starts at step 1 */ }
+  }, [token]);
+
+  const saveProgress = useCallback(async (formData: FormValues) => {
+    await apiService.saveDocumentCollectionProgress(token!, { formData });
+  }, [token]);
+
+  const upload = useCallback(async (uploadKey: string, file: File) => {
+    const response = await apiService.uploadDocumentCollectionDocument(token!, file, uploadKey);
+    if (!response.success) throw new Error(response.message || 'Upload failed');
+  }, [token]);
+
+  const submit = useCallback(async (formData: FormValues): Promise<SubmitResult> => {
+    const response: any = await apiService.submitDocumentCollection(token!, { formData });
+    if (!response.success) {
+      // The server re-validates and returns 422 with a field-path error map.
+      return { ok: false, fieldErrors: response.fieldErrors, message: response.message || 'Failed to submit' };
+    }
+    try { sessionStorage.removeItem(stepStorageKey(token)); } catch { /* ignore */ }
+    setSubmitted(true);
+    return { ok: true };
+  }, [token]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-green-50 to-white">
+      <PageShell>
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-green mx-auto mb-4"></div>
           <div className="text-lg text-gray-600">Loading...</div>
         </div>
-      </div>
+      </PageShell>
     );
   }
 
-  if (error) {
+  if (error || !form) {
+    const updated = error?.title === 'This form has been updated';
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-green-50 to-white">
+      <PageShell>
         <Card className="w-full max-w-md shadow-xl">
           <CardContent className="pt-6 text-center">
-            <div className="text-red-500 text-5xl mb-4">&#9888;</div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Link Error</h2>
-            <p className="text-gray-600">{error}</p>
+            {updated
+              ? <RefreshCw className="w-12 h-12 text-brand-green mx-auto mb-4" />
+              : <div className="text-red-500 text-5xl mb-4">&#9888;</div>}
+            <h2 className="text-xl font-bold text-gray-900 mb-2">{error?.title || 'Link Error'}</h2>
+            <p className="text-gray-600">{error?.message || 'Invalid or expired link'}</p>
           </CardContent>
         </Card>
-      </div>
+      </PageShell>
     );
   }
 
   if (submitted) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-green-50 to-white">
+      <PageShell>
         <Card className="w-full max-w-md shadow-xl">
           <CardContent className="pt-6 text-center">
             <div className="w-20 h-20 bg-brand-green rounded-full flex items-center justify-center mx-auto mb-4">
@@ -673,7 +155,7 @@ const DocumentCollectionPage = () => {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </PageShell>
     );
   }
 
@@ -701,549 +183,19 @@ const DocumentCollectionPage = () => {
       <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
         <div className="text-center mb-4 sm:mb-8">
           <h1 className="text-xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">BGV Form &amp; Document Collection</h1>
-          <p className="text-sm sm:text-base text-gray-600">On behalf of <strong>{caseData?.companyName}</strong></p>
+          <p className="text-sm sm:text-base text-gray-600">On behalf of <strong>{form.companyName}</strong></p>
         </div>
 
-        <div className="mb-6 sm:mb-8">
-          <Stepper steps={stepperSteps} currentStep={currentStep} />
-        </div>
-
-        <Card className="shadow-xl">
-          <CardContent className="px-3 sm:px-6 pt-4 sm:pt-6 pb-4 sm:pb-6">
-            <form onSubmit={handleSubmit}>
-              {errorSummary.length > 0 && (
-                <div className="mb-4 p-3 border border-red-300 bg-red-50 rounded-lg">
-                  <p className="text-sm text-red-800 flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>
-                      Please correct the highlighted fields
-                      {errorSummary.length > 0 && (
-                        <> in: <strong>{errorSummary.join(', ')}</strong></>
-                      )}
-                      . We have taken you to the first one.
-                    </span>
-                  </p>
-                </div>
-              )}
-
-              {/* ===== STEP: Personal Information ===== */}
-              {currentStepConfig === 'personalInfo' && (
-                <div className="space-y-6">
-                  <div className="flex items-center gap-2 pb-2 border-b-2 border-brand-green">
-                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
-                    <h3 className="text-xl font-semibold">Personal Information</h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {renderField('Full Name', 'fullName', formData.personalInfo.fullName, v => updatePersonalInfo('fullName', v), { required: true, path: 'personalInfo.fullName' })}
-                    {renderField('Date of Birth', 'dob', formData.personalInfo.dob, v => updatePersonalInfo('dob', v), { type: 'date', required: true })}
-                    {renderField('Nationality', 'nationality', formData.personalInfo.nationality, v => updatePersonalInfo('nationality', v))}
-                    {renderField("Father's Name", 'fathersName', formData.personalInfo.fathersName, v => updatePersonalInfo('fathersName', v), { required: true, path: 'personalInfo.fathersName' })}
-                    {renderField('Mobile Number', 'mobile', formData.personalInfo.mobile, v => updatePersonalInfo('mobile', v), { required: true, type: 'tel', path: 'personalInfo.mobile' })}
-                    {renderField('Alternate Number', 'alternateNumber', formData.personalInfo.alternateNumber, v => updatePersonalInfo('alternateNumber', v), { type: 'tel', path: 'personalInfo.alternateNumber' })}
-                    <div>
-                      <Label className="text-gray-700 font-medium">Gender <span className="text-red-500">*</span></Label>
-                      <select className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" value={formData.personalInfo.gender} onChange={e => updatePersonalInfo('gender', e.target.value)}>
-                        <option value="">Select</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-                    {renderField('Email', 'pi-email', formData.personalInfo.email, v => updatePersonalInfo('email', v), { type: 'email', required: true, path: 'personalInfo.email' })}
-                    {renderField('Aadhaar Number', 'aadhaarNumber', formData.personalInfo.aadhaarNumber, v => updatePersonalInfo('aadhaarNumber', v), { required: true, path: 'personalInfo.aadhaarNumber' })}
-                    {renderField('PAN Number', 'panNumber', formData.personalInfo.panNumber, v => updatePersonalInfo('panNumber', v), { required: true, path: 'personalInfo.panNumber' })}
-                  </div>
-
-                  <div className="mt-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-semibold text-gray-800">Address History</h4>
-                      <Button type="button" variant="outline" size="sm" onClick={addAddress}>
-                        <Plus className="w-4 h-4 mr-1" /> Add Address
-                      </Button>
-                    </div>
-                    {fieldErrors['personalInfo.addresses.type'] && (
-                      <p className="mb-3 text-sm text-red-600 flex items-center gap-1">
-                        <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {fieldErrors['personalInfo.addresses.type']}
-                      </p>
-                    )}
-                    {formData.personalInfo.addresses.map((addr, i) => (
-                      <div key={i} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3 p-3 bg-gray-50 rounded-lg relative">
-                        <div className="md:col-span-2">
-                          <Label className="text-sm">Address {i + 1}</Label>
-                          <Input
-                            value={addr.address}
-                            onChange={e => updateAddress(i, 'address', e.target.value)}
-                            onBlur={() => revalidateField(`personalInfo.addresses.${i}.address`)}
-                            placeholder="Full address"
-                            className={`mt-1 ${touched[`personalInfo.addresses.${i}.address`] && fieldErrors[`personalInfo.addresses.${i}.address`] ? 'border-red-500' : ''}`}
-                          />
-                          {touched[`personalInfo.addresses.${i}.address`] && fieldErrors[`personalInfo.addresses.${i}.address`] && (
-                            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                              <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {fieldErrors[`personalInfo.addresses.${i}.address`]}
-                            </p>
-                          )}
-                        </div>
-                        <div>
-                          <Label className="text-sm">Address Type</Label>
-                          <select
-                            className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md"
-                            value={addr.addressType || ''}
-                            onChange={e => updateAddress(i, 'addressType', e.target.value)}
-                          >
-                            <option value="">Select</option>
-                            <option value="current">Current</option>
-                            <option value="permanent">Permanent</option>
-                            <option value="other">Other</option>
-                          </select>
-                        </div>
-                        <div className="flex gap-2 items-end">
-                          <div className="flex-1">
-                            <Label className="text-sm">Duration of Stay</Label>
-                            <div className="mt-1 flex gap-2 items-center">
-                              <Input
-                                type="number"
-                                min={0}
-                                value={addr.durationYears ?? ''}
-                                onChange={e => updateAddress(i, 'durationYears', e.target.value)}
-                                onBlur={() => revalidateField(`personalInfo.addresses.${i}.durationYears`)}
-                                placeholder="0"
-                                className={`w-16 ${touched[`personalInfo.addresses.${i}.durationYears`] && fieldErrors[`personalInfo.addresses.${i}.durationYears`] ? 'border-red-500' : ''}`}
-                              />
-                              <span className="text-sm text-gray-600">yrs</span>
-                              <Input
-                                type="number"
-                                min={0}
-                                max={11}
-                                value={addr.durationMonths ?? ''}
-                                onChange={e => updateAddress(i, 'durationMonths', e.target.value)}
-                                placeholder="0"
-                                className="w-16"
-                              />
-                              <span className="text-sm text-gray-600">mos</span>
-                            </div>
-                            {touched[`personalInfo.addresses.${i}.durationYears`] && fieldErrors[`personalInfo.addresses.${i}.durationYears`] && (
-                              <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                                <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {fieldErrors[`personalInfo.addresses.${i}.durationYears`]}
-                              </p>
-                            )}
-                          </div>
-                          {formData.personalInfo.addresses.length > 1 && (
-                            <Button type="button" variant="ghost" size="sm" onClick={() => removeAddress(i)} className="text-red-500 mb-0.5">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex justify-end pt-4">
-                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg">
-                      {saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* ===== STEP: Education ===== */}
-              {currentStepConfig === 'education' && (
-                <div className="space-y-6">
-                  <div className="flex items-center gap-2 pb-2 border-b-2 border-brand-green">
-                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
-                    <h3 className="text-xl font-semibold">Education Details</h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {renderField('Degree / Qualification', 'degree', formData.education.degree, v => updateEducation('degree', v), { required: true, path: 'education.degree' })}
-                    {renderField('Enrollment No.', 'enrollmentNo', formData.education.enrollmentNo, v => updateEducation('enrollmentNo', v), { path: 'education.enrollmentNo' })}
-                    {renderField('Year of Passing', 'yearOfPassing', formData.education.yearOfPassing, v => updateEducation('yearOfPassing', v), { required: true, path: 'education.yearOfPassing' })}
-                    {renderField('University / Board Name', 'universityName', formData.education.universityName, v => updateEducation('universityName', v), { required: true, path: 'education.universityName' })}
-                    {renderField('University Location', 'universityLocation', formData.education.universityLocation, v => updateEducation('universityLocation', v), { path: 'education.universityLocation' })}
-                    {renderField('Period of Study From', 'periodOfStudyFrom', formData.education.periodOfStudyFrom, v => updateEducation('periodOfStudyFrom', v), { type: 'month', required: true, path: 'education.periodOfStudyFrom' })}
-                    {renderField('Period of Study To', 'periodOfStudyTo', formData.education.periodOfStudyTo, v => updateEducation('periodOfStudyTo', v), { type: 'month', required: true, path: 'education.periodOfStudyTo' })}
-                    {(() => {
-                      const courseTypePath = 'education.courseType';
-                      const showCourseTypeError = touched[courseTypePath] && fieldErrors[courseTypePath];
-                      return (
-                        <div>
-                          <Label className="text-gray-700 font-medium">Course Type <span className="text-red-500">*</span></Label>
-                          <select
-                            className={`mt-1 w-full px-3 py-2 border rounded-md ${showCourseTypeError ? 'border-red-500 focus-visible:ring-red-500' : 'border-gray-300'}`}
-                            value={formData.education.courseType}
-                            onChange={e => updateEducation('courseType', e.target.value)}
-                            onBlur={() => revalidateField(courseTypePath)}
-                            aria-invalid={showCourseTypeError ? true : undefined}
-                          >
-                            <option value="">Select</option>
-                            <option value="regular">Regular</option>
-                            <option value="part_time">Part Time</option>
-                            <option value="correspondence">Correspondence</option>
-                          </select>
-                          {showCourseTypeError && (
-                            <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                              <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {fieldErrors[courseTypePath]}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  <div className="flex justify-between pt-4">
-                    <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
-                  </div>
-                </div>
-              )}
-
-              {/* ===== STEP: Employment History ===== */}
-              {currentStepConfig === 'employment' && (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between pb-2 border-b-2 border-brand-green">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
-                      <h3 className="text-xl font-semibold">Employment History</h3>
-                    </div>
-                    {formData.employmentHistory.length < 10 && (
-                      <Button type="button" variant="outline" size="sm" onClick={addEmployment}>
-                        <Plus className="w-4 h-4 mr-1" /> Add Employment
-                      </Button>
-                    )}
-                  </div>
-
-                  {formData.employmentHistory.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                      <p className="mb-4">No employment history added. If you are a fresher, you can proceed without adding any employment.</p>
-                      <Button type="button" variant="outline" size="sm" onClick={addEmployment}>
-                        <Plus className="w-4 h-4 mr-1" /> Add Employment
-                      </Button>
-                    </div>
-                  )}
-
-                  {formData.employmentHistory.map((emp, i) => (
-                    <div key={i} className="p-4 border rounded-lg space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-semibold text-gray-800">Employment {i + 1}</h4>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeEmployment(i)} className="text-red-500">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {renderField('Company Name', `emp-${i}-company`, emp.companyName, v => updateEmployment(i, 'companyName', v), { required: true, path: `employmentHistory.${i}.companyName` })}
-                        {renderField('Designation', `emp-${i}-designation`, emp.designation, v => updateEmployment(i, 'designation', v), { path: `employmentHistory.${i}.designation` })}
-                        {renderField('Period From', `emp-${i}-from`, emp.periodFrom, v => updateEmployment(i, 'periodFrom', v), { type: 'month', required: true, path: `employmentHistory.${i}.periodFrom` })}
-                        {renderField('Period To', `emp-${i}-to`, emp.periodTo, v => updateEmployment(i, 'periodTo', v), { type: 'month', required: true, path: `employmentHistory.${i}.periodTo` })}
-                        {renderField('CTC', `emp-${i}-ctc`, emp.ctc, v => updateEmployment(i, 'ctc', v), { required: true, path: `employmentHistory.${i}.ctc` })}
-                        {renderField('Employee ID', `emp-${i}-empId`, emp.employeeId, v => updateEmployment(i, 'employeeId', v), { required: true, path: `employmentHistory.${i}.employeeId` })}
-                        {renderField('Supervisor Name', `emp-${i}-supName`, emp.supervisorName, v => updateEmployment(i, 'supervisorName', v), { path: `employmentHistory.${i}.supervisorName` })}
-                        {renderField('Supervisor Designation', `emp-${i}-supDesg`, emp.supervisorDesignation, v => updateEmployment(i, 'supervisorDesignation', v))}
-                        {renderField('Supervisor Contact', `emp-${i}-supContact`, emp.supervisorContact, v => updateEmployment(i, 'supervisorContact', v), { path: `employmentHistory.${i}.supervisorContact` })}
-                        {renderField('Supervisor Email', `emp-${i}-supEmail`, emp.supervisorEmail, v => updateEmployment(i, 'supervisorEmail', v), { type: 'email', path: `employmentHistory.${i}.supervisorEmail` })}
-                        {renderField('HR Name', `emp-${i}-hrName`, emp.hrName, v => updateEmployment(i, 'hrName', v), { path: `employmentHistory.${i}.hrName` })}
-                        {renderField('HR Contact', `emp-${i}-hrContact`, emp.hrContact, v => updateEmployment(i, 'hrContact', v), { path: `employmentHistory.${i}.hrContact` })}
-                        {renderField('HR Email', `emp-${i}-hrEmail`, emp.hrEmail, v => updateEmployment(i, 'hrEmail', v), { type: 'email', path: `employmentHistory.${i}.hrEmail` })}
-                        {renderField('Reason for Leaving', `emp-${i}-reason`, emp.reasonForLeaving, v => updateEmployment(i, 'reasonForLeaving', v), { path: `employmentHistory.${i}.reasonForLeaving` })}
-                        <div>
-                          <Label className="text-gray-700 font-medium">Nature of Employment</Label>
-                          <select className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" value={emp.natureOfEmployment} onChange={e => updateEmployment(i, 'natureOfEmployment', e.target.value)}>
-                            <option value="">Select</option>
-                            <option value="permanent">Permanent</option>
-                            <option value="contract">Contract</option>
-                            <option value="temporary">Temporary</option>
-                            <option value="internship">Internship</option>
-                          </select>
-                        </div>
-                        <div>
-                          <Label className="text-gray-700 font-medium">Type of Employment</Label>
-                          <select className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" value={emp.typeOfEmployment} onChange={e => updateEmployment(i, 'typeOfEmployment', e.target.value)}>
-                            <option value="">Select</option>
-                            <option value="full_time">Full Time</option>
-                            <option value="part_time">Part Time</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="flex justify-between pt-4">
-                    <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
-                  </div>
-                </div>
-              )}
-
-              {/* ===== STEP: References ===== */}
-              {currentStepConfig === 'references' && (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between pb-2 border-b-2 border-brand-green">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
-                      <h3 className="text-xl font-semibold">Professional References</h3>
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={addReference}>
-                      <Plus className="w-4 h-4 mr-1" /> Add Reference
-                    </Button>
-                  </div>
-
-                  {formData.references.map((ref, i) => (
-                    <div key={i} className="p-4 border rounded-lg space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-semibold text-gray-800">Reference {i + 1}</h4>
-                        {formData.references.length > 1 && (
-                          <Button type="button" variant="ghost" size="sm" onClick={() => removeReference(i)} className="text-red-500">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {renderField('Name', `ref-${i}-name`, ref.name, v => updateReference(i, 'name', v), { required: true, path: `references.${i}.name` })}
-                        {renderField('Designation', `ref-${i}-designation`, ref.designation, v => updateReference(i, 'designation', v), { path: `references.${i}.designation` })}
-                        {renderField('Organization', `ref-${i}-organization`, ref.organization, v => updateReference(i, 'organization', v), { path: `references.${i}.organization` })}
-                        {renderField('Relationship', `ref-${i}-relationship`, ref.relationship, v => updateReference(i, 'relationship', v), { path: `references.${i}.relationship` })}
-                        {renderField('Contact Number', `ref-${i}-contact`, ref.contact, v => updateReference(i, 'contact', v), { type: 'tel', required: true, path: `references.${i}.contact` })}
-                        {renderField('Email', `ref-${i}-email`, ref.email, v => updateReference(i, 'email', v), { type: 'email', path: `references.${i}.email` })}
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="flex justify-between pt-4">
-                    <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
-                  </div>
-                </div>
-              )}
-
-              {/* ===== STEP: Gap Details ===== */}
-              {currentStepConfig === 'gapDetails' && (
-                <div className="space-y-6">
-                  <div className="flex items-center gap-2 pb-2 border-b-2 border-brand-green">
-                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
-                    <h3 className="text-xl font-semibold">Gap Period Details</h3>
-                  </div>
-
-                  {formData.gapDetails.map((gap, index) => (
-                    <div key={gap.key} className="p-4 border rounded-lg space-y-3">
-                      <h4 className="font-semibold text-gray-800">{gap.label}</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <Label className="text-gray-700 font-medium">Any Gap?</Label>
-                          <select className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" value={gap.hasGap} onChange={e => updateGapDetail(index, 'hasGap', e.target.value)}>
-                            <option value="">Select</option>
-                            <option value="yes">Yes</option>
-                            <option value="no">No</option>
-                          </select>
-                        </div>
-                        {gap.hasGap === 'yes' && (
-                          <>
-                            {renderField('Duration', `gap-${gap.key}-duration`, gap.duration, v => updateGapDetail(index, 'duration', v), { placeholder: 'e.g. 6 months', path: `gapDetails.${index}.duration` })}
-                            {renderField('Reason', `gap-${gap.key}-reason`, gap.reason, v => updateGapDetail(index, 'reason', v), { path: `gapDetails.${index}.reason` })}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="flex justify-between pt-4">
-                    <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} disabled={saving} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg">{saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}</Button>
-                  </div>
-                </div>
-              )}
-
-              {/* ===== STEP: LOA ===== */}
-              {currentStepConfig === 'loa' && (
-                <div className="space-y-6">
-                  <div className="flex items-center gap-2 pb-2 border-b-2 border-brand-green">
-                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
-                    <h3 className="text-xl font-semibold">Letter of Authorization</h3>
-                  </div>
-
-                  <div className="bg-gray-50 p-6 rounded-lg space-y-4">
-                    <div className="space-y-3">
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input type="checkbox" checked={formData.loa.authCheckbox1} onChange={e => updateLoa('authCheckbox1', e.target.checked)} className="mt-1 h-5 w-5" />
-                        <span className="text-sm text-gray-700">I hereby authorize Zella Screenings to conduct background verification checks as may be necessary for the purpose of my employment/engagement. I understand that this may include but is not limited to verification of my educational qualifications, employment history, criminal records, and identity.</span>
-                      </label>
-
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input type="checkbox" checked={formData.loa.authCheckbox2} onChange={e => updateLoa('authCheckbox2', e.target.checked)} className="mt-1 h-5 w-5" />
-                        <span className="text-sm text-gray-700">I confirm that the information provided by me in this form is true and accurate to the best of my knowledge. I understand that any misrepresentation or omission of facts may result in disqualification from employment or termination of service.</span>
-                      </label>
-
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input type="checkbox" checked={formData.loa.authCheckbox3} onChange={e => updateLoa('authCheckbox3', e.target.checked)} className="mt-1 h-5 w-5" />
-                        <span className="text-sm text-gray-700">I authorize the release of any information to Zella Screenings and/or their authorized agents for the purpose of conducting background verification. I release all parties from any liability or claims arising from the investigation.</span>
-                      </label>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
-                      <div>
-                        <Label className="text-gray-700 font-medium">Title <span className="text-red-500">*</span></Label>
-                        <select className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" value={formData.loa.title} onChange={e => updateLoa('title', e.target.value)}>
-                          <option value="">Select</option>
-                          <option value="Mr">Mr</option>
-                          <option value="Ms">Ms</option>
-                          <option value="Mrs">Mrs</option>
-                        </select>
-                      </div>
-                      {renderField('Name (IN CAPITALS)', 'nameInCapitals', formData.loa.nameInCapitals, v => updateLoa('nameInCapitals', v), { required: true })}
-                      {renderField('Date', 'loa-date', formData.loa.date, v => updateLoa('date', v), { type: 'date', required: true })}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between pt-4">
-                    <Button type="button" onClick={handleBack} variant="outline" size="lg"><ChevronLeft className="mr-2 w-5 h-5" /> Previous</Button>
-                    <Button type="button" onClick={handleNext} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg"
-                      disabled={saving || !formData.loa.authCheckbox1 || !formData.loa.authCheckbox2 || !formData.loa.authCheckbox3}>
-                      {saving ? <><Loader2 className="mr-2 w-5 h-5 animate-spin" /> Saving...</> : <>Next <ChevronRight className="ml-2 w-5 h-5" /></>}
-                    </Button>
-                  </div>
-                  {(!formData.loa.authCheckbox1 || !formData.loa.authCheckbox2 || !formData.loa.authCheckbox3) && (
-                    <p className="text-sm text-gray-500 text-right">Please accept all authorization checkboxes to proceed</p>
-                  )}
-                </div>
-              )}
-
-              {/* ===== STEP: Document Upload ===== */}
-              {currentStepConfig === 'documents' && (() => {
-                const allRequiredUploaded = enabledDocTypes
-                  .filter(dt => dt.required)
-                  .every(dt => uploadStatus[dt.key] === 'success');
-                const allEmpDocsUploaded = employmentDocGroups.every(group =>
-                  group.subDocs.some(sd => uploadStatus[sd.key] === 'success')
-                );
-                const anyUploading = Object.values(uploadStatus).some(s => s === 'uploading');
-                const canSubmit = allRequiredUploaded && allEmpDocsUploaded && !anyUploading;
-
-                return (
-                <div className="space-y-6">
-                  <div className="flex items-center gap-2 pb-2 border-b-2 border-brand-green">
-                    <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold text-sm">{currentStep}</div>
-                    <h3 className="text-xl font-semibold">Document Upload</h3>
-                  </div>
-                  <p className="text-sm text-gray-600">Upload all documents (max 5MB each, PDF/JPG/PNG). Documents are uploaded immediately when selected.</p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {enabledDocTypes.map(({ key, label }) => {
-                      const status = uploadStatus[key] || 'idle';
-                      const errorMsg = uploadErrors[key];
-                      return (
-                        <div key={key} className={`border-2 border-dashed rounded-lg p-4 transition-colors ${
-                          status === 'success' ? 'border-green-400 bg-green-50' :
-                          status === 'error' ? 'border-red-400 bg-red-50' :
-                          status === 'uploading' ? 'border-yellow-400 bg-yellow-50' :
-                          'border-gray-300 hover:border-brand-green'
-                        }`}>
-                          <Label htmlFor={`doc-${key}`} className="text-gray-700 font-medium">
-                            {label} <span className="text-red-500">*</span>
-                          </Label>
-                          <input
-                            type="file"
-                            id={`doc-${key}`}
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            disabled={status === 'uploading'}
-                            onChange={e => handleFileChange(key, e.target.files?.[0] || null)}
-                            className="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-brand-green-50 file:text-brand-green hover:file:bg-brand-green-100 disabled:opacity-50"
-                          />
-                          {status === 'uploading' && (
-                            <p className="text-xs text-yellow-700 font-medium mt-2 flex items-center gap-1">
-                              <Loader2 className="w-3 h-3 animate-spin" /> Uploading...
-                            </p>
-                          )}
-                          {status === 'success' && (documents[key] || serverDocNames[key]) && (
-                            <p className="text-xs text-green-700 font-medium mt-2 flex items-center gap-1">
-                              <CheckCircle className="w-3 h-3" /> {documents[key]?.name || serverDocNames[key]}
-                            </p>
-                          )}
-                          {status === 'error' && errorMsg && (
-                            <p className="text-xs text-red-600 font-medium mt-2 flex items-center gap-1">
-                              <AlertCircle className="w-3 h-3" /> {errorMsg}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Per-Employment Document Groups */}
-                  {employmentDocGroups.length > 0 && (
-                    <div className="space-y-4">
-                      {employmentDocGroups.map((group) => {
-                        const anyGroupSuccess = group.subDocs.some(sd => uploadStatus[sd.key] === 'success');
-                        const anyGroupError = group.subDocs.some(sd => uploadStatus[sd.key] === 'error');
-                        const anyGroupUploading = group.subDocs.some(sd => uploadStatus[sd.key] === 'uploading');
-                        return (
-                          <div key={group.index} className={`border-2 rounded-lg p-4 transition-colors ${
-                            anyGroupSuccess ? 'border-green-400 bg-green-50' :
-                            anyGroupError ? 'border-red-400 bg-red-50' :
-                            anyGroupUploading ? 'border-yellow-400 bg-yellow-50' :
-                            'border-gray-300'
-                          }`}>
-                            <Label className="text-gray-800 font-semibold text-base">
-                              {group.label} — Documents <span className="text-red-500">*</span>
-                            </Label>
-                            <p className="text-xs text-gray-500 mt-1 mb-3">Upload at least one: Relieving Letter, Offer Letter, or Pay Slip</p>
-                            <div className="space-y-3">
-                              {group.subDocs.map((sd) => {
-                                const status = uploadStatus[sd.key] || 'idle';
-                                const errorMsg = uploadErrors[sd.key];
-                                return (
-                                  <div key={sd.key}>
-                                    <Label htmlFor={`doc-${sd.key}`} className="text-gray-600 text-sm">
-                                      {sd.label}
-                                    </Label>
-                                    <input
-                                      type="file"
-                                      id={`doc-${sd.key}`}
-                                      accept=".pdf,.jpg,.jpeg,.png"
-                                      disabled={status === 'uploading'}
-                                      onChange={e => handleFileChange(sd.key, e.target.files?.[0] || null)}
-                                      className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-brand-green-50 file:text-brand-green hover:file:bg-brand-green-100 disabled:opacity-50"
-                                    />
-                                    {status === 'uploading' && (
-                                      <p className="text-xs text-yellow-700 font-medium mt-1 flex items-center gap-1">
-                                        <Loader2 className="w-3 h-3 animate-spin" /> Uploading...
-                                      </p>
-                                    )}
-                                    {status === 'success' && (documents[sd.key] || serverDocNames[sd.key]) && (
-                                      <p className="text-xs text-green-700 font-medium mt-1 flex items-center gap-1">
-                                        <CheckCircle className="w-3 h-3" /> {documents[sd.key]?.name || serverDocNames[sd.key]}
-                                      </p>
-                                    )}
-                                    {status === 'error' && errorMsg && (
-                                      <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
-                                        <AlertCircle className="w-3 h-3" /> {errorMsg}
-                                      </p>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {!canSubmit && !anyUploading && (
-                    <p className="text-sm text-amber-600 text-center">Please upload all required documents before submitting.</p>
-                  )}
-
-                  <div className="flex justify-between pt-6">
-                    <Button type="button" onClick={handleBack} variant="outline" size="lg" className="border-brand-green text-brand-green hover:bg-brand-green-50">
-                      <ChevronLeft className="mr-2 w-5 h-5" /> Previous
-                    </Button>
-                    <Button type="submit" disabled={submitting || !canSubmit} className="bg-brand-green hover:bg-brand-green-600 text-white px-4 sm:px-8" size="lg">
-                      {submitting ? 'Submitting...' : 'Submit BGV Form'}
-                    </Button>
-                  </div>
-                </div>
-                );
-              })()}
-            </form>
-          </CardContent>
-        </Card>
+        <BgvFormRunner
+          template={form.template}
+          initialValues={form.values}
+          initialUploads={form.uploads}
+          initialStepId={readSavedStep(token)}
+          onStepChange={rememberStep}
+          onSaveProgress={saveProgress}
+          onUpload={upload}
+          onSubmit={submit}
+        />
 
         {/* Footer */}
         <div className="text-center mt-6 sm:mt-8 text-sm text-gray-500 bg-white p-4 sm:p-6 rounded-lg shadow">
