@@ -26,6 +26,7 @@ interface Props {
   defaultCustomerId?: string;
   /** Pre-fill a new case (Duplicate). */
   initial?: Partial<TrackerCase> | null;
+  onCreateCompany?: (suggestedName: string) => Promise<string | null>;
   onClose: () => void;
   onSaved: (c: TrackerCase) => void;
 }
@@ -41,7 +42,7 @@ const blank = (customerId?: string): Partial<TrackerCase> => ({
   startDate: new Date().toISOString().slice(0, 10),
 });
 
-const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId, initial, onClose, onSaved }) => {
+const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId, initial, onCreateCompany, onClose, onSaved }) => {
   const [tab, setTab] = useState<Tab>('details');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -75,7 +76,10 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
       })
       .catch((e) => setError(e.message || 'Could not load the case'))
       .finally(() => setLoading(false));
-  }, [open, caseId, meta, defaultCustomerId, initial]);
+    // Reset only when the dialog opens or switches case. Not on meta changes:
+    // creating a company updates meta.customers mid-edit and must not wipe the form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, caseId, defaultCustomerId, initial]);
 
   const set = (key: string, value: any) => setForm((f) => ({ ...f, [key]: value }));
   const fieldsByGroup = useMemo(() => {
@@ -237,6 +241,7 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
                       onChange={(v) => set('customerId', v)}
                       placeholder="Choose a company…"
                       options={meta.customers.map((c) => ({ value: c._id, label: c.companyName }))}
+                      onCreate={onCreateCompany && !readOnly ? async (q) => { const id = await onCreateCompany(q); if (id) set('customerId', id); } : undefined}
                     />
                   </div>
                 )}

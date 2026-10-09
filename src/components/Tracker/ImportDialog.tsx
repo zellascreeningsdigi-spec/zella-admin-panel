@@ -13,6 +13,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onImported: () => void;
+  /** Open "Create new company" with a suggested name; resolves to the new company id. */
+  onCreateCompany: (suggestedName: string) => Promise<string | null>;
 }
 
 type Step = 'upload' | 'link' | 'preview' | 'done';
@@ -24,7 +26,7 @@ interface SheetChoice {
   clientMap: Record<string, string>;
 }
 
-const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported }) => {
+const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCreateCompany }) => {
   const [step, setStep] = useState<Step>('upload');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -162,6 +164,10 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported }) => {
                         warn={c.include && !c.target}
                         pinned={s.clients.filter((x: any) => x.name).length > 0 ? [{ value: BY_CLIENT, label: 'Use the client name on each row' }] : []}
                         options={companyOptions}
+                        onCreate={async (q) => {
+                          const id = await onCreateCompany(q || s.name);
+                          if (id) setChoice(s.name, { target: id });
+                        }}
                       />
                     </div>
                   </div>
@@ -179,6 +185,10 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported }) => {
                             warn={!c.clientMap[cl.name]}
                             pinned={[{ value: '', label: 'Skip these rows' }]}
                             options={companyOptions}
+                            onCreate={async (q) => {
+                              const id = await onCreateCompany(q || cl.name);
+                              if (id) setChoice(s.name, { clientMap: { ...choices[s.name].clientMap, [cl.name]: id } });
+                            }}
                           />
                         </div>
                       ))}

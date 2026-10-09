@@ -504,6 +504,11 @@ class ApiService {
     return this.get(`/tracker/analytics${this.trackerQuery(params)}`);
   }
 
+  /** Add a company from the tracker. Creates no logins (those are created when the company is emailed from Datahub). */
+  async createTrackerCompany(data: { companyName: string; emails: string[] }): Promise<ApiResponse<any>> {
+    return this.post('/tracker/companies', data);
+  }
+
   async saveTrackerSettings(customerId: string, data: { trackerTatDays?: number; trackerVisibleFields?: string[] }): Promise<ApiResponse<any>> {
     return this.put(`/tracker/settings/${customerId}`, data);
   }

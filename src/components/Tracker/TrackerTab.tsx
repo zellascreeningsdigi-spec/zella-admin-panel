@@ -9,6 +9,7 @@ import CaseFormDialog from './CaseFormDialog';
 import ImportDialog from './ImportDialog';
 import ExportDialog from './ExportDialog';
 import ClientViewDialog from './ClientViewDialog';
+import CreateCompanyDialog, { CreatedCompany } from './CreateCompanyDialog';
 import { TrackerCase, TrackerFilters, TrackerMeta, toParams } from './trackerTypes';
 
 // BGV tracker: the team's tracker workbook, in the software.
@@ -47,6 +48,20 @@ const TrackerTab: React.FC = () => {
   const [exportOpen, setExportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bulk, setBulk] = useState({ status: '', allocatedTo: '', billedMonth: '' });
+  // "Create new company" from any company picker: the caller awaits the new id.
+  const [createCompany, setCreateCompany] = useState<{ name: string; resolve: (id: string | null) => void } | null>(null);
+  const requestCreateCompany = (name: string) =>
+    new Promise<string | null>((resolve) => setCreateCompany({ name, resolve }));
+  const companyCreated = (c: CreatedCompany) => {
+    setMeta((m) => (m ? {
+      ...m,
+      customers: [...m.customers, { _id: c._id, companyName: c.companyName, trackerTatDays: 15, trackerVisibleFields: [] }]
+        .sort((a, b) => a.companyName.localeCompare(b.companyName)),
+    } : m));
+    flash(`Company "${c.companyName}" created — send them the login email from Datahub when ready`);
+    createCompany?.resolve(c._id);
+    setCreateCompany(null);
+  };
 
   const flash = (text: string, extra: { undo?: () => void; error?: boolean } = {}) => {
     setNotice({ text, ...extra });
@@ -268,13 +283,23 @@ const TrackerTab: React.FC = () => {
         caseId={formCaseId}
         initial={formInitial}
         defaultCustomerId={filters.customerIds?.length === 1 ? filters.customerIds[0] : undefined}
+        onCreateCompany={requestCreateCompany}
         onClose={() => setFormOpen(false)}
         onSaved={(c) => {
           flash(c.isDraft ? `Draft saved${c.name ? `: ${c.name}` : ''}` : formCaseId ? `Saved ${c.name}` : `Added ${c.name}`);
           refreshAll();
         }}
       />
-      {meta.canEdit && <ImportDialog meta={meta} open={importOpen} onClose={() => setImportOpen(false)} onImported={refreshAll} />}
+      {meta.canEdit && <ImportDialog meta={meta} open={importOpen} onClose={() => setImportOpen(false)} onImported={refreshAll} onCreateCompany={requestCreateCompany} />}
+      {meta.canEdit && (
+        <CreateCompanyDialog
+          open={!!createCompany}
+          initialName={createCompany?.name || ''}
+          existingNames={meta.customers.map((c) => c.companyName)}
+          onClose={() => { createCompany?.resolve(null); setCreateCompany(null); }}
+          onCreated={companyCreated}
+        />
+      )}
       <ExportDialog meta={meta} open={exportOpen} filters={filters} onClose={() => setExportOpen(false)} />
       {meta.canEdit && (
         <ClientViewDialog

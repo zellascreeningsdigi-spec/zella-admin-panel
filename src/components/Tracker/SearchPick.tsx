@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Search } from 'lucide-react';
+import { Check, ChevronDown, Plus, Search } from 'lucide-react';
 
 // Searchable single-select for long lists (companies). Type to filter,
 // arrow keys + Enter to choose, Esc to close. `pinned` options (e.g. "Skip
@@ -21,10 +21,14 @@ interface SearchPickProps {
   warn?: boolean;
   size?: 'sm' | 'md';
   className?: string;
+  /** Offer "Create new company" at the end of the list; gets the typed text. */
+  onCreate?: (query: string) => void;
+  createLabel?: string;
 }
 
 const SearchPick: React.FC<SearchPickProps> = ({
   value, options, onChange, placeholder = 'Choose…', pinned = [], disabled, warn, size = 'md', className = '',
+  onCreate, createLabel = 'Create new company',
 }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -90,7 +94,11 @@ const SearchPick: React.FC<SearchPickProps> = ({
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, list.length - 1)); }
                 else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
-                else if (e.key === 'Enter') { e.preventDefault(); if (list[active]) choose(list[active].value); }
+                else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (list[active]) choose(list[active].value);
+                  else if (onCreate && list.length === pinned.length) { onCreate(query.trim()); setOpen(false); setQuery(''); }
+                }
                 else if (e.key === 'Escape') { setOpen(false); setQuery(''); }
               }}
             />
@@ -111,6 +119,16 @@ const SearchPick: React.FC<SearchPickProps> = ({
               </button>
             ))}
           </div>
+          {onCreate && (
+            <button
+              type="button"
+              onClick={() => { onCreate(query.trim()); setOpen(false); setQuery(''); }}
+              className="w-full flex items-center gap-2 px-3 py-2 border-t text-left text-sm text-brand-green hover:bg-brand-green-50 font-medium"
+            >
+              <Plus className="w-4 h-4 shrink-0" />
+              <span className="truncate">{query.trim() ? `${createLabel} “${query.trim()}”` : `${createLabel}…`}</span>
+            </button>
+          )}
         </div>
       )}
     </div>
