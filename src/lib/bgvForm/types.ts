@@ -33,6 +33,8 @@ export interface TemplateField {
   requiredFrom?: string;
   requiredMessage?: string;
   displayRequired?: boolean;
+  /** Required, but shown without the * (original gap fields). */
+  hideRequiredMark?: boolean;
   hidden?: boolean;
   builtIn?: boolean;
   locked?: boolean;

@@ -40,6 +40,8 @@
 //                 the server -- the original form gated the authorization
 //                 ticks in the browser, and API clients that submit without
 //                 them must keep working
+//   hideRequiredMark  required, but shown without the * (the original gap
+//                 fields were unmarked)
 //   reportLabel   label in the generated DOCX report. Unset = the report's
 //                 own fixed wording.
 
@@ -235,8 +237,8 @@ export const SYSTEM_STEPS = () => [
             id: 'gap.hasGap', path: 'hasGap', type: 'dropdown', label: 'Any Gap?', builtIn: true, validations: [],
             options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]
           },
-          { id: 'gap.duration', path: 'duration', type: 'text', label: 'Duration', placeholder: 'e.g. 6 months', required: true, builtIn: true, showIf: { field: 'gap.hasGap', equals: 'yes' }, validations: [meaningful({ allowCode: true })] },
-          { id: 'gap.reason', path: 'reason', type: 'text', label: 'Reason', required: true, builtIn: true, showIf: { field: 'gap.hasGap', equals: 'yes' }, validations: [{ rule: 'meaningfulText', value: { minLength: 10 }, message: 'Enter a meaningful reason (at least 10 characters)' }] }
+          { id: 'gap.duration', path: 'duration', type: 'text', label: 'Duration', placeholder: 'e.g. 6 months', required: true, hideRequiredMark: true, builtIn: true, showIf: { field: 'gap.hasGap', equals: 'yes' }, validations: [meaningful({ allowCode: true })] },
+          { id: 'gap.reason', path: 'reason', type: 'text', label: 'Reason', required: true, hideRequiredMark: true, builtIn: true, showIf: { field: 'gap.hasGap', equals: 'yes' }, validations: [{ rule: 'meaningfulText', value: { minLength: 10 }, message: 'Enter a meaningful reason (at least 10 characters)' }] }
         ]
       }
     ]

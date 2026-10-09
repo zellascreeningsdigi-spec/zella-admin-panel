@@ -19,7 +19,7 @@ import {
   validateAgainstTemplate,
   visibleSteps,
 } from '@/lib/bgvForm/types';
-import { FormValues, buildGapEntries, mergeGapEntries } from '@/lib/bgvForm/formState';
+import { FormValues, buildGapEntries, initialFormValues, mergeGapEntries } from '@/lib/bgvForm/formState';
 
 // Steps, navigation, validation, uploads and submit for a template-driven BGV
 // form. The candidate page and the form builder's preview both render this,
@@ -100,9 +100,18 @@ const BgvFormRunner: React.FC<BgvFormRunnerProps> = ({
     () => (Array.isArray(values.employmentHistory) ? values.employmentHistory : []),
     [values.employmentHistory]
   );
-  const employmentKey = `${employments.length}|${employments.map((e) => e?.companyName || '').join('|')}`;
+  const employmentKeyOf = (list: FormValues[]) => `${list.length}|${list.map((e) => e?.companyName || '').join('|')}`;
+  const employmentKey = employmentKeyOf(employments);
+  // The original form rebuilt gap rows only when the employment list differed
+  // from the blank form it started with, so saved gap answers survive a reload
+  // until employment actually changes. Start from that same key.
+  const lastEmploymentKey = useRef(employmentKeyOf(
+    (initialFormValues(template).employmentHistory as FormValues[] | undefined) || []
+  ));
   useEffect(() => {
     if (!gapField) return;
+    if (employmentKey === lastEmploymentKey.current) return;
+    lastEmploymentKey.current = employmentKey;
     setValues((prev) => {
       const next = clone(prev);
       const fresh = buildGapEntries(Array.isArray(prev.employmentHistory) ? prev.employmentHistory : []);
