@@ -6,8 +6,11 @@ import {
   TrackerMeta,
   STATUS_STYLE,
   CHECK_STYLE,
+  COLOUR_STYLE,
   TAT_STYLE,
+  TrackerCustomField,
   checkLabel,
+  checkTitle,
   fmtDate,
   fmtMonth,
 } from './trackerTypes';
@@ -18,6 +21,8 @@ import {
 export interface TableProps {
   meta: TrackerMeta;
   rows: TrackerCase[];
+  /** Companies the table is filtered to: their own fields are shown as columns. */
+  customerIds?: string[];
   loading: boolean;
   total: number;
   page: number;
@@ -41,11 +46,13 @@ interface Column {
   sortKey?: string;
   render: (c: TrackerCase) => React.ReactNode;
   width?: string;
+  extra?: boolean;
 }
 
 const DEFAULT_COLUMNS = ['bgvId', 'name', 'companyName', 'status', 'checks', 'startDate', 'endDate', 'agingDays', 'tatStatus', 'insuffRemark', 'allocatedTo', 'billing'];
 const CLIENT_DEFAULT = ['bgvId', 'name', 'status', 'checks', 'startDate', 'endDate', 'agingDays', 'tatStatus', 'insuffRemark', 'reportDate'];
 const STORAGE_KEY = (client: boolean) => `tracker-columns:${client ? 'client' : 'staff'}`;
+const HIDDEN_KEY = 'tracker-hidden-company-fields';
 
 const loadColumns = (client: boolean): string[] | null => {
   try { const v = localStorage.getItem(STORAGE_KEY(client)); return v ? JSON.parse(v) : null; } catch { return null; }
@@ -75,6 +82,10 @@ const InlineText: React.FC<{ value: string; options?: string[]; onSave: (v: stri
 const TrackerTable: React.FC<TableProps> = (p) => {
   const { meta, rows } = p;
   const [visible, setVisible] = useState<string[]>(() => loadColumns(meta.isClient) || (meta.isClient ? CLIENT_DEFAULT : DEFAULT_COLUMNS));
+  // Company fields the user switched off; every other field of the shown company appears by itself.
+  const [hiddenFields, setHiddenFields] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); } catch { return []; }
+  });
   const [pickerOpen, setPickerOpen] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -82,6 +93,24 @@ const TrackerTable: React.FC<TableProps> = (p) => {
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY(meta.isClient), JSON.stringify(visible)); } catch { /* ignore */ }
   }, [visible, meta.isClient]);
+  useEffect(() => {
+    try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(hiddenFields)); } catch { /* ignore */ }
+  }, [hiddenFields]);
+
+  // Own fields of the companies in view (the filtered ones, or a company login's own).
+  const companyFields: TrackerCustomField[] = useMemo(() => {
+    const ids = meta.isClient ? meta.customers.map((c) => c._id) : (p.customerIds || []);
+    const out = new Map<string, TrackerCustomField>();
+    for (const id of ids) {
+      for (const f of meta.customers.find((c) => c._id === id)?.trackerCustomFields || []) if (!out.has(f.label)) out.set(f.label, f);
+    }
+    return Array.from(out.values());
+  }, [meta, p.customerIds]);
+  const fieldType = useMemo(() => {
+    const m = new Map<string, string>();
+    meta.customers.forEach((c) => (c.trackerCustomFields || []).forEach((f) => m.set(f.label, f.type)));
+    return m;
+  }, [meta]);
   useEffect(() => {
     const close = (e: MouseEvent) => { if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false); };
     document.addEventListener('mousedown', close);
@@ -179,6 +208,9 @@ const TrackerTable: React.FC<TableProps> = (p) => {
             );
           }
           if (f.key === 'bgvId') return <span className="font-mono text-xs whitespace-nowrap">{v}</span>;
+          if (f.type === 'colour') {
+            return v ? <span className="inline-flex items-center gap-1 text-xs"><span className={`w-2.5 h-2.5 rounded-full ${COLOUR_STYLE[v] || ''}`} />{v}</span> : '';
+          }
           return v ?? '';
         },
       });
@@ -189,7 +221,7 @@ const TrackerTable: React.FC<TableProps> = (p) => {
         render: (c) => (
           <div className="flex flex-wrap gap-1 min-w-[150px] max-w-[260px]">
             {(c.checks || []).map((k, i) => (
-              <span key={i} title={`${meta.checkTypes.find((t) => t.key === k.type)?.label}: ${k.status}${k.note ? ` — ${k.note}` : ''}`} className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${CHECK_STYLE[k.status] || 'bg-gray-100'}`}>
+              <span key={i} title={checkTitle(meta, k)} className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${CHECK_STYLE[k.status] || 'bg-gray-100'}`}>
                 {checkLabel(meta, k)}
               </span>
             ))}
@@ -197,16 +229,33 @@ const TrackerTable: React.FC<TableProps> = (p) => {
         ),
       });
     }
-    if (meta.showExtras) {
-      const keys = new Set<string>();
-      rows.forEach((r) => Object.keys(r.extras || {}).forEach((k) => keys.add(k)));
-      Array.from(keys).sort().forEach((k) => add({ key: `extra:${k}`, label: k, render: (c) => <span className="text-xs">{(c.extras || {})[k]}</span> }));
-    }
+    // The company's own fields first (in its order), then any other extra values on these rows.
+    const keys: string[] = companyFields.map((f) => f.label);
+    const seen = new Set(keys);
+    const rest = new Set<string>();
+    rows.forEach((r) => Object.keys(r.extras || {}).forEach((k) => { if (!seen.has(k)) rest.add(k); }));
+    keys.push(...Array.from(rest).sort());
+    keys.forEach((k) => add({
+      key: `extra:${k}`,
+      label: k,
+      extra: true,
+      render: (c) => {
+        const v = (c.extras || {})[k];
+        return <span className="text-xs whitespace-nowrap">{fieldType.get(k) === 'date' ? fmtDate(v) || v : v}</span>;
+      },
+    }));
     return cols;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meta, rows, canEdit]);
+  }, [meta, rows, canEdit, companyFields, fieldType]);
 
-  const columns = visible.map((k) => allColumns.find((c) => c.key === k)).filter(Boolean) as Column[];
+  // Chosen columns, plus the shown company's own fields unless switched off.
+  const autoKeys = companyFields.map((f) => `extra:${f.label}`).filter((k) => !visible.includes(k) && !hiddenFields.includes(k));
+  const shownKeys = [...visible, ...autoKeys];
+  const columns = shownKeys.map((k) => allColumns.find((c) => c.key === k)).filter(Boolean) as Column[];
+  const toggleColumn = (key: string, on: boolean) => {
+    setVisible(on ? [...visible, key] : visible.filter((k) => k !== key));
+    if (key.startsWith('extra:')) setHiddenFields(on ? hiddenFields.filter((k) => k !== key) : Array.from(new Set([...hiddenFields, key])));
+  };
   const allIds = rows.map((r) => r._id);
   const allChecked = allIds.length > 0 && allIds.every((id) => p.selected.includes(id));
   const pages = Math.max(1, Math.ceil(p.total / p.limit));
@@ -222,18 +271,19 @@ const TrackerTable: React.FC<TableProps> = (p) => {
           {pickerOpen && (
             <div className="absolute right-0 z-30 mt-1 w-72 max-h-96 overflow-y-auto rounded-md border bg-white shadow-lg p-2">
               <div className="flex justify-between px-1 pb-2 border-b mb-1 text-xs">
-                <button type="button" className="text-brand-green" onClick={() => setVisible(allColumns.map((c) => c.key))}>Show all</button>
-                <button type="button" className="text-gray-500" onClick={() => setVisible(meta.isClient ? CLIENT_DEFAULT : DEFAULT_COLUMNS)}>Reset</button>
+                <button type="button" className="text-brand-green" onClick={() => { setVisible(allColumns.map((c) => c.key)); setHiddenFields([]); }}>Show all</button>
+                <button type="button" className="text-gray-500" onClick={() => { setVisible(meta.isClient ? CLIENT_DEFAULT : DEFAULT_COLUMNS); setHiddenFields([]); }}>Reset</button>
               </div>
-              {allColumns.map((c) => (
-                <label key={c.key} className="flex items-center gap-2 px-1 py-1 text-sm cursor-pointer hover:bg-gray-50 rounded">
-                  <input
-                    type="checkbox"
-                    checked={visible.includes(c.key)}
-                    onChange={(e) => setVisible(e.target.checked ? [...visible, c.key] : visible.filter((k) => k !== c.key))}
-                  />
-                  {c.label}
-                </label>
+              {allColumns.map((c, i) => (
+                <React.Fragment key={c.key}>
+                  {c.extra && !allColumns[i - 1]?.extra && (
+                    <p className="px-1 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400 border-t mt-1">Company fields</p>
+                  )}
+                  <label className="flex items-center gap-2 px-1 py-1 text-sm cursor-pointer hover:bg-gray-50 rounded">
+                    <input type="checkbox" checked={shownKeys.includes(c.key)} onChange={(e) => toggleColumn(c.key, e.target.checked)} />
+                    {c.label}
+                  </label>
+                </React.Fragment>
               ))}
             </div>
           )}
