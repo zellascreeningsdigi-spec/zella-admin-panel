@@ -509,7 +509,12 @@ class ApiService {
     return this.post('/tracker/companies', data);
   }
 
-  async saveTrackerSettings(customerId: string, data: { trackerTatDays?: number; trackerVisibleFields?: string[] }): Promise<ApiResponse<any>> {
+  async saveTrackerSettings(customerId: string, data: {
+    trackerTatDays?: number;
+    trackerVisibleFields?: string[];
+    trackerCustomFields?: { label: string; type: string }[];
+    resetLayout?: boolean;
+  }): Promise<ApiResponse<any>> {
     return this.put(`/tracker/settings/${customerId}`, data);
   }
 

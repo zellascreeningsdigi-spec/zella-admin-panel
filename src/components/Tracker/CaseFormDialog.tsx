@@ -12,6 +12,7 @@ import {
   TrackerField,
   TrackerMeta,
   CHECK_STYLE,
+  COLOUR_STYLE,
   TAT_STYLE,
   fmtDate,
   toInputDate,
@@ -111,7 +112,9 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
     }
     payload.billingStatus = form.billingStatus || 'Pending';
     payload.billedMonth = form.billingStatus === 'Billed' ? (form.billedMonth || '') : '';
-    payload.checks = (form.checks || []).map((c) => ({ type: c.type, status: c.status, variant: c.variant || '', note: c.note || '' }));
+    payload.checks = (form.checks || []).map((c) => ({
+      type: c.type, status: c.status, variant: c.variant || '', note: c.note || '', label: c.label || '', completedDate: c.completedDate || null,
+    }));
     payload.extras = form.extras || {};
     payload.customerId = form.customerId || undefined;
     if (mode === 'draft' && !caseId) payload.isDraft = true;
@@ -138,6 +141,17 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
   const renderInput = (f: TrackerField) => {
     const v = form[f.key];
     const cls = 'mt-1 h-9 text-sm';
+    if (f.type === 'colour') {
+      return (
+        <div className="mt-1 flex items-center gap-2">
+          <select disabled={readOnly} className="h-9 flex-1 px-2 border border-gray-300 rounded-md text-sm bg-white" value={v || ''} onChange={(e) => set(f.key, e.target.value)}>
+            <option value="">—</option>
+            {['Green', 'Amber', 'Red'].map((c) => <option key={c}>{c}</option>)}
+          </select>
+          {v && <span className={`w-4 h-4 rounded-full ${COLOUR_STYLE[v] || ''}`} />}
+        </div>
+      );
+    }
     if (f.type === 'status') {
       return (
         <select disabled={readOnly} className="mt-1 h-9 w-full px-2 border border-gray-300 rounded-md text-sm bg-white" value={v || 'WIP'} onChange={(e) => set(f.key, e.target.value)}>
@@ -181,6 +195,16 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
   const addCheck = (type: string) => setChecks([...checks, { type, status: 'Pending', variant: '', note: '' }]);
 
   const extras = form.extras || {};
+  // The chosen company's own fields (e.g. Hexaware's "Cost Center"), kept in extras by label.
+  const companyFields = meta.customers.find((c) => c._id === form.customerId)?.trackerCustomFields || [];
+  const companyFieldLabels = new Set(companyFields.map((f) => f.label));
+  const otherExtras = Object.entries(extras).filter(([k]) => !companyFieldLabels.has(k));
+  const setExtra = (k: string, v: string) => {
+    const n = { ...extras };
+    if (v) n[k] = v; else delete n[k];
+    set('extras', n);
+  };
+  const cycles: { raised?: string | null; cleared?: string | null }[] = form.insuffCycles || [];
   const tabBtn = (t: Tab, label: string, count?: number) => (
     <button
       type="button"
@@ -225,7 +249,7 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
             <div className="flex border-b">
               {tabBtn('details', 'Details')}
               {meta.showChecks && tabBtn('checks', 'Checks', checks.length)}
-              {meta.showExtras && tabBtn('extras', 'Extra fields', Object.keys(extras).length)}
+              {meta.showExtras && tabBtn('extras', 'Extra fields', otherExtras.length)}
               {original?.history && tabBtn('history', 'History', original.history.length)}
             </div>
 
@@ -262,6 +286,39 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
                     </div>
                   </div>
                 ))}
+                {cycles.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Insufficiency cycles</h4>
+                    <div className="flex flex-wrap gap-2 text-sm">
+                      {cycles.map((c, i) => (
+                        <span key={i} className="border rounded-md px-2 py-1 bg-gray-50">
+                          {['I', 'II', 'III'][i] || i + 1}: raised {fmtDate(c.raised) || '—'} · cleared {fmtDate(c.cleared) || <span className="text-amber-700">open</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {companyFields.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                      {meta.customers.find((c) => c._id === form.customerId)?.companyName} fields
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {companyFields.map((f) => (
+                        <div key={f.label}>
+                          <Label className="text-xs text-gray-600">{f.label}</Label>
+                          <Input
+                            disabled={readOnly}
+                            type={f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text'}
+                            className="mt-1 h-9 text-sm"
+                            value={f.type === 'date' ? toInputDate(extras[f.label]) : extras[f.label] || ''}
+                            onChange={(e) => setExtra(f.label, e.target.value)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -269,7 +326,8 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
               <div className="space-y-3">
                 {checks.length === 0 && <p className="text-sm text-gray-500">No checks yet.</p>}
                 {checks.map((c, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                  <div key={i} className="border rounded-md p-2 space-y-2">
+                  <div className="grid grid-cols-12 gap-2 items-center">
                     <select disabled={readOnly} className="col-span-3 h-9 px-2 border border-gray-300 rounded-md text-sm bg-white" value={c.type} onChange={(e) => setChecks(checks.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)))}>
                       {meta.checkTypes.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
                     </select>
@@ -290,6 +348,12 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
                       </button>
                     )}
                   </div>
+                  <div className="grid grid-cols-12 gap-2 items-center">
+                    <Input disabled={readOnly} className="col-span-7 h-8 text-xs" placeholder="Company’s name for this check (optional), e.g. ADDRESS CHECK (CURRENT-2)" value={c.label || ''} onChange={(e) => setChecks(checks.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+                    <span className="col-span-2 text-xs text-gray-500 text-right">Completed on</span>
+                    <Input disabled={readOnly} type="date" className="col-span-3 h-8 text-xs" value={toInputDate(c.completedDate)} onChange={(e) => setChecks(checks.map((x, j) => (j === i ? { ...x, completedDate: e.target.value || null } : x)))} />
+                  </div>
+                  </div>
                 ))}
                 {!readOnly && (
                   <div className="flex flex-wrap gap-1.5 pt-2">
@@ -306,7 +370,7 @@ const CaseFormDialog: React.FC<Props> = ({ meta, open, caseId, defaultCustomerId
             {tab === 'extras' && (
               <div className="space-y-2">
                 <p className="text-xs text-gray-500">Client-specific information (Invoice no, Ticket ID, Vendor…).</p>
-                {Object.entries(extras).map(([k, v]) => (
+                {otherExtras.map(([k, v]) => (
                   <div key={k} className="grid grid-cols-12 gap-2 items-center">
                     <span className="col-span-4 text-sm text-gray-700 truncate" title={k}>{k}</span>
                     <Input disabled={readOnly} className="col-span-7 h-9 text-sm" value={v} onChange={(e) => set('extras', { ...extras, [k]: e.target.value })} />

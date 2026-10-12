@@ -4,7 +4,7 @@ export interface TrackerField {
   key: string;
   label: string;
   group: string;
-  type: 'text' | 'longtext' | 'date' | 'month' | 'number' | 'status' | 'billing' | 'person';
+  type: 'text' | 'longtext' | 'date' | 'month' | 'number' | 'status' | 'billing' | 'person' | 'colour';
   computed?: boolean;
 }
 
@@ -14,6 +14,14 @@ export interface TrackerCheck {
   status: string;
   variant?: string;
   note?: string;
+  /** The company's own name for this check, e.g. "ADDRESS CHECK (CURRENT-2)". */
+  label?: string;
+  completedDate?: string | null;
+}
+
+export interface TrackerCustomField {
+  label: string;
+  type: 'text' | 'date' | 'number';
 }
 
 export interface TrackerCase {
@@ -55,7 +63,14 @@ export interface TrackerMeta {
   clientVisibleCandidates: string[];
   showChecks: boolean;
   showExtras: boolean;
-  customers: { _id: string; companyName: string; trackerTatDays?: number; trackerVisibleFields?: string[] }[];
+  customers: {
+    _id: string;
+    companyName: string;
+    trackerTatDays?: number;
+    trackerVisibleFields?: string[];
+    trackerCustomFields?: TrackerCustomField[];
+    hasCustomFormat?: boolean;
+  }[];
   options: { initiators: string[]; allocated: string[]; months: string[]; billedMonths: string[] };
 }
 
@@ -80,6 +95,9 @@ export interface TrackerFilters {
   dueTo?: string;
   reportFrom?: string;
   reportTo?: string;
+  reportColour?: string[];
+  extraKey?: string;
+  extraValue?: string;
 }
 
 /** Filters as API query params. */
@@ -138,6 +156,24 @@ export const TAT_STYLE: Record<string, string> = {
   'In TAT': 'text-green-700',
   'Due soon': 'text-amber-700',
   'Out of TAT': 'text-red-700',
+};
+
+export const COLOUR_STYLE: Record<string, string> = {
+  Green: 'bg-green-500',
+  Amber: 'bg-amber-400',
+  Red: 'bg-red-500',
+};
+
+/** Tooltip for a check badge: the company's own name and completion date. */
+export const checkTitle = (meta: TrackerMeta | null, c: TrackerCheck) => {
+  const t = meta?.checkTypes.find((x) => x.key === c.type);
+  return [
+    c.label || `${t?.label || c.type}${(c.n || 1) > 1 ? ` ${c.n}` : ''}`,
+    c.status,
+    c.variant,
+    c.completedDate ? `completed ${fmtDate(c.completedDate)}` : '',
+    c.note,
+  ].filter(Boolean).join(' · ');
 };
 
 export const checkLabel = (meta: TrackerMeta | null, c: TrackerCheck) => {

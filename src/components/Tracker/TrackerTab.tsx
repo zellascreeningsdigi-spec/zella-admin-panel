@@ -251,6 +251,7 @@ const TrackerTab: React.FC = () => {
       {view !== 'analytics' ? (
         <TrackerTable
           meta={meta}
+          customerIds={filters.customerIds}
           rows={rows}
           loading={loading}
           total={total}

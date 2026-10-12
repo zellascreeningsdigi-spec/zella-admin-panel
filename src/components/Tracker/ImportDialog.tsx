@@ -24,6 +24,8 @@ interface SheetChoice {
   include: boolean;
   target: string; // customerId or BY_CLIENT
   clientMap: Record<string, string>;
+  /** Remember the tab's columns as the company's own format. */
+  saveFormat: boolean;
 }
 
 const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCreateCompany }) => {
@@ -56,9 +58,11 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
         for (const c of s.clients) if (c.match) clientMap[c.name] = c.match.customerId;
         const multi = s.clients.filter((c: any) => c.name).length > 1;
         next[s.name] = {
-          include: s.rowCount > 0,
+          // A tab with no cases but its own columns is a format: still worth importing.
+          include: s.rowCount > 0 || (s.companyFields || []).length > 0,
           target: s.suggestedCustomerId || (multi ? BY_CLIENT : ''),
           clientMap,
+          saveFormat: true,
         };
       }
       setChoices(next);
@@ -74,7 +78,9 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
     token: analysis.token,
     sheets: Object.entries(choices)
       .filter(([, c]) => c.include)
-      .map(([name, c]) => (c.target === BY_CLIENT ? { name, clientMap: c.clientMap } : { name, customerId: c.target || undefined })),
+      .map(([name, c]) => (c.target === BY_CLIENT
+        ? { name, clientMap: c.clientMap }
+        : { name, customerId: c.target || undefined, saveFormat: c.saveFormat })),
   });
 
   const runPreview = async () => {
@@ -109,6 +115,23 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
     created: t.created + s.created, updated: t.updated + s.updated, unchanged: t.unchanged + s.unchanged, skipped: t.skipped + s.skipped,
   }), { created: 0, updated: 0, unchanged: 0, skipped: 0 }), [preview]);
   const included = Object.values(choices).filter((c) => c.include).length;
+  const companyChanges = (preview?.sheets || []).filter((s: any) => s.newFields?.length || s.saveFormat);
+  const caseCount = totals.created + totals.updated;
+  const knownFields = (customerId: string) => new Set(
+    (companies.find((co) => co._id === customerId)?.trackerCustomFields || []).map((f) => f.label.toLowerCase()),
+  );
+  const columnLabel = (col: any) => {
+    switch (col.kind) {
+      case 'field': return meta.fields.find((f) => f.key === col.field)?.label || col.field;
+      case 'check': return `check: ${col.check}`;
+      case 'checkAll': return 'check: all';
+      case 'checkDate': return `completion date of ${col.check}`;
+      case 'insuffCycle': return `insufficiency ${col.cycle}`;
+      case 'client': return 'company';
+      case 'extra': return `company field${col.valueType && col.valueType !== 'text' ? ` (${col.valueType})` : ''}`;
+      default: return 'calculated';
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
@@ -152,7 +175,9 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
                       <input type="checkbox" checked={c.include} onChange={(e) => setChoice(s.name, { include: e.target.checked })} />
                       {s.name}
                     </label>
-                    <span className="text-xs text-gray-500">{s.rowCount} cases{s.warnings ? ` · ${s.warnings} values to check` : ''}</span>
+                    <span className="text-xs text-gray-500">
+                      {s.rowCount ? `${s.rowCount} cases` : 'No cases — column format only'}{s.warnings ? ` · ${s.warnings} values to check` : ''}
+                    </span>
                     <div className="flex items-center gap-2 ml-auto">
                       <span className="text-xs text-gray-500">Company:</span>
                       <SearchPick
@@ -195,19 +220,38 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
                     </div>
                   )}
 
+                  {c.include && c.target && c.target !== BY_CLIENT && (() => {
+                    const known = knownFields(c.target);
+                    const fresh = (s.companyFields || []).filter((f: any) => !known.has(f.label.toLowerCase()));
+                    const companyName = companies.find((co) => co._id === c.target)?.companyName || 'this company';
+                    return (
+                      <div className="bg-blue-50/60 rounded-md p-2 text-xs space-y-1.5">
+                        {fresh.length > 0 ? (
+                          <p className="text-blue-900">
+                            <strong>{fresh.length} new field{fresh.length === 1 ? '' : 's'}</strong> for {companyName}:{' '}
+                            {fresh.map((f: any) => f.label).join(', ')}
+                          </p>
+                        ) : (s.companyFields || []).length > 0 ? (
+                          <p className="text-gray-600">{companyName} already has all {s.companyFields.length} of this tab’s own fields.</p>
+                        ) : null}
+                        <label className="flex items-start gap-2 cursor-pointer text-gray-700">
+                          <input type="checkbox" className="mt-0.5" checked={c.saveFormat} onChange={(e) => setChoice(s.name, { saveFormat: e.target.checked })} />
+                          <span>Remember this tab’s columns as {companyName}’s format — its Excel export comes back in the same columns and order</span>
+                        </label>
+                      </div>
+                    );
+                  })()}
+
                   <button type="button" className="text-xs text-gray-500 flex items-center gap-1" onClick={() => setExpanded((x) => ({ ...x, [s.name]: !x[s.name] }))}>
                     {expanded[s.name] ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                    Columns: {s.columns.length - extras.length - ignored.length} mapped, {extras.length} kept as extra fields, {ignored.length} calculated by the tracker
+                    Columns: {s.columns.length - extras.length - ignored.length} mapped, {extras.length} company field{extras.length === 1 ? '' : 's'}, {ignored.length} calculated by the tracker
                   </button>
                   {expanded[s.name] && (
                     <div className="text-xs text-gray-600 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-0.5 pl-4">
                       {s.columns.map((col: any, i: number) => (
                         <span key={i} className="truncate">
                           {col.header} → <span className={col.kind === 'extra' ? 'text-blue-700' : col.kind === 'ignore' ? 'text-gray-400' : 'text-brand-green'}>
-                            {col.kind === 'field' ? meta.fields.find((f) => f.key === col.field)?.label || col.field
-                              : col.kind === 'check' || col.kind === 'checkAll' ? `check: ${col.check || 'all'}`
-                              : col.kind === 'client' ? 'company'
-                              : col.kind === 'extra' ? 'extra field' : 'calculated'}
+                            {columnLabel(col)}
                           </span>
                         </span>
                       ))}
@@ -226,6 +270,19 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
                 <div key={l as string} className="border rounded-lg p-2"><p className={`text-xl font-semibold ${tone}`}>{n as number}</p><p className="text-xs text-gray-500">{l}</p></div>
               ))}
             </div>
+            {companyChanges.length > 0 && (
+              <div className="border border-blue-200 bg-blue-50/60 rounded-lg p-2 text-sm space-y-1">
+                {companyChanges.map((s: any) => (
+                  <p key={s.name} className="text-blue-900">
+                    <strong>{s.companyName}</strong>:{' '}
+                    {[
+                      s.newFields?.length ? `adds ${s.newFields.length} field${s.newFields.length === 1 ? '' : 's'} (${s.newFields.map((f: any) => f.label).join(', ')})` : '',
+                      s.saveFormat ? `remembers the “${s.name}” columns as its format` : '',
+                    ].filter(Boolean).join(' and ')}
+                  </p>
+                ))}
+              </div>
+            )}
             {preview.sheets.map((s: any) => {
               const rows = s.rows || [];
               const warnRows = rows.filter((r: any) => r.warnings?.length);
@@ -265,6 +322,14 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
             <CheckCircle2 className="w-10 h-10 text-brand-green mx-auto" />
             <p className="font-medium">Import complete</p>
             <p className="text-sm text-gray-600">{result.totals.created} new · {result.totals.updated} updated · {result.totals.unchanged} unchanged · {result.totals.skipped} skipped</p>
+            {(result.fieldsAdded > 0 || result.formatsSaved > 0) && (
+              <p className="text-sm text-blue-800">
+                {[
+                  result.fieldsAdded ? `${result.fieldsAdded} company field${result.fieldsAdded === 1 ? '' : 's'} added` : '',
+                  result.formatsSaved ? `${result.formatsSaved} company format${result.formatsSaved === 1 ? '' : 's'} saved` : '',
+                ].filter(Boolean).join(' · ')}
+              </p>
+            )}
           </div>
         )}
 
@@ -283,8 +348,10 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
               </Button>
             )}
             {step === 'preview' && (
-              <Button type="button" onClick={apply} disabled={busy || totals.created + totals.updated === 0}>
-                {busy ? 'Importing…' : `Import ${totals.created + totals.updated} case${totals.created + totals.updated === 1 ? '' : 's'}`}
+              <Button type="button" onClick={apply} disabled={busy || (caseCount === 0 && companyChanges.length === 0)}>
+                {busy ? 'Importing…'
+                  : caseCount > 0 ? `Import ${caseCount} case${caseCount === 1 ? '' : 's'}`
+                  : 'Save company fields & format'}
               </Button>
             )}
           </div>

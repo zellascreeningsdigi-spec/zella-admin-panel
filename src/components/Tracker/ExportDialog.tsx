@@ -19,6 +19,7 @@ const ExportDialog: React.FC<Props> = ({ meta, open, filters, onClose }) => {
   const [selected, setSelected] = useState<string[]>([]);
   const [useFilters, setUseFilters] = useState(true);
   const [separate, setSeparate] = useState(true);
+  const [companyFormat, setCompanyFormat] = useState(true);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,13 +29,14 @@ const ExportDialog: React.FC<Props> = ({ meta, open, filters, onClose }) => {
   }, [open, filters.customerIds]);
 
   const otherFilters = Object.entries(filters).filter(([k, v]) => k !== 'customerIds' && (Array.isArray(v) ? v.length : v)).length;
+  const withFormat = meta.customers.filter((c) => c.hasCustomFormat && (!selected.length || selected.includes(c._id)));
   const shown = meta.customers.filter((c) => !query || c.companyName.toLowerCase().includes(query.toLowerCase()));
 
   const download = async () => {
     setError(null); setBusy(true);
     try {
       const base = useFilters ? toParams(filters) : {};
-      await apiService.downloadTrackerExport({ ...base, customerIds: selected, separateSheets: separate ? undefined : 'false' });
+      await apiService.downloadTrackerExport({ ...base, customerIds: selected, separateSheets: separate ? undefined : 'false', companyFormat: companyFormat ? undefined : 'false' });
       onClose();
     } catch (e: any) {
       setError(e.message || 'Export failed');
@@ -81,6 +83,18 @@ const ExportDialog: React.FC<Props> = ({ meta, open, filters, onClose }) => {
               <span>One sheet per company, plus an “All Cases” sheet</span>
             </label>
           )}
+          {!meta.isClient && withFormat.length > 0 && (
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input type="checkbox" className="mt-0.5" checked={companyFormat} onChange={(e) => setCompanyFormat(e.target.checked)} />
+              <span>
+                Use each company’s own Excel format for its sheet
+                <span className="block text-xs text-gray-500">
+                  {withFormat.slice(0, 3).map((c) => c.companyName).join(', ')}{withFormat.length > 3 ? ` +${withFormat.length - 3} more` : ''} — same columns and order as their own tracker. Untick for the standard columns.
+                </span>
+              </span>
+            </label>
+          )}
+          <p className="text-xs text-gray-500">Each company’s own fields are included as columns.</p>
         </div>
 
         {error && <p className="text-sm text-red-600 flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {error}</p>}

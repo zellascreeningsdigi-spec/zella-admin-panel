@@ -45,6 +45,19 @@ const TrackerFilterBar: React.FC<Props> = ({ meta, filters, onChange }) => {
   const selectBase = 'h-9 px-2 border border-gray-300 rounded-md text-sm bg-white';
   const select = `${selectBase} w-full`;
   const opt = (arr: string[]) => arr.map((v) => ({ value: v, label: v }));
+  // Own fields of the companies in view, for "field contains…".
+  const fieldsFor = (ids: string[]) => Array.from(new Set(
+    (meta.isClient ? meta.customers : meta.customers.filter((c) => ids.includes(c._id)))
+      .flatMap((c) => (c.trackerCustomFields || []).map((f) => f.label)),
+  ));
+  const companyFields = fieldsFor(filters.customerIds || []);
+  const [extraValue, setExtraValue] = useState(filters.extraValue || '');
+  useEffect(() => { setExtraValue(filters.extraValue || ''); }, [filters.extraValue]);
+  useEffect(() => {
+    const t = setTimeout(() => { if ((filters.extraValue || '') !== extraValue) set({ extraValue: extraValue || undefined }); }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extraValue]);
 
   return (
     <div className="space-y-3">
@@ -59,7 +72,11 @@ const TrackerFilterBar: React.FC<Props> = ({ meta, filters, onChange }) => {
             className="w-48"
             options={meta.customers.map((c) => ({ value: c._id, label: c.companyName }))}
             selected={filters.customerIds || []}
-            onChange={(customerIds) => set({ customerIds })}
+            onChange={(customerIds) => set({
+              customerIds,
+              // A field filter of a company no longer in view goes with it.
+              ...(filters.extraKey && !fieldsFor(customerIds).includes(filters.extraKey) ? { extraKey: undefined, extraValue: undefined } : {}),
+            })}
           />
         )}
         <MultiPick label="Status" className="w-40" options={opt(meta.statuses)} selected={filters.status || []} onChange={(status) => set({ status })} />
@@ -129,6 +146,30 @@ const TrackerFilterBar: React.FC<Props> = ({ meta, filters, onChange }) => {
                 </select>
               </div>
             </>
+          )}
+          {meta.fields.some((f) => f.key === 'reportColour') && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Final report colour</p>
+              <MultiPick label="Any colour" options={opt(['Green', 'Amber', 'Red'])} selected={filters.reportColour || []} onChange={(reportColour) => set({ reportColour })} />
+            </div>
+          )}
+          {companyFields.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Company field</p>
+              <div className="flex gap-1">
+                <select className={`${selectBase} w-1/2`} value={filters.extraKey || ''} onChange={(e) => set({ extraKey: e.target.value || undefined, ...(e.target.value ? {} : { extraValue: undefined }) })}>
+                  <option value="">Choose…</option>
+                  {companyFields.map((f) => <option key={f} value={f}>{f}</option>)}
+                </select>
+                <input
+                  disabled={!filters.extraKey}
+                  value={extraValue}
+                  onChange={(e) => setExtraValue(e.target.value)}
+                  placeholder={filters.extraKey ? 'contains… (empty = filled)' : ''}
+                  className="h-9 w-1/2 px-2 border border-gray-300 rounded-md text-sm"
+                />
+              </div>
+            </div>
           )}
           <div>
             <p className="text-xs text-gray-500 mb-1">Initiation month</p>
