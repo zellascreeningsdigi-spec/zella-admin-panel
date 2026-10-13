@@ -197,6 +197,10 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
                     </div>
                   </div>
 
+                  {(s.notes || []).map((n: string) => (
+                    <p key={n} className="text-xs text-amber-700 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5 shrink-0" /> {n}</p>
+                  ))}
+
                   {c.include && c.target === BY_CLIENT && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5 bg-gray-50 rounded-md p-2">
                       {s.clients.filter((x: any) => x.name).map((cl: any) => (
