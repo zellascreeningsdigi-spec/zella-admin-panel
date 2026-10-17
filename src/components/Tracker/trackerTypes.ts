@@ -52,6 +52,8 @@ export interface TrackerCase {
 export interface TrackerMeta {
   isClient: boolean;
   canEdit: boolean;
+  /** Super-admins: remove cases in bulk (selected, or every case in a tab). */
+  canBulkDelete?: boolean;
   fields: TrackerField[];
   groups: { key: string; label: string }[];
   statuses: string[];
@@ -180,3 +182,36 @@ export const checkLabel = (meta: TrackerMeta | null, c: TrackerCheck) => {
   const t = meta?.checkTypes.find((x) => x.key === c.type);
   return `${t?.code || c.type}${(c.n || 1) > 1 ? c.n : ''}`;
 };
+
+/** One tab on the tracker page: a view with its own companies, filters and sort. Saved per person. */
+export interface TrackerTabState {
+  id: string;
+  name: string;
+  view: 'cases' | 'analytics' | 'drafts';
+  filters: TrackerFilters;
+  sortBy: string;
+  sortDir: 'asc' | 'desc';
+  limit: number;
+  /** "All companies" and "Drafts" are always there and cannot be closed or renamed. */
+  fixed?: boolean;
+}
+
+export const newTabId = () => `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+export const makeTab = (patch: Partial<TrackerTabState> & { name: string }): TrackerTabState => ({
+  id: newTabId(),
+  view: 'cases',
+  filters: {},
+  sortBy: 'startDate',
+  sortDir: 'desc',
+  limit: 50,
+  ...patch,
+});
+
+/**
+ * Comparison key for company names: two names are the same company name when
+ * they match ignoring case, spaces and punctuation (same rule as the server).
+ */
+// Built at runtime: the build targets ES5, which has no regex `u` flag syntax.
+const NOT_LETTER_OR_DIGIT = new RegExp('[^\\p{L}\\p{N}]+', 'gu');
+export const companyKey = (name?: string | null) => String(name ?? '').toLowerCase().replace(NOT_LETTER_OR_DIGIT, '');

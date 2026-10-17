@@ -5,10 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertCircle, Info } from 'lucide-react';
 import { apiService } from '@/services/api';
+import { companyKey } from './trackerTypes';
 
 // Create a company on the platform without leaving the tracker. Only the
 // company is created — no logins. Logins are created when the company is
-// sent its login email from Datahub, as for every company.
+// sent its login email from Datahub, as for every company. Emails are
+// optional. One company per name (ignoring case, spaces and punctuation).
 
 export interface CreatedCompany {
   _id: string;
@@ -40,11 +42,11 @@ const CreateCompanyDialog: React.FC<Props> = ({ open, initialName, existingNames
     const companyName = name.trim();
     const list = emails.split(/[\s,;]+/).map((e) => e.trim()).filter(Boolean);
     if (!companyName) { setError('Enter the company name'); return; }
-    if (existingNames.some((n) => n.trim().toLowerCase() === companyName.toLowerCase())) {
-      setError(`"${companyName}" already exists — pick it from the list instead`);
+    const same = existingNames.find((n) => companyKey(n) === companyKey(companyName));
+    if (same) {
+      setError(`A company named "${same}" already exists — pick it from the list instead`);
       return;
     }
-    if (list.length === 0) { setError('Add at least one email for the company'); return; }
     const bad = list.filter((e) => !EMAIL.test(e));
     if (bad.length) { setError(`Not a valid email: ${bad.join(', ')}`); return; }
     try {
@@ -71,7 +73,7 @@ const CreateCompanyDialog: React.FC<Props> = ({ open, initialName, existingNames
             <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </div>
           <div>
-            <Label className="text-xs text-gray-600">Company email(s) <span className="text-red-500">*</span></Label>
+            <Label className="text-xs text-gray-600">Company email(s) <span className="text-gray-400">(optional)</span></Label>
             <Input
               className="mt-1"
               value={emails}
@@ -83,8 +85,8 @@ const CreateCompanyDialog: React.FC<Props> = ({ open, initialName, existingNames
           <p className="text-xs text-gray-600 bg-gray-50 rounded-md p-2 flex gap-1.5">
             <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-gray-400" />
             <span>
-              Only the company is created — no logins and no emails. When you are ready, send the login email from
-              Datahub; the logins are created then.
+              Only the company is created — no logins and no emails. When you are ready, add an email in Datahub (if
+              you have not here) and send the login email; the logins are created then.
             </span>
           </p>
           {error && <p className="text-sm text-red-600 flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {error}</p>}

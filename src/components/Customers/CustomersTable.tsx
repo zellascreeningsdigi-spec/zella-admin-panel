@@ -136,6 +136,7 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers, onViewCustom
           const emails = row.getValue('emails') as string[];
           return (
             <div className="space-y-1">
+              {emails.length === 0 && <div className="text-sm text-gray-400">No email</div>}
               {emails.map((email, index) => (
                 <div key={index} className="text-sm">{email}</div>
               ))}
