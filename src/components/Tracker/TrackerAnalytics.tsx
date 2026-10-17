@@ -5,11 +5,14 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { TrackerMeta, fmtMonth } from './trackerTypes';
+import MonthlyReport from './MonthlyReport';
 
 // Tracker analytics for the filtered set of cases.
 
 interface Props {
   meta: TrackerMeta;
+  /** The tab's name, for the monthly report's heading and download. */
+  title: string;
   data: any | null;
   loading: boolean;
   onDrill: (patch: Record<string, any>) => void;
@@ -40,7 +43,7 @@ const ChartCard: React.FC<{ title: string; children: React.ReactNode; className?
   </Card>
 );
 
-const TrackerAnalytics: React.FC<Props> = ({ meta, data, loading, onDrill }) => {
+const TrackerAnalytics: React.FC<Props> = ({ meta, title, data, loading, onDrill }) => {
   if (!data) {
     return <div className="py-16 text-center text-gray-400">{loading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'No data'}</div>;
   }
@@ -67,6 +70,8 @@ const TrackerAnalytics: React.FC<Props> = ({ meta, data, loading, onDrill }) => 
           ? <Kpi label="Red / Amber" value={t.discrepant} tone="text-red-700" onClick={() => onDrill({ discrepancy: true })} />
           : <Kpi label="Closed" value={t.closed} />}
       </div>
+
+      <MonthlyReport rows={data.monthly || []} title={title} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <ChartCard title="Cases by status">

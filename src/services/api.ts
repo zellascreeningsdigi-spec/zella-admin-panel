@@ -496,17 +496,37 @@ class ApiService {
     return this.post(`/tracker/cases/${id}/restore`);
   }
 
-  async bulkTrackerCases(payload: { ids: string[]; action: 'update' | 'delete'; values?: any }): Promise<ApiResponse<any>> {
+  /** `all` + `filters` (super-admins, delete only): every case matching the filters, refused if more than `expectedCount` match. */
+  async bulkTrackerCases(payload: { ids?: string[]; action: 'update' | 'delete'; values?: any; all?: boolean; filters?: Record<string, any>; expectedCount?: number }): Promise<ApiResponse<any>> {
     return this.post('/tracker/cases/bulk', payload);
+  }
+
+  /** Undo a bulk removal. */
+  async restoreTrackerBatch(deleteBatch: string): Promise<ApiResponse<any>> {
+    return this.post('/tracker/cases/restore-batch', { deleteBatch });
   }
 
   async getTrackerAnalytics(params: Record<string, any>): Promise<ApiResponse<any>> {
     return this.get(`/tracker/analytics${this.trackerQuery(params)}`);
   }
 
-  /** Add a company from the tracker. Creates no logins (those are created when the company is emailed from Datahub). */
-  async createTrackerCompany(data: { companyName: string; emails: string[] }): Promise<ApiResponse<any>> {
+  /** Add a company from the tracker. Creates no logins (those are created when the company is emailed from Datahub). Emails are optional. */
+  async createTrackerCompany(data: { companyName: string; emails?: string[] }): Promise<ApiResponse<any>> {
     return this.post('/tracker/companies', data);
+  }
+
+  /** Create one company per name (names already on the platform are returned, not created again). */
+  async createTrackerCompanies(names: string[]): Promise<ApiResponse<any>> {
+    return this.post('/tracker/companies/bulk', { names });
+  }
+
+  /** The tracker tabs this person has open. */
+  async getTrackerTabs(): Promise<ApiResponse<any>> {
+    return this.get('/tracker/tabs');
+  }
+
+  async saveTrackerTabs(data: { tabs: any[]; activeId: string }): Promise<ApiResponse<any>> {
+    return this.put('/tracker/tabs', data);
   }
 
   async saveTrackerSettings(customerId: string, data: {

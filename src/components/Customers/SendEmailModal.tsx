@@ -117,11 +117,14 @@ const SendEmailModal: React.FC<SendEmailModalProps> = ({ isOpen, onClose, custom
                     onClick={handleSelectAll}
                     disabled={sending}
                   >
-                    {selectedEmails.length === customer.emails.length ? 'Deselect All' : 'Select All'}
+                    {selectedEmails.length === customer.emails.length && customer.emails.length > 0 ? 'Deselect All' : 'Select All'}
                   </Button>
                 </div>
 
                 <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-3">
+                  {customer.emails.length === 0 && (
+                    <p className="text-sm text-gray-500 p-2">This company has no email yet. Edit the company to add one, then send the login email.</p>
+                  )}
                   {customer.emails.map((email, index) => (
                     <div
                       key={index}

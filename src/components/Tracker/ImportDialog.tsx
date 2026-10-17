@@ -1,20 +1,29 @@
 import React, { useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Building2, CheckCircle2, ChevronDown, ChevronRight, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
 import { apiService } from '@/services/api';
 import SearchPick from './SearchPick';
-import { TrackerMeta } from './trackerTypes';
+import { CreatedCompany } from './CreateCompanyDialog';
+import { TrackerMeta, companyKey } from './trackerTypes';
 
 // Import cases from Excel: upload -> link tabs to companies -> preview -> import.
+//
+// A client name is linked once for the whole file: choosing (or creating) the
+// company for "Dilip Buildcon Ltd" links every row with that name, in every
+// tab. Names that are already a company, or were linked before, are linked
+// automatically; names that are not yet companies can all be created at once.
 
 interface Props {
   meta: TrackerMeta;
   open: boolean;
   onClose: () => void;
-  onImported: () => void;
+  /** After the import; `sheets` = the imported tabs to open in the tracker (when asked for). */
+  onImported: (sheets?: { name: string; customerIds: string[] }[]) => void;
   /** Open "Create new company" with a suggested name; resolves to the new company id. */
   onCreateCompany: (suggestedName: string) => Promise<string | null>;
+  /** Companies created here in one go (so the pickers know them). */
+  onCompaniesCreated: (companies: CreatedCompany[]) => void;
 }
 
 type Step = 'upload' | 'link' | 'preview' | 'done';
@@ -23,23 +32,37 @@ const BY_CLIENT = '__by_client__';
 interface SheetChoice {
   include: boolean;
   target: string; // customerId or BY_CLIENT
-  clientMap: Record<string, string>;
   /** Remember the tab's columns as the company's own format. */
   saveFormat: boolean;
 }
 
-const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCreateCompany }) => {
+/** The one name a tab goes by: its only client name, or its tab name when rows name no client. Null when rows name several clients. */
+const sheetName = (s: any): string | null => {
+  const named = (s.clients || []).filter((c: any) => c.name);
+  if (named.length === 1) return named[0].name;
+  return named.length === 0 ? s.name : null;
+};
+
+const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCreateCompany, onCompaniesCreated }) => {
   const [step, setStep] = useState<Step>('upload');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<any>(null);
   const [choices, setChoices] = useState<Record<string, SheetChoice>>({});
+  // Client name (companyKey) -> company id for the whole file. '' = skip those rows; missing = not chosen yet.
+  const [nameMap, setNameMap] = useState<Record<string, string>>({});
+  // Names linked by a close (not exact) match: shown as "check this".
+  const [suggested, setSuggested] = useState<Record<string, boolean>>({});
+  const [openAsTabs, setOpenAsTabs] = useState(true);
+  const [missingOpen, setMissingOpen] = useState(false);
+  const [unticked, setUnticked] = useState<Record<string, boolean>>({});
   const [preview, setPreview] = useState<any>(null);
   const [result, setResult] = useState<any>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const reset = () => {
-    setStep('upload'); setError(null); setAnalysis(null); setChoices({}); setPreview(null); setResult(null); setExpanded({});
+    setStep('upload'); setError(null); setAnalysis(null); setChoices({}); setNameMap({}); setSuggested({});
+    setMissingOpen(false); setUnticked({}); setPreview(null); setResult(null); setExpanded({});
   };
   const close = () => { if (!busy) { reset(); onClose(); } };
 
@@ -53,19 +76,26 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
       const a = r.data;
       setAnalysis(a);
       const next: Record<string, SheetChoice> = {};
+      const names: Record<string, string> = {};
+      const close: Record<string, boolean> = {};
       for (const s of a.sheets.filter((x: any) => x.usable)) {
-        const clientMap: Record<string, string> = {};
-        for (const c of s.clients) if (c.match) clientMap[c.name] = c.match.customerId;
+        for (const c of s.clients) {
+          const key = companyKey(c.name);
+          if (!key || !c.match || key in names) continue;
+          names[key] = c.match.customerId;
+          if (!c.match.exact) close[key] = true;
+        }
         const multi = s.clients.filter((c: any) => c.name).length > 1;
         next[s.name] = {
           // A tab with no cases but its own columns is a format: still worth importing.
           include: s.rowCount > 0 || (s.companyFields || []).length > 0,
           target: s.suggestedCustomerId || (multi ? BY_CLIENT : ''),
-          clientMap,
           saveFormat: true,
         };
       }
       setChoices(next);
+      setNameMap(names);
+      setSuggested(close);
       setStep('link');
     } catch (e: any) {
       setError(e.message || 'Could not read the file');
@@ -74,14 +104,101 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
     }
   };
 
+  const usableSheets: any[] = useMemo(() => (analysis?.sheets || []).filter((s: any) => s.usable), [analysis]);
+  const clientMapFor = (s: any) => {
+    const map: Record<string, string> = {};
+    for (const c of s.clients) if (c.name && nameMap[companyKey(c.name)]) map[c.name] = nameMap[companyKey(c.name)];
+    return map;
+  };
   const payload = () => ({
     token: analysis.token,
-    sheets: Object.entries(choices)
-      .filter(([, c]) => c.include)
-      .map(([name, c]) => (c.target === BY_CLIENT
-        ? { name, clientMap: c.clientMap }
-        : { name, customerId: c.target || undefined, saveFormat: c.saveFormat })),
+    sheets: usableSheets
+      .filter((s) => choices[s.name]?.include)
+      .map((s) => {
+        const c = choices[s.name];
+        return c.target === BY_CLIENT
+          ? { name: s.name, clientMap: clientMapFor(s) }
+          : { name: s.name, customerId: c.target || undefined, saveFormat: c.saveFormat };
+      }),
   });
+  /** The companies each imported tab ended up with (to open it as a tracker tab). */
+  const importedTabs = () => usableSheets
+    .filter((s) => choices[s.name]?.include)
+    .map((s) => {
+      const c = choices[s.name];
+      const ids = c.target === BY_CLIENT ? Object.values(clientMapFor(s)) : c.target ? [c.target] : [];
+      return { name: s.name, customerIds: Array.from(new Set(ids)) };
+    })
+    .filter((t) => t.customerIds.length > 0);
+
+  /**
+   * Link a name to a company everywhere in the file: rows with that client
+   * name in every tab, and every tab that goes by that name as a whole.
+   */
+  const linkName = (name: string, id: string) => {
+    const key = companyKey(name);
+    if (!key) return;
+    setNameMap((m) => ({ ...m, [key]: id }));
+    setSuggested((x) => ({ ...x, [key]: false }));
+    setChoices((all) => {
+      const out = { ...all };
+      for (const s of usableSheets) {
+        const own = sheetName(s);
+        if (own && companyKey(own) === key && out[s.name]?.target !== BY_CLIENT) out[s.name] = { ...out[s.name], target: id };
+      }
+      return out;
+    });
+  };
+  const setTarget = (s: any, v: string) => {
+    const own = sheetName(s);
+    if (v && v !== BY_CLIENT && own) linkName(own, v);
+    else setChoice(s.name, { target: v });
+  };
+
+  // Names in the included tabs that are not linked to any company yet.
+  const missing = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const s of usableSheets) {
+      const c = choices[s.name];
+      if (!c?.include || (c.target && c.target !== BY_CLIENT)) continue;
+      const own = sheetName(s);
+      const candidates = c.target === BY_CLIENT || !own ? s.clients.filter((x: any) => x.name).map((x: any) => x.name) : [own];
+      for (const n of candidates) {
+        const key = companyKey(n);
+        if (key && !(key in nameMap) && !out.has(key)) out.set(key, String(n).trim());
+      }
+    }
+    return Array.from(out.entries()).map(([key, name]) => ({ key, name }));
+  }, [usableSheets, choices, nameMap]);
+  const toCreate = missing.filter((m) => !unticked[m.key]);
+
+  const createMissing = async () => {
+    setError(null); setBusy(true);
+    try {
+      const r = await apiService.createTrackerCompanies(toCreate.map((m) => m.name));
+      const results: { name: string; company: CreatedCompany }[] = r.data?.results || [];
+      onCompaniesCreated(results.map((x) => x.company));
+      const ids: Record<string, string> = {};
+      for (const x of results) ids[companyKey(x.name)] = x.company._id;
+      setNameMap((m) => ({ ...m, ...ids }));
+      setChoices((all) => {
+        const out = { ...all };
+        for (const s of usableSheets) {
+          const c = out[s.name];
+          if (!c?.include || (c.target && c.target !== BY_CLIENT)) continue;
+          const own = sheetName(s);
+          if (own && c.target !== BY_CLIENT && ids[companyKey(own)]) out[s.name] = { ...c, target: ids[companyKey(own)] };
+          else if (!own && !c.target) out[s.name] = { ...c, target: BY_CLIENT };
+        }
+        return out;
+      });
+      setMissingOpen(false);
+    } catch (e: any) {
+      setError(e.message || 'Could not create the companies');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const runPreview = async () => {
     setError(null); setBusy(true);
@@ -102,7 +219,7 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
       const r = await apiService.trackerImportApply(payload());
       setResult(r.data);
       setStep('done');
-      onImported();
+      onImported(openAsTabs ? importedTabs() : undefined);
     } catch (e: any) {
       setError(e.message || 'Import failed');
     } finally {
@@ -162,7 +279,34 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
             <p className="text-sm text-gray-600">
               <strong>{analysis.fileName}</strong> — link each tab to a company. Rows whose company is not chosen are skipped.
               Existing cases (same BGV ID and name) are updated; blank cells never erase saved values.
+              A client name is linked once for the whole file — every row with that name, in every tab, goes to the same company.
             </p>
+            {missing.length > 0 && (
+              <div className="border border-brand-green/40 bg-brand-green-50 rounded-lg p-2.5 text-sm space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Building2 className="w-4 h-4 text-brand-green shrink-0" />
+                  <span className="flex-1 min-w-[200px]">
+                    <strong>{missing.length}</strong> name{missing.length === 1 ? '' : 's'} in this file {missing.length === 1 ? 'is' : 'are'} not a company yet
+                    {!missingOpen && <>: {missing.slice(0, 4).map((m) => m.name).join(', ')}{missing.length > 4 ? ` +${missing.length - 4} more` : ''}</>}
+                  </span>
+                  <button type="button" className="text-xs text-gray-600 underline" onClick={() => setMissingOpen((o) => !o)}>{missingOpen ? 'Hide list' : 'Choose which'}</button>
+                  <Button type="button" size="sm" className="h-8" disabled={busy || toCreate.length === 0} onClick={createMissing}>
+                    {busy ? 'Creating…' : `Create ${toCreate.length} compan${toCreate.length === 1 ? 'y' : 'ies'} with these names`}
+                  </Button>
+                </div>
+                {missingOpen && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 pl-6 max-h-48 overflow-y-auto">
+                    {missing.map((m) => (
+                      <label key={m.key} className="flex items-center gap-2 cursor-pointer truncate">
+                        <input type="checkbox" checked={!unticked[m.key]} onChange={(e) => setUnticked((u) => ({ ...u, [m.key]: !e.target.checked }))} />
+                        <span className="truncate" title={m.name}>{m.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-gray-600 pl-6">Each company is created with exactly that name (no email, no logins) and linked to every row with the name.</p>
+              </div>
+            )}
             {analysis.sheets.map((s: any) => {
               if (!s.usable) return <p key={s.name} className="text-sm text-gray-400">Tab “{s.name}”: {s.reason}</p>;
               const c = choices[s.name];
@@ -184,39 +328,49 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
                         className="w-72"
                         disabled={!c.include}
                         value={c.target}
-                        onChange={(v) => setChoice(s.name, { target: v })}
+                        onChange={(v) => setTarget(s, v)}
                         placeholder="Choose a company…"
                         warn={c.include && !c.target}
                         pinned={s.clients.filter((x: any) => x.name).length > 0 ? [{ value: BY_CLIENT, label: 'Use the client name on each row' }] : []}
                         options={companyOptions}
                         onCreate={async (q) => {
-                          const id = await onCreateCompany(q || s.name);
-                          if (id) setChoice(s.name, { target: id });
+                          const id = await onCreateCompany(q || sheetName(s) || s.name);
+                          if (id) setTarget(s, id);
                         }}
                       />
                     </div>
                   </div>
 
+                  {(s.notes || []).map((n: string) => (
+                    <p key={n} className="text-xs text-amber-700 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5 shrink-0" /> {n}</p>
+                  ))}
+
                   {c.include && c.target === BY_CLIENT && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1.5 bg-gray-50 rounded-md p-2">
-                      {s.clients.filter((x: any) => x.name).map((cl: any) => (
-                        <div key={cl.name} className="flex items-center gap-2 text-sm">
-                          <span className="flex-1 truncate" title={cl.name}>{cl.name} <span className="text-xs text-gray-400">×{cl.count}</span></span>
-                          <SearchPick
-                            className="w-56 shrink-0"
-                            size="sm"
-                            value={c.clientMap[cl.name] || ''}
-                            onChange={(v) => setChoice(s.name, { clientMap: { ...c.clientMap, [cl.name]: v } })}
-                            warn={!c.clientMap[cl.name]}
-                            pinned={[{ value: '', label: 'Skip these rows' }]}
-                            options={companyOptions}
-                            onCreate={async (q) => {
-                              const id = await onCreateCompany(q || cl.name);
-                              if (id) setChoice(s.name, { clientMap: { ...choices[s.name].clientMap, [cl.name]: id } });
-                            }}
-                          />
-                        </div>
-                      ))}
+                      {s.clients.filter((x: any) => x.name).map((cl: any) => {
+                        const key = companyKey(cl.name);
+                        return (
+                          <div key={cl.name} className="flex items-center gap-2 text-sm">
+                            <span className="flex-1 truncate" title={cl.name}>
+                              {cl.name} <span className="text-xs text-gray-400">×{cl.count}</span>
+                              {suggested[key] && nameMap[key] && <span className="ml-1 text-[11px] text-amber-700" title="Linked by a similar name — check it is the right company">check</span>}
+                            </span>
+                            <SearchPick
+                              className="w-56 shrink-0"
+                              size="sm"
+                              value={nameMap[key] || ''}
+                              onChange={(v) => linkName(cl.name, v)}
+                              warn={!(key in nameMap)}
+                              pinned={[{ value: '', label: 'Skip these rows' }]}
+                              options={companyOptions}
+                              onCreate={async (q) => {
+                                const id = await onCreateCompany(q || cl.name);
+                                if (id) linkName(cl.name, id);
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -336,9 +490,15 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
         {error && <p className="text-sm text-red-600 flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {error}</p>}
 
         <div className="flex justify-between pt-2 border-t">
-          <div>
+          <div className="flex items-center gap-3">
             {step === 'link' && <Button type="button" variant="ghost" onClick={reset} disabled={busy}>Choose another file</Button>}
             {step === 'preview' && <Button type="button" variant="ghost" onClick={() => setStep('link')} disabled={busy}>Back</Button>}
+            {(step === 'link' || step === 'preview') && (
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input type="checkbox" checked={openAsTabs} onChange={(e) => setOpenAsTabs(e.target.checked)} />
+                Open each imported tab as a tracker tab
+              </label>
+            )}
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={close} disabled={busy}>{step === 'done' ? 'Close' : 'Cancel'}</Button>

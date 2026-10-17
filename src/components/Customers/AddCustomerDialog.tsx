@@ -143,11 +143,9 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
       newErrors.companyName = 'Company name is required';
     }
 
-    // Validate emails
+    // Validate emails (optional: a company without emails has no logins yet)
     const validEmails = formData.emails.filter(email => email.trim() !== '');
-    if (validEmails.length === 0) {
-      newErrors.emails = 'At least one email is required';
-    } else {
+    if (validEmails.length > 0) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       const invalidEmails = validEmails.filter(email => !emailRegex.test(email));
       if (invalidEmails.length > 0) {
@@ -252,7 +250,7 @@ const AddCustomerDialog: React.FC<AddCustomerDialogProps> = ({
             {/* Emails */}
             <div className="space-y-2">
               <Label>
-                Emails <span className="text-red-500">*</span>
+                Emails <span className="text-gray-400 font-normal">(optional)</span>
               </Label>
               {formData.emails.map((email, index) => (
                 <div key={index} className="flex items-center space-x-2">
