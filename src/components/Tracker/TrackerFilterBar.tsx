@@ -30,7 +30,8 @@ const DateRange: React.FC<{ label: string; from?: string; to?: string; onChange:
 
 const TrackerFilterBar: React.FC<Props> = ({ meta, filters, onChange }) => {
   const [q, setQ] = useState(filters.q || '');
-  const [more, setMore] = useState(false);
+  // A tab made for particular checks opens with its check filters in view.
+  const [more, setMore] = useState(() => !!(filters.checkType?.length || filters.checkStatus?.length));
   const set = (patch: Partial<TrackerFilters>) => onChange({ ...filters, ...patch });
 
   // Search as you type, without a request per keystroke.
