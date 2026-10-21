@@ -5,10 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BarChart3, List } from 'lucide-react';
 import MultiPick from './MultiPick';
-import { TrackerMeta, TrackerTabState, makeTab } from './trackerTypes';
+import { TrackerFilters, TrackerMeta, TrackerTabState, makeTab } from './trackerTypes';
 
-// Open new tracker tabs: cases or analytics, for chosen companies — either
-// one tab for all of them together, or a separate tab for each.
+// Open new tracker tabs: cases or analytics, for any mix of companies and
+// checks (and optionally check statuses) — all in one tab, or a tab per
+// company, per check, or per company and check.
 
 interface Props {
   meta: TrackerMeta;
@@ -17,28 +18,70 @@ interface Props {
   onCreate: (tabs: TrackerTabState[]) => void;
 }
 
+type Split = 'one' | 'company' | 'check' | 'both';
+// Leaves room for the fixed tabs within the server's limit.
+const MAX_NEW_TABS = 50;
+
 const NewTabDialog: React.FC<Props> = ({ meta, open, onClose, onCreate }) => {
   const [view, setView] = useState<'cases' | 'analytics'>('cases');
   const [customerIds, setCustomerIds] = useState<string[]>([]);
-  const [separate, setSeparate] = useState(false);
+  const [checkTypes, setCheckTypes] = useState<string[]>([]);
+  const [checkStatuses, setCheckStatuses] = useState<string[]>([]);
+  const [split, setSplit] = useState<Split>('one');
   const [name, setName] = useState('');
 
   useEffect(() => {
-    if (open) { setView('cases'); setCustomerIds([]); setSeparate(false); setName(''); }
+    if (open) { setView('cases'); setCustomerIds([]); setCheckTypes([]); setCheckStatuses([]); setSplit('one'); setName(''); }
   }, [open]);
 
-  const nameOf = (id: string) => meta.customers.find((c) => c._id === id)?.companyName || 'Company';
-  const several = customerIds.length > 1;
-  const oneTabName = () => {
-    if (name.trim()) return name.trim();
-    if (customerIds.length === 0) return view === 'analytics' ? 'Analytics' : 'All companies';
-    return customerIds.length === 1 ? nameOf(customerIds[0]) : `${nameOf(customerIds[0])} +${customerIds.length - 1}`;
+  const companyName = (id: string) => meta.customers.find((c) => c._id === id)?.companyName || 'Company';
+  const checkName = (key: string) => meta.checkTypes.find((c) => c.key === key)?.label || key;
+  const several = (list: string[], label: (v: string) => string) =>
+    list.length === 1 ? label(list[0]) : `${label(list[0])} +${list.length - 1}`;
+  const autoName = (ids: string[], checks: string[]) => {
+    const parts = [
+      ids.length ? several(ids, companyName) : '',
+      checks.length ? several(checks, checkName) : '',
+      checkStatuses.length ? several(checkStatuses, (s) => s) : '',
+    ].filter(Boolean);
+    if (parts.length) return parts.join(' · ');
+    return view === 'analytics' ? 'Analytics' : 'All companies';
   };
+  const filtersFor = (ids: string[], checks: string[]): TrackerFilters => ({
+    ...(ids.length ? { customerIds: ids } : {}),
+    ...(checks.length ? { checkType: checks } : {}),
+    ...(checkStatuses.length ? { checkStatus: checkStatuses } : {}),
+  });
+
+  // What each way of splitting would open.
+  const groups = (s: Split): { ids: string[]; checks: string[] }[] => {
+    const byCompany = customerIds.length ? customerIds.map((id) => [id]) : [[]];
+    const byCheck = checkTypes.length ? checkTypes.map((k) => [k]) : [[]];
+    switch (s) {
+      case 'company': return byCompany.map((ids) => ({ ids, checks: checkTypes }));
+      case 'check': return byCheck.map((checks) => ({ ids: customerIds, checks }));
+      case 'both': return byCompany.flatMap((ids) => byCheck.map((checks) => ({ ids, checks })));
+      default: return [{ ids: customerIds, checks: checkTypes }];
+    }
+  };
+  const splits: { key: Split; label: string; show: boolean }[] = [
+    { key: 'one', label: 'One tab for all of them', show: true },
+    { key: 'company', label: `A tab for each company (${customerIds.length})`, show: customerIds.length > 1 },
+    { key: 'check', label: `A tab for each check (${checkTypes.length})`, show: checkTypes.length > 1 },
+    { key: 'both', label: `A tab for each company and check (${customerIds.length * checkTypes.length})`, show: customerIds.length > 1 && checkTypes.length > 1 },
+  ];
+  // A split that no longer applies (a company or check was unticked) falls back to one tab.
+  const activeSplit: Split = splits.find((s) => s.key === split)?.show ? split : 'one';
+  const planned = groups(activeSplit);
+  const tooMany = planned.length > MAX_NEW_TABS;
 
   const create = () => {
-    const tabs = several && separate
-      ? customerIds.map((id) => makeTab({ name: nameOf(id), view, filters: { customerIds: [id] } }))
-      : [makeTab({ name: oneTabName(), view, filters: customerIds.length ? { customerIds } : {} })];
+    if (tooMany) return;
+    const tabs = planned.map((g) => makeTab({
+      name: planned.length === 1 && name.trim() ? name.trim() : autoName(g.ids, g.checks),
+      view,
+      filters: filtersFor(g.ids, g.checks),
+    }));
     onCreate(tabs);
     onClose();
   };
@@ -68,33 +111,70 @@ const NewTabDialog: React.FC<Props> = ({ meta, open, onClose, onCreate }) => {
                 selected={customerIds}
                 onChange={setCustomerIds}
               />
-              {several && (
-                <div className="mt-2 space-y-1.5 text-sm">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" checked={!separate} onChange={() => setSeparate(false)} />
-                    One tab for all {customerIds.length} companies
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" checked={separate} onChange={() => setSeparate(true)} />
-                    A separate tab for each company ({customerIds.length} tabs)
-                  </label>
-                </div>
+            </div>
+          )}
+
+          {meta.showChecks && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs text-gray-600">Checks</Label>
+                <MultiPick
+                  label="Any check"
+                  className="w-full mt-1"
+                  options={meta.checkTypes.map((c) => ({ value: c.key, label: c.label }))}
+                  selected={checkTypes}
+                  onChange={setCheckTypes}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-600">Check status</Label>
+                <MultiPick
+                  label="Any status"
+                  className="w-full mt-1"
+                  options={meta.checkStatuses.filter((s) => s !== 'NA').map((s) => ({ value: s, label: s }))}
+                  selected={checkStatuses}
+                  onChange={setCheckStatuses}
+                />
+              </div>
+              {(checkTypes.length > 0 || checkStatuses.length > 0) && (
+                <p className="col-span-2 text-xs text-gray-500">
+                  Cases that have {checkTypes.length ? `a ${checkTypes.map(checkName).join(' / ')} check` : 'a check'}
+                  {checkStatuses.length ? ` that is ${checkStatuses.join(' / ')}` : ''}. Checks marked NA do not count.
+                </p>
               )}
             </div>
           )}
 
-          {!(several && separate) && (
+          {splits.filter((s) => s.show).length > 1 && (
+            <div className="space-y-1.5 text-sm">
+              <Label className="text-xs text-gray-600">Open as</Label>
+              {splits.filter((s) => s.show).map((s) => (
+                <label key={s.key} className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" checked={activeSplit === s.key} onChange={() => setSplit(s.key)} />
+                  {s.label}
+                </label>
+              ))}
+            </div>
+          )}
+
+          {planned.length === 1 ? (
             <div>
               <Label className="text-xs text-gray-600">Tab name</Label>
-              <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder={oneTabName()} onKeyDown={(e) => { if (e.key === 'Enter') create(); }} />
+              <Input className="mt-1" value={name} onChange={(e) => setName(e.target.value)} placeholder={autoName(planned[0].ids, planned[0].checks)} onKeyDown={(e) => { if (e.key === 'Enter') create(); }} />
             </div>
+          ) : (
+            <p className={`text-xs ${tooMany ? 'text-red-600' : 'text-gray-500'}`}>
+              {tooMany
+                ? `That would open ${planned.length} tabs — at most ${MAX_NEW_TABS} at a time. Choose fewer companies or checks.`
+                : `Opens ${planned.length} tabs, e.g. "${autoName(planned[0].ids, planned[0].checks)}".`}
+            </p>
           )}
 
           <p className="text-xs text-gray-500">Each tab keeps its own filters. You can switch any tab between its cases and its analytics.</p>
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="button" onClick={create}>{several && separate ? `Open ${customerIds.length} tabs` : 'Open tab'}</Button>
+            <Button type="button" onClick={create} disabled={tooMany}>{planned.length > 1 ? `Open ${planned.length} tabs` : 'Open tab'}</Button>
           </div>
         </div>
       </DialogContent>

@@ -46,7 +46,25 @@ export interface TrackerCase {
   requiredChecks?: string;
   hasDiscrepancy?: boolean;
   history?: { at: string; byName?: string; action: string; changes: { field: string; from: any; to: any }[] }[];
+  /** The company sheet's own wording per column key: t = text in the sheet, v = what it was read as (null = unreadable). */
+  sheetValues?: Record<string, { t: string; v: string | null }>;
   [key: string]: any;
+}
+
+/** One column of a company's own sheet format, as remembered from its import. */
+export interface TrackerLayoutEntry {
+  header: string;
+  /** Unique within the sheet; looks up the sheet's own wording in sheetValues. */
+  key?: string;
+  kind: 'field' | 'check' | 'checkAll' | 'checkDate' | 'insuffCycle' | 'client' | 'extra' | 'computed' | 'blank';
+  field?: string;
+  append?: boolean;
+  type?: string;
+  n?: number;
+  cycle?: number;
+  part?: 'raised' | 'cleared';
+  label?: string;
+  computed?: string;
 }
 
 export interface TrackerMeta {
@@ -54,6 +72,8 @@ export interface TrackerMeta {
   canEdit: boolean;
   /** Super-admins: remove cases in bulk (selected, or every case in a tab). */
   canBulkDelete?: boolean;
+  /** Super-admins: open, close and rename the tracker tabs everyone sees. */
+  canManageTabs?: boolean;
   fields: TrackerField[];
   groups: { key: string; label: string }[];
   statuses: string[];
@@ -109,17 +129,20 @@ export const toParams = (f: TrackerFilters): Record<string, any> => ({
   discrepancy: f.discrepancy ? 'true' : undefined,
 });
 
+// Fixed month names: newer browsers write September as "Sept", the sheets use "Sep".
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 export const fmtDate = (v?: string | null) => {
   if (!v) return '';
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return `${String(d.getUTCDate()).padStart(2, '0')} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 };
 
 export const fmtMonth = (v?: string | null) => {
   if (!v || !/^\d{4}-\d{2}$/.test(v)) return v || '';
   const [y, m] = v.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return `${MONTHS[m - 1]} ${y}`;
 };
 
 /** yyyy-mm-dd for <input type="date">. */
@@ -152,6 +175,8 @@ export const CHECK_STYLE: Record<string, string> = {
   Hold: 'bg-gray-200 text-gray-700',
   'Unable to Verify': 'bg-rose-100 text-rose-700',
   Duplicate: 'bg-slate-200 text-slate-700',
+  Stopped: 'bg-slate-200 text-slate-600',
+  NA: 'bg-gray-50 text-gray-400',
 };
 
 export const TAT_STYLE: Record<string, string> = {

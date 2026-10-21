@@ -26,6 +26,7 @@ const TAT_COLOURS: Record<string, string> = { 'In TAT': '#22c55e', 'Due soon': '
 const CHECK_COLOURS: Record<string, string> = {
   Pending: '#d1d5db', WIP: '#60a5fa', Insuff: '#fbbf24', Received: '#818cf8', Green: '#4ade80', Amber: '#fb923c',
   Red: '#f87171', 'Client Suggestion': '#c084fc', Hold: '#9ca3af', 'Unable to Verify': '#fb7185', Duplicate: '#94a3b8',
+  Stopped: '#64748b',
 };
 
 const Kpi: React.FC<{ label: string; value: React.ReactNode; hint?: string; tone?: string; onClick?: () => void }> = ({ label, value, hint, tone = 'text-gray-900', onClick }) => (

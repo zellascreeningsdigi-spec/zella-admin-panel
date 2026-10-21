@@ -9,6 +9,8 @@ import {
   COLOUR_STYLE,
   TAT_STYLE,
   TrackerCustomField,
+  TrackerCheck,
+  TrackerLayoutEntry,
   checkLabel,
   checkTitle,
   fmtDate,
@@ -17,6 +19,8 @@ import {
 
 // The tracker table: every row can be edited inline (status, allocated to,
 // billing), opened, duplicated or removed. Columns are chosen by the user.
+// For one company with its own sheet format, the table can instead show that
+// company's columns: its exact headers, in its order, with its own wording.
 
 export interface TableProps {
   meta: TrackerMeta;
@@ -38,13 +42,15 @@ export interface TableProps {
   onDuplicate: (c: TrackerCase) => void;
   onDelete: (c: TrackerCase) => void;
   onInlineSave: (c: TrackerCase, patch: Record<string, any>) => Promise<void>;
+  /** The company's own columns, when exactly one company with a remembered format is in view. */
+  layout?: { companyName: string; columns: TrackerLayoutEntry[] } | null;
 }
 
 interface Column {
   key: string;
   label: string;
   sortKey?: string;
-  render: (c: TrackerCase) => React.ReactNode;
+  render: (c: TrackerCase, index: number) => React.ReactNode;
   width?: string;
   extra?: boolean;
 }
@@ -53,6 +59,26 @@ const DEFAULT_COLUMNS = ['bgvId', 'name', 'companyName', 'status', 'checks', 'st
 const CLIENT_DEFAULT = ['bgvId', 'name', 'status', 'checks', 'startDate', 'endDate', 'agingDays', 'tatStatus', 'insuffRemark', 'reportDate'];
 const STORAGE_KEY = (client: boolean) => `tracker-columns:${client ? 'client' : 'staff'}`;
 const HIDDEN_KEY = 'tracker-hidden-company-fields';
+
+const COMPANY_VIEW_KEY = 'tracker-company-columns';
+const DAY = 86400000;
+const daysBetween = (from?: string | null, to?: string | Date | null) =>
+  from ? Math.max(0, Math.floor((new Date(to || Date.now()).getTime() - new Date(from).getTime()) / DAY)) : null;
+
+/** The sheet's own text for a cell while the value is still what was read from it (same rule as the export). */
+const sheetText = (c: TrackerCase, e: TrackerLayoutEntry, current: React.ReactNode, currentText: string): React.ReactNode => {
+  const sv = e.key ? c.sheetValues?.[e.key] : undefined;
+  if (!sv) return current;
+  if (sv.v == null) return currentText === '' ? sv.t : current;
+  return currentText.toLowerCase() === String(sv.v).toLowerCase() ? sv.t : current;
+};
+
+/** A check as the company writes it: the original cell ("Green-500") while it still holds, else the status. */
+const checkText = (k?: TrackerCheck) => {
+  if (!k) return '';
+  const note = k.note || '';
+  return note && note.toLowerCase().startsWith((k.status || '').toLowerCase()) ? note : k.status;
+};
 
 const loadColumns = (client: boolean): string[] | null => {
   try { const v = localStorage.getItem(STORAGE_KEY(client)); return v ? JSON.parse(v) : null; } catch { return null; }
@@ -87,6 +113,12 @@ const TrackerTable: React.FC<TableProps> = (p) => {
     try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) || '[]'); } catch { return []; }
   });
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [companyView, setCompanyView] = useState<boolean>(() => {
+    try { return localStorage.getItem(COMPANY_VIEW_KEY) !== 'off'; } catch { return true; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(COMPANY_VIEW_KEY, companyView ? 'on' : 'off'); } catch { /* ignore */ }
+  }, [companyView]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
@@ -220,7 +252,7 @@ const TrackerTable: React.FC<TableProps> = (p) => {
         key: 'checks', label: 'Checks',
         render: (c) => (
           <div className="flex flex-wrap gap-1 min-w-[150px] max-w-[260px]">
-            {(c.checks || []).map((k, i) => (
+            {(c.checks || []).filter((k) => k.status !== 'NA').map((k, i) => (
               <span key={i} title={checkTitle(meta, k)} className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${CHECK_STYLE[k.status] || 'bg-gray-100'}`}>
                 {checkLabel(meta, k)}
               </span>
@@ -248,10 +280,109 @@ const TrackerTable: React.FC<TableProps> = (p) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meta, rows, canEdit, companyFields, fieldType]);
 
+  // The company's own columns: exact headers, in its order, with its own wording.
+  const layoutColumns: Column[] | null = useMemo(() => {
+    if (!p.layout?.columns?.length) return null;
+    const standard = new Map(allColumns.map((c) => [c.key, c]));
+    const checkOf = (c: TrackerCase, e: TrackerLayoutEntry) => (c.checks || []).find((k) => k.type === e.type && (k.n || 1) === (e.n || 1));
+    const text = (v: React.ReactNode) => <span className="text-xs whitespace-nowrap">{v}</span>;
+    return p.layout.columns.map((e, i): Column => {
+      const key = `layout:${i}`;
+      const label = e.header;
+      switch (e.kind) {
+        case 'client':
+          return { key, label, render: (c) => text(c.companyName) };
+        case 'field': {
+          const std = e.field ? standard.get(e.field === 'billing' ? 'billing' : e.field) : undefined;
+          const f = meta.fields.find((x) => x.key === e.field);
+          return {
+            key, label, sortKey: std?.sortKey,
+            render: (c, idx) => {
+              if (!f) return '';
+              // A second column of a field: its own text from the sheet.
+              if (e.append) return text(sheetText(c, e, '', ''));
+              const raw = c[f.key];
+              const shownText = f.type === 'date' ? fmtDate(raw) : f.type === 'month' ? fmtMonth(raw) : String(raw ?? '');
+              // Inline-editable fields keep their editor; everything else shows the company's wording.
+              if (std && ['status', 'allocatedTo', 'billing'].includes(f.key) && canEdit) {
+                const sheet = sheetText(c, e, null, shownText);
+                return sheet === null ? std.render(c, idx) : <span title={`Tracker value: ${shownText}`}>{std.render(c, idx)}<span className="block text-[10px] text-gray-500">{sheet}</span></span>;
+              }
+              return text(sheetText(c, e, std ? std.render(c, idx) : shownText, shownText));
+            },
+          };
+        }
+        case 'check':
+          return {
+            key, label,
+            render: (c) => {
+              const k = checkOf(c, e);
+              if (!k) return '';
+              return <span title={checkTitle(meta, k)} className={`px-1.5 py-0.5 rounded text-[11px] font-medium whitespace-nowrap ${CHECK_STYLE[k.status] || 'bg-gray-100'}`}>{checkText(k)}</span>;
+            },
+          };
+        case 'checkAll':
+          return { key, label, render: (c) => text((c.checks || []).filter((k) => k.type === e.type).map(checkText).join(' / ')) };
+        case 'checkDate':
+          return {
+            key, label,
+            render: (c) => {
+              const k = checkOf(c, e);
+              const d = k?.status === 'NA' ? '' : fmtDate(k?.completedDate);
+              return text(sheetText(c, e, d, d));
+            },
+          };
+        case 'insuffCycle':
+          return { key, label, render: (c) => text(fmtDate((c.insuffCycles || [])[(e.cycle || 1) - 1]?.[e.part || 'raised'])) };
+        case 'extra':
+          return {
+            key, label,
+            render: (c) => {
+              const v = (c.extras || {})[e.label || ''];
+              return text(fieldType.get(e.label || '') === 'date' ? fmtDate(v) || v : v);
+            },
+          };
+        case 'computed': {
+          // Worked out by the tracker; the sheet's text where it has nothing to work from.
+          const value = (c: TrackerCase, idx: number): string => {
+            switch (e.computed) {
+              case 'serial': return String((p.page - 1) * p.limit + idx + 1);
+              case 'tatStatus': return c.tatStatus === 'In TAT' ? 'Within TAT' : (c.tatStatus || '');
+              case 'agingDays': return String(c.agingDays ?? '');
+              case 'insuffDays': return String(c.insuffDays ?? '');
+              case 'daysDelay': return c.endDate ? String(daysBetween(c.endDate, c.reportDate) ?? '') : '';
+              case 'checkAging': {
+                const k = checkOf(c, e);
+                if (k?.status === 'NA') return 'NA';
+                return k && c.startDate ? String(daysBetween(c.startDate, k.completedDate) ?? '') : '';
+              }
+              default: return '';
+            }
+          };
+          return {
+            key, label,
+            render: (c, idx) => {
+              const v = value(c, idx);
+              const shown = sheetText(c, e, v, v);
+              return e.computed === 'tatStatus' && shown === v
+                ? <span className={`text-xs whitespace-nowrap ${TAT_STYLE[c.tatStatus || ''] || ''}`}>{v}</span>
+                : text(shown);
+            },
+          };
+        }
+        default:
+          // Columns the tracker has no use for: kept as the sheet had them.
+          return { key, label, render: (c) => text(sheetText(c, e, '', '')) };
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.layout, allColumns, meta, fieldType, p.page, p.limit, canEdit]);
+  const showingCompany = !!layoutColumns && companyView;
+
   // Chosen columns, plus the shown company's own fields unless switched off.
   const autoKeys = companyFields.map((f) => `extra:${f.label}`).filter((k) => !visible.includes(k) && !hiddenFields.includes(k));
   const shownKeys = [...visible, ...autoKeys];
-  const columns = shownKeys.map((k) => allColumns.find((c) => c.key === k)).filter(Boolean) as Column[];
+  const columns = showingCompany ? layoutColumns! : shownKeys.map((k) => allColumns.find((c) => c.key === k)).filter(Boolean) as Column[];
   const toggleColumn = (key: string, on: boolean) => {
     setVisible(on ? [...visible, key] : visible.filter((k) => k !== key));
     if (key.startsWith('extra:')) setHiddenFields(on ? hiddenFields.filter((k) => k !== key) : Array.from(new Set([...hiddenFields, key])));
@@ -264,7 +395,14 @@ const TrackerTable: React.FC<TableProps> = (p) => {
     <div className="space-y-2">
       <div className="flex items-center justify-between text-sm text-gray-600">
         <span>{p.total.toLocaleString('en-IN')} case{p.total === 1 ? '' : 's'}</span>
-        <div ref={pickerRef} className="relative">
+        <div className="flex items-center gap-2">
+        {layoutColumns && (
+          <div className="flex rounded-md border overflow-hidden text-sm" title="Show this company's own columns, exactly as in its sheet">
+            <button type="button" onClick={() => setCompanyView(true)} className={`px-2.5 h-8 ${showingCompany ? 'bg-brand-green text-white' : 'bg-white text-gray-700'}`}>{p.layout!.companyName} columns</button>
+            <button type="button" onClick={() => setCompanyView(false)} className={`px-2.5 h-8 border-l ${!showingCompany ? 'bg-brand-green text-white' : 'bg-white text-gray-700'}`}>Tracker columns</button>
+          </div>
+        )}
+        <div ref={pickerRef} className={`relative ${showingCompany ? 'hidden' : ''}`}>
           <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen((v) => !v)}>
             <Columns3 className="w-4 h-4 mr-1" /> Columns
           </Button>
@@ -287,6 +425,7 @@ const TrackerTable: React.FC<TableProps> = (p) => {
               ))}
             </div>
           )}
+        </div>
         </div>
       </div>
 
@@ -319,14 +458,14 @@ const TrackerTable: React.FC<TableProps> = (p) => {
             {!p.loading && rows.length === 0 && (
               <tr><td colSpan={columns.length + 2} className="py-10 text-center text-gray-500">No cases match these filters.</td></tr>
             )}
-            {rows.map((c) => (
+            {rows.map((c, i) => (
               <tr key={c._id} onClick={() => p.onOpen(c)} className={`border-b last:border-b-0 hover:bg-gray-50 cursor-pointer ${p.selected.includes(c._id) ? 'bg-brand-green-50' : ''} ${p.loading ? 'opacity-60' : ''}`}>
                 {canEdit && (
                   <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={p.selected.includes(c._id)} onChange={(e) => p.onSelect(e.target.checked ? [...p.selected, c._id] : p.selected.filter((id) => id !== c._id))} />
                   </td>
                 )}
-                {columns.map((col) => <td key={col.key} className="px-2 py-1.5 align-middle">{col.render(c)}</td>)}
+                {columns.map((col) => <td key={col.key} className="px-2 py-1.5 align-middle">{col.render(c, i)}</td>)}
                 <td className="px-2 py-1.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                   {savingId === c._id && <Loader2 className="w-3.5 h-3.5 animate-spin inline mr-1 text-gray-400" />}
                   <button type="button" className="p-1 text-gray-400 hover:text-brand-green" title={canEdit ? 'Edit' : 'View'} onClick={() => p.onOpen(c)}><Pencil className="w-4 h-4" /></button>

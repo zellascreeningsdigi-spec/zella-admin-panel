@@ -520,12 +520,18 @@ class ApiService {
     return this.post('/tracker/companies/bulk', { names });
   }
 
-  /** The tracker tabs this person has open. */
+  /** A company's own columns (remembered from its import), or null. */
+  async getTrackerLayout(customerId: string): Promise<ApiResponse<{ companyName: string; layout: any[] | null }>> {
+    return this.get(`/tracker/layout/${customerId}`);
+  }
+
+  /** The shared tracker tabs (everyone sees the same set). */
   async getTrackerTabs(): Promise<ApiResponse<any>> {
     return this.get('/tracker/tabs');
   }
 
-  async saveTrackerTabs(data: { tabs: any[]; activeId: string }): Promise<ApiResponse<any>> {
+  /** Super-admins only. */
+  async saveTrackerTabs(data: { tabs: any[] }): Promise<ApiResponse<any>> {
     return this.put('/tracker/tabs', data);
   }
 
