@@ -220,7 +220,7 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
       const r = await apiService.trackerImportApply(payload());
       setResult(r.data);
       setStep('done');
-      onImported(openAsTabs ? importedTabs() : undefined);
+      onImported(openAsTabs && meta.canManageTabs ? importedTabs() : undefined);
     } catch (e: any) {
       setError(e.message || 'Import failed');
     } finally {
@@ -548,7 +548,7 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
           <div className="flex items-center gap-3">
             {step === 'link' && <Button type="button" variant="ghost" onClick={reset} disabled={busy}>Choose another file</Button>}
             {step === 'preview' && <Button type="button" variant="ghost" onClick={() => setStep('link')} disabled={busy}>Back</Button>}
-            {(step === 'link' || step === 'preview') && (
+            {(step === 'link' || step === 'preview') && meta.canManageTabs && (
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                 <input type="checkbox" checked={openAsTabs} onChange={(e) => setOpenAsTabs(e.target.checked)} />
                 Open each imported tab as a tracker tab

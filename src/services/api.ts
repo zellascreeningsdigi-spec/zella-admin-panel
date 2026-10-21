@@ -525,12 +525,13 @@ class ApiService {
     return this.get(`/tracker/layout/${customerId}`);
   }
 
-  /** The tracker tabs this person has open. */
+  /** The shared tracker tabs (everyone sees the same set). */
   async getTrackerTabs(): Promise<ApiResponse<any>> {
     return this.get('/tracker/tabs');
   }
 
-  async saveTrackerTabs(data: { tabs: any[]; activeId: string }): Promise<ApiResponse<any>> {
+  /** Super-admins only. */
+  async saveTrackerTabs(data: { tabs: any[] }): Promise<ApiResponse<any>> {
     return this.put('/tracker/tabs', data);
   }
 

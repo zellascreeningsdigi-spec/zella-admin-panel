@@ -72,6 +72,8 @@ export interface TrackerMeta {
   canEdit: boolean;
   /** Super-admins: remove cases in bulk (selected, or every case in a tab). */
   canBulkDelete?: boolean;
+  /** Super-admins: open, close and rename the tracker tabs everyone sees. */
+  canManageTabs?: boolean;
   fields: TrackerField[];
   groups: { key: string; label: string }[];
   statuses: string[];

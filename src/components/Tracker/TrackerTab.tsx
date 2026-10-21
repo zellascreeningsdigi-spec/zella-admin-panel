@@ -20,11 +20,14 @@ import { TrackerCase, TrackerFilters, TrackerLayoutEntry, TrackerMeta, TrackerTa
 // own cases read-only, limited to the fields their company is set to show.
 //
 // Like the workbook, the page has tabs: each tab is cases or analytics for
-// its own companies and filters. Tabs are saved per person on the server.
+// its own companies and filters. One shared set of tabs: super-admins open,
+// close, rename and set them up for everyone. Others can filter and sort
+// inside a tab for themselves; that is not saved and does not change the tab.
 
 const ALL_TAB = 'all';
 const DRAFTS_TAB = 'drafts';
 const LEGACY_FILTER_KEY = 'tracker-filters';
+const ACTIVE_KEY = 'tracker-active-tab';
 
 /** The person's saved tabs, with the fixed tabs always present (Drafts only for editors). */
 const withFixedTabs = (saved: TrackerTabState[], canEdit: boolean): TrackerTabState[] => {
@@ -102,6 +105,7 @@ const TrackerTab: React.FC = () => {
 
   // ---- tabs ----
   const canEdit = !!meta?.canEdit;
+  const canManageTabs = !!meta?.canManageTabs;
   const metaLoaded = !!meta;
   useEffect(() => {
     if (!metaLoaded) return;
@@ -109,10 +113,10 @@ const TrackerTab: React.FC = () => {
     (async () => {
       let saved: TrackerTabState[] = [];
       let savedActive = ALL_TAB;
+      try { savedActive = localStorage.getItem(ACTIVE_KEY) || ALL_TAB; } catch { /* first tab */ }
       try {
         const r = await apiService.getTrackerTabs();
         saved = r.data?.tabs || [];
-        savedActive = r.data?.activeId || ALL_TAB;
       } catch { /* start with the default tabs */ }
       if (cancelled) return;
       const list = withFixedTabs(saved, canEdit);
@@ -122,16 +126,21 @@ const TrackerTab: React.FC = () => {
     return () => { cancelled = true; };
   }, [metaLoaded, canEdit]);
 
-  // Save the tabs (debounced) whenever they change.
+  // A super-admin's changes are the shared tabs: saved (debounced) for everyone.
   const saveTimer = useRef<number | undefined>(undefined);
   useEffect(() => {
-    if (!tabs) return;
+    if (!tabs || !canManageTabs) return;
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
-      apiService.saveTrackerTabs({ tabs, activeId }).catch(() => { /* tabs are a convenience */ });
+      apiService.saveTrackerTabs({ tabs }).catch(() => flash('Could not save the tabs', { error: true }));
     }, 700);
     return () => window.clearTimeout(saveTimer.current);
-  }, [tabs, activeId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabs, canManageTabs]);
+  // Which tab is open is each person's own, kept in their browser.
+  useEffect(() => {
+    try { localStorage.setItem(ACTIVE_KEY, activeId); } catch { /* ignore */ }
+  }, [activeId]);
 
   const tab = tabs?.find((t) => t.id === activeId) || tabs?.[0] || null;
   const view = tab?.view || 'cases';
@@ -166,7 +175,7 @@ const TrackerTab: React.FC = () => {
     if (renaming?.name.trim()) updateTab(renaming.id, { name: renaming.name.trim().slice(0, 80) });
     setRenaming(null);
   };
-  /** After an import: a tab per imported sheet, unless the same tab is already open. */
+  /** After an import: a tab per imported sheet, unless the same tab is already open (only super-admins add tabs). */
   const openImportedTabs = (sheets: { name: string; customerIds: string[] }[]) => {
     if (!tabs) return;
     const same = (a: string[] = [], b: string[] = []) => a.length === b.length && a.every((x) => b.includes(x));
@@ -175,6 +184,7 @@ const TrackerTab: React.FC = () => {
     for (const s of sheets) {
       const existing = tabs.find((t) => !t.fixed && t.name === s.name && same(t.filters.customerIds, s.customerIds));
       if (existing) { first = first || existing.id; continue; }
+      if (!canManageTabs) continue;
       const t = makeTab({ name: s.name, filters: { customerIds: s.customerIds } });
       created.push(t);
       first = first || t.id;
@@ -372,8 +382,8 @@ const TrackerTab: React.FC = () => {
               role="tab"
               aria-selected={active}
               onClick={() => !active && switchTab(t.id)}
-              onDoubleClick={() => !t.fixed && setRenaming({ id: t.id, name: t.name })}
-              title={t.fixed ? t.name : `${t.name} — double-click to rename`}
+              onDoubleClick={() => canManageTabs && !t.fixed && setRenaming({ id: t.id, name: t.name })}
+              title={t.fixed || !canManageTabs ? t.name : `${t.name} — double-click to rename`}
               className={`group shrink-0 flex items-center gap-1.5 pl-3 pr-2 h-9 rounded-t-md border border-b-0 text-sm cursor-pointer select-none ${active ? 'bg-white text-brand-green font-medium border-gray-200 -mb-px' : 'bg-gray-50 text-gray-600 border-transparent hover:bg-gray-100'}`}
             >
               <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -390,7 +400,7 @@ const TrackerTab: React.FC = () => {
                 <span className="max-w-[180px] truncate">{t.name}</span>
               )}
               {t.id === DRAFTS_TAB && draftCount > 0 && <span className="text-[11px] px-1.5 rounded-full bg-amber-100 text-amber-800">{draftCount}</span>}
-              {!t.fixed && (
+              {canManageTabs && !t.fixed && (
                 <button
                   type="button"
                   aria-label={`Close ${t.name}`}
@@ -403,9 +413,13 @@ const TrackerTab: React.FC = () => {
             </div>
           );
         })}
-        <button type="button" onClick={() => setNewTabOpen(true)} title="New tab" className="shrink-0 h-8 w-8 mb-0.5 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-brand-green">
-          <Plus className="w-4 h-4" />
-        </button>
+        {canManageTabs ? (
+          <button type="button" onClick={() => setNewTabOpen(true)} title="New tab — every user sees the tabs you set up" className="shrink-0 h-8 w-8 mb-0.5 flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-brand-green">
+            <Plus className="w-4 h-4" />
+          </button>
+        ) : !meta.isClient && tabs.length > 1 && (
+          <span className="shrink-0 ml-auto mb-2 text-[11px] text-gray-400" title="Filters you change apply only for you, until you reload">Tabs are set by the super-admin</span>
+        )}
       </div>
 
       {notice && (
@@ -514,7 +528,7 @@ const TrackerTab: React.FC = () => {
           onCompaniesCreated={companiesCreated}
         />
       )}
-      <NewTabDialog meta={meta} open={newTabOpen} onClose={() => setNewTabOpen(false)} onCreate={openTabs} />
+      {canManageTabs && <NewTabDialog meta={meta} open={newTabOpen} onClose={() => setNewTabOpen(false)} onCreate={openTabs} />}
       {meta.canBulkDelete && (
         <BulkDeleteDialog
           open={confirmDelete}
