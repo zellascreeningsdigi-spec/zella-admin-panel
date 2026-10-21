@@ -12,7 +12,7 @@ import ClientViewDialog from './ClientViewDialog';
 import CreateCompanyDialog, { CreatedCompany } from './CreateCompanyDialog';
 import NewTabDialog from './NewTabDialog';
 import BulkDeleteDialog from './BulkDeleteDialog';
-import { TrackerCase, TrackerFilters, TrackerMeta, TrackerTabState, makeTab, toParams } from './trackerTypes';
+import { TrackerCase, TrackerFilters, TrackerLayoutEntry, TrackerMeta, TrackerTabState, makeTab, toParams } from './trackerTypes';
 
 // BGV tracker: the team's tracker workbook, in the software.
 // Staff add / edit / remove cases (inline or in the form), import tabs of the
@@ -184,6 +184,20 @@ const TrackerTab: React.FC = () => {
   };
 
   const tabsReady = !!tabs;
+
+  // The company's own columns, when the tab shows exactly one company that has a remembered format.
+  const [layouts, setLayouts] = useState<Record<string, { companyName: string; columns: TrackerLayoutEntry[] } | null>>({});
+  const layoutCompany = meta?.isClient
+    ? meta.customers[0]?._id
+    : (filters.customerIds?.length === 1 && meta?.customers.find((c) => c._id === filters.customerIds![0])?.hasCustomFormat ? filters.customerIds[0] : undefined);
+  useEffect(() => {
+    if (!layoutCompany || layoutCompany in layouts) return;
+    let cancelled = false;
+    apiService.getTrackerLayout(layoutCompany)
+      .then((r) => { if (!cancelled) setLayouts((m) => ({ ...m, [layoutCompany]: r.data?.layout ? { companyName: r.data.companyName, columns: r.data.layout } : null })); })
+      .catch(() => { if (!cancelled) setLayouts((m) => ({ ...m, [layoutCompany]: null })); });
+    return () => { cancelled = true; };
+  }, [layoutCompany, layouts]);
   // The filters of the case list as sent to the server (also used to remove every matching case).
   const listParams = useMemo(() => ({
     ...toParams(filters),
@@ -237,7 +251,8 @@ const TrackerTab: React.FC = () => {
       return add.length ? { ...m, customers: [...m.customers, ...add].sort((a, b) => a.companyName.localeCompare(b.companyName)) } : m;
     });
   };
-  const refreshAll = () => { loadCases(); loadMeta(); loadDraftCount(); if (view === 'analytics') loadAnalytics(); };
+  // A re-import can change a company's format, so its columns are fetched again.
+  const refreshAll = () => { setLayouts({}); loadCases(); loadMeta(); loadDraftCount(); if (view === 'analytics') loadAnalytics(); };
 
   // ---- row actions ----
   const openCase = (c: TrackerCase) => { setFormInitial(null); setFormCaseId(c._id); setFormOpen(true); };
@@ -447,6 +462,7 @@ const TrackerTab: React.FC = () => {
       {view !== 'analytics' ? (
         <TrackerTable
           meta={meta}
+          layout={layoutCompany ? layouts[layoutCompany] : null}
           customerIds={filters.customerIds}
           rows={rows}
           loading={loading}

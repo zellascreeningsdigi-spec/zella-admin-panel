@@ -520,6 +520,11 @@ class ApiService {
     return this.post('/tracker/companies/bulk', { names });
   }
 
+  /** A company's own columns (remembered from its import), or null. */
+  async getTrackerLayout(customerId: string): Promise<ApiResponse<{ companyName: string; layout: any[] | null }>> {
+    return this.get(`/tracker/layout/${customerId}`);
+  }
+
   /** The tracker tabs this person has open. */
   async getTrackerTabs(): Promise<ApiResponse<any>> {
     return this.get('/tracker/tabs');

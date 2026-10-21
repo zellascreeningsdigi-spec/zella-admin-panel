@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, AlertTriangle, Building2, CheckCircle2, ChevronDown, ChevronRight, FileSpreadsheet, Loader2, Upload } from 'lucide-react';
@@ -232,6 +233,22 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
     created: t.created + s.created, updated: t.updated + s.updated, unchanged: t.unchanged + s.unchanged, skipped: t.skipped + s.skipped,
   }), { created: 0, updated: 0, unchanged: 0, skipped: 0 }), [preview]);
   const included = Object.values(choices).filter((c) => c.include).length;
+  // Every row that does not become (or update) its own case, with the reason.
+  const notImported: { sheet: string; row: number; bgvId: string; name: string; reason: string }[] = useMemo(
+    () => (preview?.sheets || []).flatMap((s: any) => (s.notImported || []).map((r: any) => ({ sheet: s.name, ...r }))),
+    [preview],
+  );
+  const downloadNotImported = () => {
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ['Tab', 'Row', 'BGV ID', 'Candidate name', 'Why it was not imported as its own case'],
+      ...notImported.map((r) => [r.sheet, r.row, r.bgvId, r.name, r.reason]),
+    ]);
+    sheet['!cols'] = [{ wch: 22 }, { wch: 6 }, { wch: 18 }, { wch: 28 }, { wch: 90 }];
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, sheet, 'Not imported');
+    XLSX.writeFile(book, `${String(analysis?.fileName || 'import').replace(/\.[^.]+$/, '')} - rows not imported.xlsx`);
+  };
+  const [notImportedOpen, setNotImportedOpen] = useState(true);
   const companyChanges = (preview?.sheets || []).filter((s: any) => s.newFields?.length || s.saveFormat);
   const caseCount = totals.created + totals.updated;
   const knownFields = (customerId: string) => new Set(
@@ -424,6 +441,38 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
                 <div key={l as string} className="border rounded-lg p-2"><p className={`text-xl font-semibold ${tone}`}>{n as number}</p><p className="text-xs text-gray-500">{l}</p></div>
               ))}
             </div>
+            {notImported.length > 0 && (
+              <div className="border border-amber-300 bg-amber-50 rounded-lg p-2 text-sm space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span className="flex-1 min-w-[200px] text-amber-900">
+                    <strong>{notImported.length.toLocaleString('en-IN')}</strong> row{notImported.length === 1 ? '' : 's'} will not be imported as {notImported.length === 1 ? 'its' : 'their'} own case — see why below
+                  </span>
+                  <button type="button" className="text-xs text-amber-900 underline" onClick={() => setNotImportedOpen((o) => !o)}>{notImportedOpen ? 'Hide' : 'Show'}</button>
+                  <Button type="button" size="sm" variant="outline" className="h-8 bg-white" onClick={downloadNotImported}>Download list</Button>
+                </div>
+                {notImportedOpen && (
+                  <div className="max-h-56 overflow-y-auto bg-white border rounded-md">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-gray-50 text-gray-500">
+                        <tr><th className="text-left px-2 py-1">Tab</th><th className="text-left px-2 py-1">Row</th><th className="text-left px-2 py-1">BGV ID · Name</th><th className="text-left px-2 py-1">Why</th></tr>
+                      </thead>
+                      <tbody>
+                        {notImported.slice(0, 500).map((r) => (
+                          <tr key={`${r.sheet}:${r.row}`} className="border-t align-top">
+                            <td className="px-2 py-1 whitespace-nowrap">{r.sheet}</td>
+                            <td className="px-2 py-1">{r.row}</td>
+                            <td className="px-2 py-1 whitespace-nowrap">{[r.bgvId, r.name].filter(Boolean).join(' · ') || '—'}</td>
+                            <td className="px-2 py-1 text-amber-900">{r.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {notImported.length > 500 && <p className="p-2 text-xs text-gray-500">Showing 500 of {notImported.length.toLocaleString('en-IN')} — download the list for all of them.</p>}
+                  </div>
+                )}
+              </div>
+            )}
             {companyChanges.length > 0 && (
               <div className="border border-blue-200 bg-blue-50/60 rounded-lg p-2 text-sm space-y-1">
                 {companyChanges.map((s: any) => (
@@ -476,6 +525,12 @@ const ImportDialog: React.FC<Props> = ({ meta, open, onClose, onImported, onCrea
             <CheckCircle2 className="w-10 h-10 text-brand-green mx-auto" />
             <p className="font-medium">Import complete</p>
             <p className="text-sm text-gray-600">{result.totals.created} new · {result.totals.updated} updated · {result.totals.unchanged} unchanged · {result.totals.skipped} skipped</p>
+            {notImported.length > 0 && (
+              <p className="text-sm text-amber-800">
+                {notImported.length.toLocaleString('en-IN')} row{notImported.length === 1 ? ' was' : 's were'} not imported as {notImported.length === 1 ? 'its' : 'their'} own case.{' '}
+                <button type="button" className="underline" onClick={downloadNotImported}>Download the list with reasons</button>
+              </p>
+            )}
             {(result.fieldsAdded > 0 || result.formatsSaved > 0) && (
               <p className="text-sm text-blue-800">
                 {[
