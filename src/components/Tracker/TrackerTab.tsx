@@ -372,7 +372,8 @@ const TrackerTab: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex items-end gap-1 border-b border-gray-200 overflow-x-auto">
+      {/* The tabs stay at the top while the page scrolls (-top-6 cancels the page's own top padding). */}
+      <div className="sticky -top-6 z-20 -mx-6 px-6 pt-2 bg-gray-50 flex items-end gap-1 border-b border-gray-200 overflow-x-auto">
         {tabs.map((t) => {
           const active = t.id === tab.id;
           const Icon = t.view === 'drafts' ? FilePen : t.view === 'analytics' ? BarChart3 : List;

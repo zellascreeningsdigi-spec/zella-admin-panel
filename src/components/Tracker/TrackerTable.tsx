@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowDown, ArrowUp, Columns3, Copy, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Columns3, Copy, Loader2, Pencil, Trash2 } from 'lucide-react';
 import {
   TrackerCase,
   TrackerMeta,
@@ -61,6 +61,10 @@ const STORAGE_KEY = (client: boolean) => `tracker-columns:${client ? 'client' : 
 const HIDDEN_KEY = 'tracker-hidden-company-fields';
 
 const COMPANY_VIEW_KEY = 'tracker-company-columns';
+// Room kept under the table box for the page controls (rows per page, paging) and the page padding.
+const BELOW_TABLE = 84;
+// Header cells stay at the top of the table box while its rows scroll under them.
+const HEAD_CELL = 'sticky top-0 z-10 bg-gray-50 shadow-[inset_0_-1px_0_rgb(229,231,235)]';
 const DAY = 86400000;
 const daysBetween = (from?: string | null, to?: string | Date | null) =>
   from ? Math.max(0, Math.floor((new Date(to || Date.now()).getTime() - new Date(from).getTime()) / DAY)) : null;
@@ -121,6 +125,48 @@ const TrackerTable: React.FC<TableProps> = (p) => {
   }, [companyView]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  // The table scrolls inside its own box (both ways), so its header can stay
+  // in view and its horizontal scrollbar is always on screen.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScroll, setCanScroll] = useState({ left: false, right: false });
+  const measureScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const left = el.scrollLeft > 2;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+    setCanScroll((s) => (s.left === left && s.right === right ? s : { left, right }));
+  };
+  const scrollColumns = (dir: 1 | -1) => {
+    const el = scrollRef.current;
+    if (el) el.scrollBy({ left: dir * Math.max(200, el.clientWidth * 0.7), behavior: 'smooth' });
+  };
+  // The box ends at the bottom of the screen (above the page controls), so
+  // its horizontal scrollbar is visible without scrolling the page. What sits
+  // above it (filters, notices, the selection bar) changes, so it is measured
+  // after every render; a small box falls back to scrolling the page.
+  const [boxHeight, setBoxHeight] = useState<number | null>(null);
+  const fitBox = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const scroller = el.closest('main');
+    const topAtRest = el.getBoundingClientRect().top + (scroller?.scrollTop || 0);
+    const next = Math.max(320, Math.floor(window.innerHeight - topAtRest - BELOW_TABLE));
+    setBoxHeight((h) => (h !== null && Math.abs(h - next) < 4 ? h : next));
+  };
+  useLayoutEffect(fitBox);
+  useEffect(() => {
+    window.addEventListener('resize', fitBox);
+    return () => window.removeEventListener('resize', fitBox);
+  }, []);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    measureScroll();
+    const ro = new ResizeObserver(measureScroll);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY(meta.isClient), JSON.stringify(visible)); } catch { /* ignore */ }
@@ -396,6 +442,16 @@ const TrackerTable: React.FC<TableProps> = (p) => {
       <div className="flex items-center justify-between text-sm text-gray-600">
         <span>{p.total.toLocaleString('en-IN')} case{p.total === 1 ? '' : 's'}</span>
         <div className="flex items-center gap-2">
+        {(canScroll.left || canScroll.right) && (
+          <div className="flex rounded-md border overflow-hidden" title="Scroll the columns (or Shift + mouse wheel)">
+            <button type="button" aria-label="Scroll columns left" disabled={!canScroll.left} onClick={() => scrollColumns(-1)} className="h-8 w-8 flex items-center justify-center bg-white text-gray-700 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-white">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button type="button" aria-label="Scroll columns right" disabled={!canScroll.right} onClick={() => scrollColumns(1)} className="h-8 w-8 flex items-center justify-center bg-white text-gray-700 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-white border-l">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         {layoutColumns && (
           <div className="flex rounded-md border overflow-hidden text-sm" title="Show this company's own columns, exactly as in its sheet">
             <button type="button" onClick={() => setCompanyView(true)} className={`px-2.5 h-8 ${showingCompany ? 'bg-brand-green text-white' : 'bg-white text-gray-700'}`}>{p.layout!.companyName} columns</button>
@@ -429,17 +485,17 @@ const TrackerTable: React.FC<TableProps> = (p) => {
         </div>
       </div>
 
-      <div className="overflow-x-auto border rounded-lg bg-white">
+      <div ref={scrollRef} onScroll={measureScroll} style={{ maxHeight: boxHeight ?? undefined }} className="tracker-scroll overflow-auto border rounded-lg bg-white">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 border-b">
+          <thead>
             <tr>
               {canEdit && (
-                <th className="w-8 px-2 py-2">
+                <th className={`${HEAD_CELL} w-8 px-2 py-2`}>
                   <input type="checkbox" checked={allChecked} onChange={(e) => p.onSelect(e.target.checked ? Array.from(new Set([...p.selected, ...allIds])) : p.selected.filter((id) => !allIds.includes(id)))} />
                 </th>
               )}
               {columns.map((c) => (
-                <th key={c.key} className="px-2 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                <th key={c.key} className={`${HEAD_CELL} px-2 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap`}>
                   {c.sortKey ? (
                     <button type="button" className="flex items-center gap-1 hover:text-gray-900" onClick={() => p.onSort(c.sortKey!)}>
                       {c.label}
@@ -448,7 +504,7 @@ const TrackerTable: React.FC<TableProps> = (p) => {
                   ) : c.label}
                 </th>
               ))}
-              <th className="px-2 py-2 text-right text-xs font-semibold text-gray-600">Actions</th>
+              <th className={`${HEAD_CELL} px-2 py-2 text-right text-xs font-semibold text-gray-600`}>Actions</th>
             </tr>
           </thead>
           <tbody>
