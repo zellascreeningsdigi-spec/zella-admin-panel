@@ -6,9 +6,10 @@ import { apiService } from '@/services/api';
 import SearchPick from './SearchPick';
 import { TrackerCustomField, TrackerMeta } from './trackerTypes';
 
-// Per-company tracker settings: default TAT, the company's own fields, its
-// remembered Excel format, and which fields its login can see. Nothing
-// ticked = they see everything.
+// Per-company tracker settings: whether its logins can open the tracker at
+// all, default TAT, the company's own fields, its remembered Excel format,
+// and which fields its login can see (nothing ticked = everything). The
+// tracker can also be turned on or off for every company at once.
 
 interface Props {
   meta: TrackerMeta;
@@ -27,6 +28,8 @@ const ClientViewDialog: React.FC<Props> = ({ meta, open, initialCustomerId, onCl
   const [fields, setFields] = useState<TrackerCustomField[]>([]);
   const [newField, setNewField] = useState<TrackerCustomField>({ label: '', type: 'text' });
   const [resetLayout, setResetLayout] = useState(false);
+  const [enabled, setEnabled] = useState(true);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -46,6 +49,7 @@ const ClientViewDialog: React.FC<Props> = ({ meta, open, initialCustomerId, onCl
     setFields(c?.trackerCustomFields || []);
     setNewField({ label: '', type: 'text' });
     setResetLayout(false);
+    setEnabled(c?.trackerEnabled !== false);
   }, [customerId, meta.customers]);
   const company = meta.customers.find((x) => x._id === customerId);
 
@@ -67,6 +71,7 @@ const ClientViewDialog: React.FC<Props> = ({ meta, open, initialCustomerId, onCl
         // Drop visibility ticks of fields that were removed.
         trackerVisibleFields: visible.filter((k) => !k.startsWith('extra:') || labels.has(k)),
         ...(resetLayout ? { resetLayout: true } : {}),
+        trackerEnabled: enabled,
       });
       setMessage({ ok: true, text: r.message || 'Saved' });
       onSaved();
@@ -74,6 +79,21 @@ const ClientViewDialog: React.FC<Props> = ({ meta, open, initialCustomerId, onCl
       setMessage({ ok: false, text: e.message || 'Could not save' });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const shownCount = meta.customers.filter((c) => c.trackerEnabled !== false).length;
+  const setForAll = async (on: boolean) => {
+    if (!window.confirm(`${on ? 'Show' : 'Hide'} the BGV tracker for all ${meta.customers.length} companies? Their logins ${on ? 'will see' : 'will no longer see'} it.`)) return;
+    setBulkBusy(true); setMessage(null);
+    try {
+      const r: any = await apiService.setTrackerAccessForAll(on);
+      setMessage({ ok: true, text: r.message || 'Saved' });
+      onSaved();
+    } catch (e: any) {
+      setMessage({ ok: false, text: e.message || 'Could not change it for all companies' });
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -96,6 +116,14 @@ const ClientViewDialog: React.FC<Props> = ({ meta, open, initialCustomerId, onCl
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Company tracker settings</DialogTitle></DialogHeader>
 
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-gray-50 p-2.5 text-sm">
+          <span className="flex-1 min-w-[220px] text-gray-700">
+            <strong>All companies:</strong> the BGV tracker is shown to {shownCount} of {meta.customers.length} companies’ logins
+          </span>
+          <Button type="button" size="sm" variant="outline" className="h-8 bg-white" disabled={bulkBusy || shownCount === meta.customers.length} onClick={() => setForAll(true)}>Show to all</Button>
+          <Button type="button" size="sm" variant="outline" className="h-8 bg-white text-red-600 border-red-200" disabled={bulkBusy || shownCount === 0} onClick={() => setForAll(false)}>Hide from all</Button>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="sm:col-span-2">
             <p className="text-xs text-gray-500 mb-1">Company</p>
@@ -114,6 +142,18 @@ const ClientViewDialog: React.FC<Props> = ({ meta, open, initialCustomerId, onCl
         <p className="text-xs text-gray-500 -mt-2">
           Due date = start date + TAT, unless a case has its own due date or TAT. Saving moves the due date of every case that follows the company TAT.
         </p>
+
+        <label className={`flex items-start gap-2 rounded-md border p-2.5 cursor-pointer ${enabled ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+          <input type="checkbox" className="mt-1" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+          <span className="text-sm">
+            <strong>Show the BGV tracker to {company?.companyName || 'this company'}’s logins</strong>
+            <span className="block text-xs text-gray-600">
+              {enabled
+                ? 'They see their own cases (read-only), limited to the fields ticked below.'
+                : 'Hidden: the BGV Tracker menu does not appear for them and they cannot open it.'}
+            </span>
+          </span>
+        </label>
 
         <div className="space-y-2">
           <p className="text-sm font-medium">This company’s own fields</p>

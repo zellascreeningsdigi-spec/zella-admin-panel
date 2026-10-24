@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Columns3, Copy, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Columns3, Copy, Loader2, Pencil, Trash2 } from 'lucide-react';
 import {
   TrackerCase,
   TrackerMeta,
@@ -18,7 +18,8 @@ import {
 } from './trackerTypes';
 
 // The tracker table: every row can be edited inline (status, allocated to,
-// billing), opened, duplicated or removed. Columns are chosen by the user.
+// billing), opened, duplicated or removed. Columns are chosen and ordered by
+// the user (drag a header, or the arrows in Columns), remembered per browser.
 // For one company with its own sheet format, the table can instead show that
 // company's columns: its exact headers, in its order, with its own wording.
 
@@ -433,6 +434,25 @@ const TrackerTable: React.FC<TableProps> = (p) => {
     setVisible(on ? [...visible, key] : visible.filter((k) => k !== key));
     if (key.startsWith('extra:')) setHiddenFields(on ? hiddenFields.filter((k) => k !== key) : Array.from(new Set([...hiddenFields, key])));
   };
+
+  // ---- column order ----
+  const shownColumnKeys = columns.map((c) => c.key);
+  /** Put the shown columns in a new order; chosen columns not in view right now keep their place at the end. */
+  const setOrder = (order: string[]) => setVisible([...order, ...visible.filter((k) => !order.includes(k))]);
+  const moveColumn = (key: string, to: number) => {
+    const order = shownColumnKeys.filter((k) => k !== key);
+    order.splice(Math.max(0, Math.min(to, order.length)), 0, key);
+    setOrder(order);
+  };
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dropKey, setDropKey] = useState<string | null>(null);
+  const dropOn = (target: string) => {
+    if (!dragKey || dragKey === target) return;
+    // Takes the target's place: dropped on a column to its right it lands after
+    // it, to its left before it (moveColumn removes it from its old place first).
+    moveColumn(dragKey, shownColumnKeys.indexOf(target));
+  };
+  const hiddenColumns = allColumns.filter((c) => !shownColumnKeys.includes(c.key));
   const allIds = rows.map((r) => r._id);
   const allChecked = allIds.length > 0 && allIds.every((id) => p.selected.includes(id));
   const pages = Math.max(1, Math.ceil(p.total / p.limit));
@@ -468,16 +488,26 @@ const TrackerTable: React.FC<TableProps> = (p) => {
                 <button type="button" className="text-brand-green" onClick={() => { setVisible(allColumns.map((c) => c.key)); setHiddenFields([]); }}>Show all</button>
                 <button type="button" className="text-gray-500" onClick={() => { setVisible(meta.isClient ? CLIENT_DEFAULT : DEFAULT_COLUMNS); setHiddenFields([]); }}>Reset</button>
               </div>
-              {allColumns.map((c, i) => (
-                <React.Fragment key={c.key}>
-                  {c.extra && !allColumns[i - 1]?.extra && (
-                    <p className="px-1 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400 border-t mt-1">Company fields</p>
-                  )}
-                  <label className="flex items-center gap-2 px-1 py-1 text-sm cursor-pointer hover:bg-gray-50 rounded">
-                    <input type="checkbox" checked={shownKeys.includes(c.key)} onChange={(e) => toggleColumn(c.key, e.target.checked)} />
-                    {c.label}
+              <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Shown, in order</p>
+              <p className="px-1 pb-1 text-[11px] text-gray-500">Use the arrows, or drag a column header in the table.</p>
+              {columns.map((c, i) => (
+                <div key={c.key} className="flex items-center gap-1 px-1 py-0.5 text-sm hover:bg-gray-50 rounded">
+                  <label className="flex flex-1 min-w-0 items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked onChange={(e) => toggleColumn(c.key, e.target.checked)} />
+                    <span className="truncate">{c.label}</span>
                   </label>
-                </React.Fragment>
+                  <button type="button" aria-label={`Move ${c.label} left`} disabled={i === 0} onClick={() => moveColumn(c.key, i - 1)} className="p-0.5 rounded text-gray-500 hover:bg-gray-200 disabled:text-gray-300 disabled:hover:bg-transparent"><ChevronUp className="w-3.5 h-3.5" /></button>
+                  <button type="button" aria-label={`Move ${c.label} right`} disabled={i === columns.length - 1} onClick={() => moveColumn(c.key, i + 1)} className="p-0.5 rounded text-gray-500 hover:bg-gray-200 disabled:text-gray-300 disabled:hover:bg-transparent"><ChevronDown className="w-3.5 h-3.5" /></button>
+                </div>
+              ))}
+              {hiddenColumns.length > 0 && (
+                <p className="px-1 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400 border-t mt-1">Hidden</p>
+              )}
+              {hiddenColumns.map((c) => (
+                <label key={c.key} className="flex items-center gap-2 px-1 py-1 text-sm cursor-pointer hover:bg-gray-50 rounded">
+                  <input type="checkbox" checked={false} onChange={(e) => toggleColumn(c.key, e.target.checked)} />
+                  {c.label}{c.extra && <span className="text-[10px] text-gray-400">company field</span>}
+                </label>
               ))}
             </div>
           )}
@@ -495,7 +525,18 @@ const TrackerTable: React.FC<TableProps> = (p) => {
                 </th>
               )}
               {columns.map((c) => (
-                <th key={c.key} className={`${HEAD_CELL} px-2 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap`}>
+                <th
+                  key={c.key}
+                  // Drag a header onto another to move the column (not in the company's own column view).
+                  draggable={!showingCompany}
+                  onDragStart={(e) => { setDragKey(c.key); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', c.key); }}
+                  onDragOver={(e) => { if (dragKey && dragKey !== c.key) { e.preventDefault(); setDropKey(c.key); } }}
+                  onDragLeave={() => setDropKey((k) => (k === c.key ? null : k))}
+                  onDrop={(e) => { e.preventDefault(); dropOn(c.key); setDragKey(null); setDropKey(null); }}
+                  onDragEnd={() => { setDragKey(null); setDropKey(null); }}
+                  title={showingCompany ? undefined : 'Drag to move this column'}
+                  className={`${HEAD_CELL} px-2 py-2 text-left text-xs font-semibold text-gray-600 whitespace-nowrap ${showingCompany ? '' : 'cursor-grab'} ${dragKey === c.key ? 'opacity-50' : ''} ${dropKey === c.key ? '!bg-brand-green-50 outline outline-2 -outline-offset-2 outline-brand-green' : ''}`}
+                >
                   {c.sortKey ? (
                     <button type="button" className="flex items-center gap-1 hover:text-gray-900" onClick={() => p.onSort(c.sortKey!)}>
                       {c.label}

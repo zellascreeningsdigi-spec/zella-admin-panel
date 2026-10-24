@@ -540,8 +540,19 @@ class ApiService {
     trackerVisibleFields?: string[];
     trackerCustomFields?: { label: string; type: string }[];
     resetLayout?: boolean;
+    trackerEnabled?: boolean;
   }): Promise<ApiResponse<any>> {
     return this.put(`/tracker/settings/${customerId}`, data);
+  }
+
+  /** Show or hide the BGV tracker for every company's logins. */
+  async setTrackerAccessForAll(enabled: boolean): Promise<ApiResponse<{ enabled: boolean; count: number }>> {
+    return this.put('/tracker/settings/tracker-access', { enabled });
+  }
+
+  /** Whether this login may open the BGV tracker (company logins can have it turned off). */
+  async getTrackerAccess(): Promise<ApiResponse<{ enabled: boolean }>> {
+    return this.get('/tracker/access');
   }
 
   /** Download the Excel export for the given filters. */
