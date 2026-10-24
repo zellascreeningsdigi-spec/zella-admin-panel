@@ -92,6 +92,8 @@ export interface TrackerMeta {
     trackerVisibleFields?: string[];
     trackerCustomFields?: TrackerCustomField[];
     hasCustomFormat?: boolean;
+    /** Whether the company's logins can open the BGV tracker (staff view only). */
+    trackerEnabled?: boolean;
   }[];
   options: { initiators: string[]; allocated: string[]; months: string[]; billedMonths: string[] };
 }

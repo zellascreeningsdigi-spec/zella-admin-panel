@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { apiService } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { LogOut, FileText, Home, Users, BarChart3, UserCog, MapPin, FileCheck, ShieldCheck, ScanLine, Store, ClipboardList, UsersRound, Table2 } from 'lucide-react';
 import logo from "../../logo192.png";
@@ -13,6 +14,16 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, open = false, onClose }) => {
   const { logout, user } = useAuth();
+  // A company can have the BGV tracker turned off for its logins.
+  const [trackerOff, setTrackerOff] = useState(false);
+  useEffect(() => {
+    if (user?.role !== 'customer') { setTrackerOff(false); return; }
+    let cancelled = false;
+    apiService.getTrackerAccess()
+      .then((r) => { if (!cancelled) setTrackerOff(r.data?.enabled === false); })
+      .catch(() => { /* keep the item; the page explains if it is not available */ });
+    return () => { cancelled = true; };
+  }, [user?.role, user?.customerId]);
 
   const allMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home, roles: ['super-admin', 'admin', 'operator', 'viewer'] },
@@ -33,7 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, open = false,
 
   // Filter menu items based on user role
   const menuItems = allMenuItems.filter(item =>
-    user && item.roles.includes(user.role)
+    user && item.roles.includes(user.role) && !(item.id === 'tracker' && trackerOff)
   );
 
   // Show Manage Users only for ashish@zellascreenings.com
