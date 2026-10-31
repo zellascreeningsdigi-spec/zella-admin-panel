@@ -164,6 +164,22 @@ const TrackerTab: React.FC = () => {
     setTabs((list) => (list ? [...list, ...created] : list));
     switchTab(created[0].id);
   };
+  // Super-admins drag a tab onto another to move it (saved for everyone).
+  // The fixed tabs (All companies, Drafts) stay first and do not move.
+  const [dragTab, setDragTab] = useState<string | null>(null);
+  const [dropTab, setDropTab] = useState<string | null>(null);
+  const moveTab = (id: string, target: string) => {
+    setTabs((list) => {
+      if (!list || id === target) return list;
+      const moving = list.find((t) => t.id === id);
+      const to = list.findIndex((t) => t.id === target);
+      if (!moving || moving.fixed || to < 0 || list[to].fixed) return list;
+      // Takes the target's place: after it when moved right, before it when moved left.
+      const rest = list.filter((t) => t.id !== id);
+      rest.splice(to, 0, moving);
+      return rest;
+    });
+  };
   const closeTab = (id: string) => {
     if (!tabs) return;
     const i = tabs.findIndex((t) => t.id === id);
@@ -384,8 +400,14 @@ const TrackerTab: React.FC = () => {
               aria-selected={active}
               onClick={() => !active && switchTab(t.id)}
               onDoubleClick={() => canManageTabs && !t.fixed && setRenaming({ id: t.id, name: t.name })}
-              title={t.fixed || !canManageTabs ? t.name : `${t.name} — double-click to rename`}
-              className={`group shrink-0 flex items-center gap-1.5 pl-3 pr-2 h-9 rounded-t-md border border-b-0 text-sm cursor-pointer select-none ${active ? 'bg-white text-brand-green font-medium border-gray-200 -mb-px' : 'bg-gray-50 text-gray-600 border-transparent hover:bg-gray-100'}`}
+              draggable={canManageTabs && !t.fixed && renaming?.id !== t.id}
+              onDragStart={(e) => { setDragTab(t.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', t.id); }}
+              onDragOver={(e) => { if (dragTab && dragTab !== t.id && !t.fixed) { e.preventDefault(); setDropTab(t.id); } }}
+              onDragLeave={() => setDropTab((d) => (d === t.id ? null : d))}
+              onDrop={(e) => { e.preventDefault(); if (dragTab) moveTab(dragTab, t.id); setDragTab(null); setDropTab(null); }}
+              onDragEnd={() => { setDragTab(null); setDropTab(null); }}
+              title={t.fixed || !canManageTabs ? t.name : `${t.name} — drag to move, double-click to rename`}
+              className={`${dragTab === t.id ? 'opacity-50' : ''} ${dropTab === t.id ? 'ring-2 ring-brand-green ring-inset' : ''} group shrink-0 flex items-center gap-1.5 pl-3 pr-2 h-9 rounded-t-md border border-b-0 text-sm cursor-pointer select-none ${active ? 'bg-white text-brand-green font-medium border-gray-200 -mb-px' : 'bg-gray-50 text-gray-600 border-transparent hover:bg-gray-100'}`}
             >
               <Icon className="w-3.5 h-3.5 shrink-0" />
               {renaming?.id === t.id ? (
