@@ -297,7 +297,7 @@ const AddressVerificationPage = () => {
   };
 
   // Must match the multer limit in routes/addressVerification.js.
-  const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+  const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
   // Fields that must be captured with the camera rather than chosen from the
   // gallery. `capture` on the input drives the OS to open the camera directly;
@@ -320,7 +320,7 @@ const AddressVerificationPage = () => {
       const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
       setFileErrors(prev => ({
         ...prev,
-        [field]: `This photo is ${sizeMb}MB — the limit is 5MB. Please retake it at a lower resolution or choose a smaller file.`
+        [field]: `This photo is ${sizeMb}MB — the limit is 15MB. Please retake it at a lower resolution or choose a smaller file.`
       }));
       setDocuments(prev => ({ ...prev, [field]: null }));
       return;
@@ -1198,7 +1198,7 @@ const AddressVerificationPage = () => {
                       <div className="w-8 h-8 bg-brand-green rounded-full flex items-center justify-center text-white font-bold">4</div>
                       <h3 className="text-xl font-semibold text-gray-900">Document Uploads</h3>
                     </div>
-                    <p className="text-sm text-gray-600">All documents are required (max 5MB each, PDF/JPG/PNG only)</p>
+                    <p className="text-sm text-gray-600">All documents are required (max 15MB each, PDF/JPG/PNG only)</p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {/* ID Proof One */}
